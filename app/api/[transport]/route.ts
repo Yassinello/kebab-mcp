@@ -84,7 +84,7 @@ function checkAuth(request: Request): Response | null {
   const token = process.env.MCP_AUTH_TOKEN?.trim();
   if (!token) return null;
 
-  // MCP API: Bearer token only (no query string — security best practice)
+  // Check Authorization header (timing-safe)
   const authHeader = request.headers.get("authorization");
   if (authHeader) {
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -93,8 +93,19 @@ function checkAuth(request: Request): Response | null {
         if (timingSafeEqual(Buffer.from(bearer), Buffer.from(token))) {
           return null;
         }
-      } catch { /* length mismatch caught above */ }
+      } catch { /* noop */ }
     }
+  }
+
+  // Fallback: query string token (needed for Claude Desktop which embeds token in URL)
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get("token")?.trim();
+  if (queryToken && queryToken.length === token.length) {
+    try {
+      if (timingSafeEqual(Buffer.from(queryToken), Buffer.from(token))) {
+        return null;
+      }
+    } catch { /* noop */ }
   }
 
   return new Response("Unauthorized", { status: 401 });
