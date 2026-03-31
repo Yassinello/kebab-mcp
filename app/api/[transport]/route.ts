@@ -69,6 +69,7 @@ function checkAuth(request: Request): Response | null {
   const url = new URL(request.url);
   if (url.searchParams.get("token") === token) return null;
 
+  console.log("[YassMCP Auth] rejected — token configured:", !!token, "authHeader:", authHeader ? "present" : "missing");
   return new Response("Unauthorized", { status: 401 });
 }
 
