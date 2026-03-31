@@ -55,21 +55,21 @@ const mcpHandler = createMcpHandler(
 );
 
 function checkAuth(request: Request): Response | null {
-  const token = process.env.MCP_AUTH_TOKEN;
+  const token = process.env.MCP_AUTH_TOKEN?.trim();
   if (!token) return null; // No auth configured = allow (dev mode)
 
   // Check Authorization header
   const authHeader = request.headers.get("authorization");
   if (authHeader) {
-    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (bearer === token) return null;
   }
 
   // Check query param as fallback (for MCP clients that don't support headers)
   const url = new URL(request.url);
-  if (url.searchParams.get("token") === token) return null;
+  const queryToken = url.searchParams.get("token")?.trim();
+  if (queryToken === token) return null;
 
-  console.log("[YassMCP Auth] rejected — token configured:", !!token, "authHeader:", authHeader ? "present" : "missing");
   return new Response("Unauthorized", { status: 401 });
 }
 
