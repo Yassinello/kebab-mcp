@@ -70,16 +70,48 @@ export async function handleSaveArticle(params: {
     throw new Error(`Article content too large (${Math.round(markdown.length / 1024 / 1024)}MB). Max: 5MB`);
   }
 
-  // Extract title: Jina metadata "Title:" > first # heading > URL hostname
+  // Extract title: Jina metadata "Title:" > <title> tag > first # heading > URL path > hostname
   let title = params.title;
   if (!title) {
     // Jina Reader prepends "Title: ..." at the top of its output
     const jinaTitleMatch = markdown.match(/^Title:\s*(.+)$/m);
     if (jinaTitleMatch) {
-      title = jinaTitleMatch[1].trim();
-    } else {
+      const raw = jinaTitleMatch[1].trim();
+      // Skip if Jina returned just a hostname or empty-ish title
+      if (raw && raw !== new URL(params.url).hostname && raw.length > 3) {
+        title = raw;
+      }
+    }
+    if (!title) {
+      // Try first H1 heading
       const headingMatch = markdown.match(/^#\s+(.+)$/m);
-      title = headingMatch ? headingMatch[1].trim() : new URL(params.url).hostname;
+      if (headingMatch) {
+        const h1 = headingMatch[1].trim();
+        if (h1 && h1 !== new URL(params.url).hostname && h1.length > 3) {
+          title = h1;
+        }
+      }
+    }
+    if (!title) {
+      // Try og:title or <title> patterns sometimes present in Jina output
+      const ogMatch = markdown.match(/og:title['":\s]+(.+?)[\n"']/i);
+      if (ogMatch) {
+        title = ogMatch[1].trim();
+      }
+    }
+    if (!title) {
+      // Derive from URL path (last meaningful segment)
+      const urlPath = new URL(params.url).pathname.replace(/\/$/, "");
+      const segments = urlPath.split("/").filter(Boolean);
+      const lastSegment = segments[segments.length - 1];
+      if (lastSegment && lastSegment.length > 3) {
+        title = lastSegment
+          .replace(/[-_]/g, " ")
+          .replace(/\.\w+$/, "") // remove file extension
+          .replace(/\b\w/g, (c) => c.toUpperCase()); // capitalize words
+      } else {
+        title = new URL(params.url).hostname;
+      }
     }
   }
 

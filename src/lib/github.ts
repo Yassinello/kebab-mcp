@@ -416,6 +416,115 @@ async function treeGrep(
   };
 }
 
+// --- Recent commits (files modified recently) ---
+
+export interface RecentNote {
+  path: string;
+  message: string;
+  date: string;
+  author: string;
+}
+
+export async function vaultRecentCommits(
+  limit: number,
+  folder?: string,
+  since?: string
+): Promise<RecentNote[]> {
+  if (folder) validateVaultPath(folder);
+  const { pat, repo } = getConfig();
+
+  // Use commits API with path filter — returns commits that touch files in folder
+  let url = `${GITHUB_API}/repos/${repo}/commits?per_page=100`;
+  if (folder) {
+    url += `&path=${encodeURIComponent(folder.replace(/\/$/, ""))}`;
+  }
+  if (since) {
+    // Ensure ISO format for GitHub API
+    const sinceDate = since.includes("T") ? since : `${since}T00:00:00Z`;
+    url += `&since=${encodeURIComponent(sinceDate)}`;
+  }
+
+  const res = await fetchWithTimeout(url, { headers: headers(pat) }, 15_000);
+  if (!res.ok) throw new Error(`GitHub Commits error: ${res.status}`);
+
+  const commits = (await res.json()) as Array<{
+    sha: string;
+    commit: {
+      message: string;
+      author: { name: string; date: string };
+    };
+    files?: Array<{ filename: string; status: string }>;
+  }>;
+
+  // Deduplicate by file path — we want unique recently modified files
+  const seen = new Set<string>();
+  const results: RecentNote[] = [];
+
+  for (const commit of commits) {
+    if (results.length >= limit) break;
+
+    // Fetch commit details to get file list
+    const detailRes = await fetchWithTimeout(
+      `${GITHUB_API}/repos/${repo}/commits/${commit.sha}`,
+      { headers: headers(pat) }
+    );
+    if (!detailRes.ok) continue;
+
+    const detail = (await detailRes.json()) as {
+      files?: Array<{ filename: string; status: string }>;
+    };
+
+    for (const file of detail.files || []) {
+      if (results.length >= limit) break;
+      if (!file.filename.endsWith(".md")) continue;
+      if (folder && !file.filename.startsWith(folder.replace(/\/$/, "") + "/")) continue;
+      if (seen.has(file.filename)) continue;
+
+      seen.add(file.filename);
+      results.push({
+        path: file.filename,
+        message: commit.commit.message.split("\n")[0],
+        date: commit.commit.author.date,
+        author: commit.commit.author.name,
+      });
+    }
+  }
+
+  return results;
+}
+
+// --- Tree listing (for stats) ---
+
+export interface TreeFile {
+  path: string;
+  size: number;
+}
+
+export async function vaultTree(folder?: string): Promise<TreeFile[]> {
+  if (folder) validateVaultPath(folder);
+  const { pat, repo } = getConfig();
+
+  const res = await fetchWithTimeout(
+    `${GITHUB_API}/repos/${repo}/git/trees/main?recursive=1`,
+    { headers: headers(pat) }
+  );
+
+  if (!res.ok) throw new Error(`GitHub Trees error: ${res.status}`);
+
+  const tree = (await res.json()) as GitTreeResponse;
+
+  let files = tree.tree
+    .filter((t) => t.type === "blob")
+    .map((t) => ({ path: t.path, size: t.size || 0 }));
+
+  if (folder) {
+    const prefix = folder.replace(/\/$/, "") + "/";
+    files = files.filter((f) => f.path.startsWith(prefix));
+  }
+
+  return files;
+}
+
 // --- Health check ---
 
 export async function checkVaultHealth(): Promise<{
