@@ -3,6 +3,39 @@ import { googleFetch, googleFetchJSON } from "./google-fetch";
 
 const CAL = "https://www.googleapis.com/calendar/v3";
 
+// --- Google API response types ---
+
+interface CalendarListResponse {
+  items?: { id: string; summary?: string }[];
+}
+
+interface CalendarEventsResponse {
+  items?: {
+    id: string;
+    summary?: string;
+    start?: { dateTime?: string; date?: string };
+    end?: { dateTime?: string; date?: string };
+    location?: string;
+    hangoutLink?: string;
+    status?: string;
+  }[];
+}
+
+interface CalendarEventResponse {
+  id: string;
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  location?: string;
+  hangoutLink?: string;
+  htmlLink?: string;
+  attendees?: { email: string; self?: boolean; responseStatus?: string }[];
+}
+
+interface FreeBusyResponse {
+  calendars?: Record<string, { busy?: { start: string; end: string }[] }>;
+}
+
 export interface CalendarEvent {
   id: string;
   summary: string;
@@ -21,7 +54,7 @@ export interface CalendarInfo {
 // --- List calendars ---
 
 export async function listAllCalendars(): Promise<CalendarInfo[]> {
-  const data = await googleFetchJSON<any>(`${CAL}/users/me/calendarList`);
+  const data = await googleFetchJSON<CalendarListResponse>(`${CAL}/users/me/calendarList`);
   return (data.items || []).map((c: { id: string; summary?: string }) => ({
     id: c.id,
     summary: c.summary || c.id,
@@ -47,7 +80,7 @@ export async function listEventsAllCalendars(opts: {
         `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
         `&singleEvents=true&orderBy=startTime&maxResults=50`;
 
-      const data = await googleFetchJSON<any>(url);
+      const data = await googleFetchJSON<CalendarEventsResponse>(url);
 
       return (data.items || []).map(
         (e: {
@@ -95,7 +128,7 @@ export async function createEvent(opts: {
     ? { date: opts.end }
     : { dateTime: opts.end, timeZone: getInstanceConfig().timezone };
 
-  const e = await googleFetchJSON<any>(
+  const e = await googleFetchJSON<CalendarEventResponse>(
     `${CAL}/calendars/${encodeURIComponent(calId)}/events`,
     {
       method: "POST",
@@ -148,7 +181,7 @@ export async function updateEvent(opts: {
 }): Promise<CalendarEvent> {
   const calId = opts.calendarId || "primary";
 
-  const patch: any = {};
+  const patch: Record<string, unknown> = {};
   if (opts.summary) patch.summary = opts.summary;
   if (opts.description !== undefined) patch.description = opts.description;
   if (opts.location !== undefined) patch.location = opts.location;
@@ -163,7 +196,7 @@ export async function updateEvent(opts: {
       : { dateTime: opts.end, timeZone: getInstanceConfig().timezone };
   }
 
-  const e = await googleFetchJSON<any>(
+  const e = await googleFetchJSON<CalendarEventResponse>(
     `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(opts.eventId)}`,
     {
       method: "PATCH",
@@ -174,7 +207,7 @@ export async function updateEvent(opts: {
 
   return {
     id: e.id,
-    summary: e.summary,
+    summary: e.summary || "(untitled)",
     start: e.start?.dateTime || e.start?.date || "",
     end: e.end?.dateTime || e.end?.date || "",
     calendar: calId,
@@ -192,7 +225,7 @@ export async function findFreeTime(opts: {
 }): Promise<{ start: string; end: string }[]> {
   const calendars = await listAllCalendars();
 
-  const data = await googleFetchJSON<any>(`${CAL}/freeBusy`, {
+  const data = await googleFetchJSON<FreeBusyResponse>(`${CAL}/freeBusy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -204,7 +237,7 @@ export async function findFreeTime(opts: {
 
   // Merge all busy periods
   const busy: { start: number; end: number }[] = [];
-  for (const cal of Object.values(data.calendars || {}) as any[]) {
+  for (const cal of Object.values(data.calendars || {})) {
     for (const b of cal.busy || []) {
       busy.push({ start: new Date(b.start).getTime(), end: new Date(b.end).getTime() });
     }
@@ -277,11 +310,11 @@ export async function rsvpEvent(opts: {
 }): Promise<boolean> {
   const calId = opts.calendarId || "primary";
 
-  const event = await googleFetchJSON<any>(
+  const event = await googleFetchJSON<CalendarEventResponse>(
     `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(opts.eventId)}`
   );
 
-  const attendees = (event.attendees || []).map((a: any) => {
+  const attendees = (event.attendees || []).map((a: { email: string; self?: boolean; responseStatus?: string }) => {
     if (a.self) return { ...a, responseStatus: opts.response };
     return a;
   });

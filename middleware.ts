@@ -3,17 +3,20 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = process.env.MCP_AUTH_TOKEN?.trim();
 
-  // Protect admin dashboard — accepts token in query string (for browser access)
-  if (pathname === "/" && token) {
+  // Protect admin routes — dashboard and setup
+  const adminToken = (
+    process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN
+  )?.trim();
+
+  if ((pathname === "/" || pathname === "/setup") && adminToken) {
     const queryToken = request.nextUrl.searchParams.get("token")?.trim();
     const authHeader = request.headers.get("authorization");
     const bearer = authHeader?.replace(/^Bearer\s+/i, "").trim();
 
-    if (bearer !== token && queryToken !== token) {
+    if (bearer !== adminToken && queryToken !== adminToken) {
       return new NextResponse(
-        "Unauthorized — append ?token=<MCP_AUTH_TOKEN> to access the dashboard",
+        "Unauthorized — use Authorization header or ?token= to access the dashboard",
         { status: 401, headers: { "Content-Type": "text/plain" } }
       );
     }
@@ -23,5 +26,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/"],
+  matcher: ["/", "/setup"],
 };

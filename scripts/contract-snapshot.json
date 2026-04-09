@@ -1,0 +1,325 @@
+[
+  {
+    "name": "calendar_create",
+    "pack": "google",
+    "schemaKeys": [
+      "calendar_id",
+      "description",
+      "end",
+      "location",
+      "start",
+      "summary"
+    ]
+  },
+  {
+    "name": "calendar_delete",
+    "pack": "google",
+    "schemaKeys": [
+      "calendar_id",
+      "event_id"
+    ]
+  },
+  {
+    "name": "calendar_events",
+    "pack": "google",
+    "schemaKeys": [
+      "days"
+    ]
+  },
+  {
+    "name": "calendar_find_free",
+    "pack": "google",
+    "schemaKeys": [
+      "days",
+      "duration_minutes",
+      "start_date"
+    ]
+  },
+  {
+    "name": "calendar_rsvp",
+    "pack": "google",
+    "schemaKeys": [
+      "calendar_id",
+      "event_id",
+      "response"
+    ]
+  },
+  {
+    "name": "calendar_update",
+    "pack": "google",
+    "schemaKeys": [
+      "calendar_id",
+      "description",
+      "end",
+      "event_id",
+      "location",
+      "start",
+      "summary"
+    ]
+  },
+  {
+    "name": "contacts_search",
+    "pack": "google",
+    "schemaKeys": [
+      "max_results",
+      "query"
+    ]
+  },
+  {
+    "name": "drive_read",
+    "pack": "google",
+    "schemaKeys": [
+      "file_id"
+    ]
+  },
+  {
+    "name": "drive_search",
+    "pack": "google",
+    "schemaKeys": [
+      "max_results",
+      "query"
+    ]
+  },
+  {
+    "name": "gmail_attachment",
+    "pack": "google",
+    "schemaKeys": [
+      "attachment_id",
+      "message_id"
+    ]
+  },
+  {
+    "name": "gmail_draft",
+    "pack": "google",
+    "schemaKeys": [
+      "bcc",
+      "body",
+      "cc",
+      "subject",
+      "to"
+    ]
+  },
+  {
+    "name": "gmail_inbox",
+    "pack": "google",
+    "schemaKeys": [
+      "max_results",
+      "query"
+    ]
+  },
+  {
+    "name": "gmail_label",
+    "pack": "google",
+    "schemaKeys": [
+      "add",
+      "message_id",
+      "remove"
+    ]
+  },
+  {
+    "name": "gmail_read",
+    "pack": "google",
+    "schemaKeys": [
+      "message_id"
+    ]
+  },
+  {
+    "name": "gmail_reply",
+    "pack": "google",
+    "schemaKeys": [
+      "body",
+      "cc",
+      "message_id"
+    ]
+  },
+  {
+    "name": "gmail_search",
+    "pack": "google",
+    "schemaKeys": [
+      "max_results",
+      "query"
+    ]
+  },
+  {
+    "name": "gmail_send",
+    "pack": "google",
+    "schemaKeys": [
+      "bcc",
+      "body",
+      "cc",
+      "subject",
+      "to"
+    ]
+  },
+  {
+    "name": "gmail_trash",
+    "pack": "google",
+    "schemaKeys": [
+      "message_id"
+    ]
+  },
+  {
+    "name": "linkedin_feed",
+    "pack": "browser",
+    "schemaKeys": [
+      "max_posts"
+    ]
+  },
+  {
+    "name": "mcp_logs",
+    "pack": "admin",
+    "schemaKeys": [
+      "count",
+      "filter"
+    ]
+  },
+  {
+    "name": "my_context",
+    "pack": "vault",
+    "schemaKeys": []
+  },
+  {
+    "name": "read_paywalled",
+    "pack": "vault",
+    "schemaKeys": [
+      "url"
+    ]
+  },
+  {
+    "name": "save_article",
+    "pack": "vault",
+    "schemaKeys": [
+      "folder",
+      "tags",
+      "title",
+      "url"
+    ]
+  },
+  {
+    "name": "vault_append",
+    "pack": "vault",
+    "schemaKeys": [
+      "content",
+      "path",
+      "separator"
+    ]
+  },
+  {
+    "name": "vault_backlinks",
+    "pack": "vault",
+    "schemaKeys": [
+      "path"
+    ]
+  },
+  {
+    "name": "vault_batch_read",
+    "pack": "vault",
+    "schemaKeys": [
+      "paths"
+    ]
+  },
+  {
+    "name": "vault_delete",
+    "pack": "vault",
+    "schemaKeys": [
+      "message",
+      "path"
+    ]
+  },
+  {
+    "name": "vault_due",
+    "pack": "vault",
+    "schemaKeys": [
+      "before",
+      "folder"
+    ]
+  },
+  {
+    "name": "vault_list",
+    "pack": "vault",
+    "schemaKeys": [
+      "folder"
+    ]
+  },
+  {
+    "name": "vault_move",
+    "pack": "vault",
+    "schemaKeys": [
+      "from",
+      "message",
+      "to"
+    ]
+  },
+  {
+    "name": "vault_read",
+    "pack": "vault",
+    "schemaKeys": [
+      "path"
+    ]
+  },
+  {
+    "name": "vault_recent",
+    "pack": "vault",
+    "schemaKeys": [
+      "folder",
+      "n",
+      "since"
+    ]
+  },
+  {
+    "name": "vault_search",
+    "pack": "vault",
+    "schemaKeys": [
+      "folder",
+      "limit",
+      "page",
+      "query"
+    ]
+  },
+  {
+    "name": "vault_stats",
+    "pack": "vault",
+    "schemaKeys": [
+      "folder"
+    ]
+  },
+  {
+    "name": "vault_write",
+    "pack": "vault",
+    "schemaKeys": [
+      "content",
+      "frontmatter",
+      "message",
+      "path",
+      "sha"
+    ]
+  },
+  {
+    "name": "web_act",
+    "pack": "browser",
+    "schemaKeys": [
+      "actions",
+      "context_name",
+      "url"
+    ]
+  },
+  {
+    "name": "web_browse",
+    "pack": "browser",
+    "schemaKeys": [
+      "context_name",
+      "scroll_count",
+      "url"
+    ]
+  },
+  {
+    "name": "web_extract",
+    "pack": "browser",
+    "schemaKeys": [
+      "context_name",
+      "instruction",
+      "scroll_count",
+      "url"
+    ]
+  }
+]

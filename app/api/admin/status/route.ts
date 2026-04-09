@@ -6,7 +6,7 @@ import { getRecentLogs } from "@/core/logging";
 /**
  * Private admin status endpoint — requires ADMIN_AUTH_TOKEN.
  * Returns detailed pack diagnostics, tool counts, config, and recent logs.
- * This is the API behind the dashboard UI.
+ * Runs diagnose() on enabled packs to verify credentials actually work.
  */
 export async function GET(request: Request) {
   const authError = checkAdminAuth(request);
@@ -16,18 +16,33 @@ export async function GET(request: Request) {
   const config = getInstanceConfig();
   const logs = getRecentLogs();
 
-  const packs = registry.map((p) => ({
-    id: p.manifest.id,
-    label: p.manifest.label,
-    description: p.manifest.description,
-    enabled: p.enabled,
-    reason: p.reason,
-    toolCount: p.manifest.tools.length,
-    tools: p.manifest.tools.map((t) => ({
-      name: t.name,
-      description: t.description,
-    })),
-  }));
+  // Run diagnose() on enabled packs that have it
+  const packs = await Promise.all(
+    registry.map(async (p) => {
+      let diagnosis: { ok: boolean; message: string } | undefined;
+      if (p.enabled && p.manifest.diagnose) {
+        try {
+          diagnosis = await p.manifest.diagnose();
+        } catch {
+          diagnosis = { ok: false, message: "Diagnose check failed" };
+        }
+      }
+
+      return {
+        id: p.manifest.id,
+        label: p.manifest.label,
+        description: p.manifest.description,
+        enabled: p.enabled,
+        reason: p.reason,
+        toolCount: p.manifest.tools.length,
+        diagnosis,
+        tools: p.manifest.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+        })),
+      };
+    })
+  );
 
   const totalTools = registry
     .filter((p) => p.enabled)

@@ -22,7 +22,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:contract": "npx tsx scripts/contract-test.ts"
   },
   "dependencies": {
     "@browserbasehq/sdk": "^2.10.0",

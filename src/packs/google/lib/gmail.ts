@@ -24,13 +24,61 @@ export interface EmailFull extends EmailSummary {
   attachments: { id: string; filename: string; mimeType: string; size: number }[];
 }
 
+// --- Google API response types ---
+
+interface GmailMessageList {
+  messages?: { id: string; threadId: string }[];
+  nextPageToken?: string;
+}
+
+interface GmailMessagePart {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string; attachmentId?: string; size?: number };
+  headers?: { name: string; value: string }[];
+  parts?: GmailMessagePart[];
+}
+
+interface GmailMessage {
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+  snippet?: string;
+  payload?: GmailMessagePart;
+}
+
+interface GmailDraftResponse {
+  id: string;
+  message?: { id: string };
+}
+
 // --- Helpers ---
+
+function buildEmailHeaders(opts: {
+  to: string;
+  subject: string;
+  cc?: string;
+  bcc?: string;
+  inReplyTo?: string;
+  references?: string;
+}): string[] {
+  const hdrs = [
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    `Content-Type: text/plain; charset=utf-8`,
+  ];
+  if (opts.cc) hdrs.push(`Cc: ${opts.cc}`);
+  if (opts.bcc) hdrs.push(`Bcc: ${opts.bcc}`);
+  if (opts.inReplyTo) hdrs.push(`In-Reply-To: ${opts.inReplyTo}`);
+  if (opts.references) hdrs.push(`References: ${opts.references}`);
+  return hdrs;
+}
 
 function getHeader(headers: { name: string; value: string }[], name: string): string {
   return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 }
 
-function extractBody(payload: any): string {
+function extractBody(payload: GmailMessagePart | undefined): string {
   if (!payload) return "";
   if (payload.body?.data) {
     return Buffer.from(payload.body.data, "base64url").toString("utf-8");
@@ -56,9 +104,9 @@ function extractBody(payload: any): string {
   return "";
 }
 
-function extractAttachments(payload: any): EmailFull["attachments"] {
+function extractAttachments(payload: GmailMessagePart | undefined): EmailFull["attachments"] {
   const attachments: EmailFull["attachments"] = [];
-  function walk(parts: any[]) {
+  function walk(parts: GmailMessagePart[]) {
     for (const part of parts || []) {
       if (part.filename && part.body?.attachmentId) {
         attachments.push({
@@ -84,14 +132,14 @@ export async function listEmails(opts: {
   const maxResults = opts.maxResults || 10;
   const q = opts.query || "";
 
-  const listData = await googleFetchJSON<any>(
+  const listData = await googleFetchJSON<GmailMessageList>(
     `${GMAIL}/messages?maxResults=${maxResults}&q=${encodeURIComponent(q)}`
   );
   if (!listData.messages || listData.messages.length === 0) return [];
 
   return Promise.all(
-    listData.messages.map(async (msg: { id: string }) => {
-      const m = await googleFetchJSON<any>(
+    listData.messages.map(async (msg) => {
+      const m = await googleFetchJSON<GmailMessage>(
         `${GMAIL}/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`
       );
       const headers = m.payload?.headers || [];
@@ -112,7 +160,7 @@ export async function listEmails(opts: {
 // --- Read full email ---
 
 export async function readEmail(messageId: string): Promise<EmailFull> {
-  const m = await googleFetchJSON<any>(`${GMAIL}/messages/${messageId}?format=full`);
+  const m = await googleFetchJSON<GmailMessage>(`${GMAIL}/messages/${messageId}?format=full`);
   const headers = m.payload?.headers || [];
 
   return {
@@ -171,19 +219,10 @@ export async function sendEmail(opts: {
   inReplyTo?: string;
   references?: string;
 }): Promise<{ id: string; threadId: string }> {
-  const hdrs = [
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    `Content-Type: text/plain; charset=utf-8`,
-  ];
-  if (opts.cc) hdrs.push(`Cc: ${opts.cc}`);
-  if (opts.bcc) hdrs.push(`Bcc: ${opts.bcc}`);
-  if (opts.inReplyTo) hdrs.push(`In-Reply-To: ${opts.inReplyTo}`);
-  if (opts.references) hdrs.push(`References: ${opts.references}`);
-
+  const hdrs = buildEmailHeaders(opts);
   const raw = Buffer.from(hdrs.join("\r\n") + "\r\n\r\n" + opts.body).toString("base64url");
 
-  const payload: any = { raw };
+  const payload: { raw: string; threadId?: string } = { raw };
   if (opts.threadId) payload.threadId = opts.threadId;
 
   return googleFetchJSON(`${GMAIL}/messages/send`, {
@@ -243,22 +282,15 @@ export async function createDraft(opts: {
   cc?: string;
   bcc?: string;
 }): Promise<{ id: string; messageId: string }> {
-  const hdrs = [
-    `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
-    `Content-Type: text/plain; charset=utf-8`,
-  ];
-  if (opts.cc) hdrs.push(`Cc: ${opts.cc}`);
-  if (opts.bcc) hdrs.push(`Bcc: ${opts.bcc}`);
-
+  const hdrs = buildEmailHeaders(opts);
   const raw = Buffer.from(hdrs.join("\r\n") + "\r\n\r\n" + opts.body).toString("base64url");
 
-  const data = await googleFetchJSON<any>(`${GMAIL}/drafts`, {
+  const data = await googleFetchJSON<GmailDraftResponse>(`${GMAIL}/drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: { raw } }),
   });
-  return { id: data.id, messageId: data.message?.id };
+  return { id: data.id, messageId: data.message?.id || "" };
 }
 
 // --- Get attachment ---

@@ -20,6 +20,19 @@ export const vaultPack: PackManifest = {
   label: "Obsidian Vault",
   description: "Notes, articles, search, backlinks — via GitHub-backed Obsidian vault",
   requiredEnvVars: ["GITHUB_PAT", "GITHUB_REPO"],
+  diagnose: async () => {
+    try {
+      const repo = process.env.GITHUB_REPO;
+      const pat = process.env.GITHUB_PAT;
+      const res = await fetch(`https://api.github.com/repos/${repo}`, {
+        headers: { Authorization: `token ${pat}` },
+      });
+      if (res.ok) return { ok: true, message: `Connected to ${repo}` };
+      return { ok: false, message: `GitHub API ${res.status}: cannot access ${repo}` };
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : "Cannot reach GitHub" };
+    }
+  },
   tools: [
     {
       name: "vault_write",

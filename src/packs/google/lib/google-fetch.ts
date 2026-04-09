@@ -60,8 +60,8 @@ export async function googleFetch(
       }
 
       return res;
-    } catch (err: any) {
-      if (err.name === "AbortError") {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
         if (attempt < MAX_RETRIES) {
           await sleep(INITIAL_BACKOFF_MS * Math.pow(2, attempt));
           continue;
@@ -81,7 +81,7 @@ export async function googleFetch(
 /**
  * googleFetch + parse JSON response
  */
-export async function googleFetchJSON<T = any>(
+export async function googleFetchJSON<T = unknown>(
   url: string,
   opts: GoogleFetchOpts = {}
 ): Promise<T> {

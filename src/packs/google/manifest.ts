@@ -1,4 +1,5 @@
 import type { PackManifest } from "@/core/types";
+import { getGoogleAccessToken } from "./lib/google-auth";
 import { gmailInboxSchema, handleGmailInbox } from "./tools/gmail-inbox";
 import { gmailReadSchema, handleGmailRead } from "./tools/gmail-read";
 import { gmailSendSchema, handleGmailSend } from "./tools/gmail-send";
@@ -27,6 +28,17 @@ export const googlePack: PackManifest = {
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_REFRESH_TOKEN",
   ],
+  diagnose: async () => {
+    try {
+      await getGoogleAccessToken();
+      return { ok: true, message: "Google OAuth token is valid" };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to refresh Google token",
+      };
+    }
+  },
   tools: [
     {
       name: "gmail_inbox",
