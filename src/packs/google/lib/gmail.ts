@@ -188,7 +188,7 @@ export async function searchEmails(opts: {
   maxResults?: number;
 }): Promise<EmailFull[]> {
   const maxResults = Math.min(opts.maxResults || 5, 10);
-  const listData = await googleFetchJSON<any>(
+  const listData = await googleFetchJSON<GmailMessageList>(
     `${GMAIL}/messages?maxResults=${maxResults}&q=${encodeURIComponent(opts.query)}`
   );
   if (!listData.messages || listData.messages.length === 0) return [];
