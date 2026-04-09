@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "YassMCP — Admin",
+  title: "MyMCP — Dashboard",
   description: "Personal MCP Server Dashboard",
 };
 
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

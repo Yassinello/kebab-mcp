@@ -2,7 +2,17 @@
   "name": "mymcp",
   "version": "1.0.0",
   "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes",
-  "keywords": ["mcp", "model-context-protocol", "claude", "ai", "personal", "vercel", "gmail", "calendar", "obsidian"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "personal",
+    "vercel",
+    "gmail",
+    "calendar",
+    "obsidian"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,11 +28,13 @@
     "@browserbasehq/sdk": "^2.10.0",
     "@browserbasehq/stagehand": "^3.2.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@tailwindcss/postcss": "^4.2.2",
     "js-yaml": "^4.1.1",
     "mcp-handler": "^1.1.0",
     "next": "^16.2.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
