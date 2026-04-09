@@ -1,22 +1,22 @@
 import type { PackManifest } from "@/core/types";
-import { gmailInboxSchema, handleGmailInbox } from "@/tools/gmail-inbox";
-import { gmailReadSchema, handleGmailRead } from "@/tools/gmail-read";
-import { gmailSendSchema, handleGmailSend } from "@/tools/gmail-send";
-import { gmailReplySchema, handleGmailReply } from "@/tools/gmail-reply";
-import { gmailTrashSchema, handleGmailTrash } from "@/tools/gmail-trash";
-import { gmailLabelSchema, handleGmailLabel } from "@/tools/gmail-label";
-import { gmailSearchSchema, handleGmailSearch } from "@/tools/gmail-search";
-import { gmailDraftSchema, handleGmailDraft } from "@/tools/gmail-draft";
-import { gmailAttachmentSchema, handleGmailAttachment } from "@/tools/gmail-attachment";
-import { calendarEventsSchema, handleCalendarEvents } from "@/tools/calendar-events";
-import { calendarCreateSchema, handleCalendarCreate } from "@/tools/calendar-create";
-import { calendarDeleteSchema, handleCalendarDelete } from "@/tools/calendar-delete";
-import { calendarUpdateSchema, handleCalendarUpdate } from "@/tools/calendar-update";
-import { calendarFindFreeSchema, handleCalendarFindFree } from "@/tools/calendar-find-free";
-import { calendarRsvpSchema, handleCalendarRsvp } from "@/tools/calendar-rsvp";
-import { contactsSearchSchema, handleContactsSearch } from "@/tools/contacts-search";
-import { driveSearchSchema, handleDriveSearch } from "@/tools/drive-search";
-import { driveReadSchema, handleDriveRead } from "@/tools/drive-read";
+import { gmailInboxSchema, handleGmailInbox } from "./tools/gmail-inbox";
+import { gmailReadSchema, handleGmailRead } from "./tools/gmail-read";
+import { gmailSendSchema, handleGmailSend } from "./tools/gmail-send";
+import { gmailReplySchema, handleGmailReply } from "./tools/gmail-reply";
+import { gmailTrashSchema, handleGmailTrash } from "./tools/gmail-trash";
+import { gmailLabelSchema, handleGmailLabel } from "./tools/gmail-label";
+import { gmailSearchSchema, handleGmailSearch } from "./tools/gmail-search";
+import { gmailDraftSchema, handleGmailDraft } from "./tools/gmail-draft";
+import { gmailAttachmentSchema, handleGmailAttachment } from "./tools/gmail-attachment";
+import { calendarEventsSchema, handleCalendarEvents } from "./tools/calendar-events";
+import { calendarCreateSchema, handleCalendarCreate } from "./tools/calendar-create";
+import { calendarDeleteSchema, handleCalendarDelete } from "./tools/calendar-delete";
+import { calendarUpdateSchema, handleCalendarUpdate } from "./tools/calendar-update";
+import { calendarFindFreeSchema, handleCalendarFindFree } from "./tools/calendar-find-free";
+import { calendarRsvpSchema, handleCalendarRsvp } from "./tools/calendar-rsvp";
+import { contactsSearchSchema, handleContactsSearch } from "./tools/contacts-search";
+import { driveSearchSchema, handleDriveSearch } from "./tools/drive-search";
+import { driveReadSchema, handleDriveRead } from "./tools/drive-read";
 
 export const googlePack: PackManifest = {
   id: "google",

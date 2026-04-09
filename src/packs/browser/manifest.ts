@@ -1,8 +1,8 @@
 import type { PackManifest } from "@/core/types";
-import { webBrowseSchema, handleWebBrowse } from "@/tools/web-browse";
-import { webExtractSchema, handleWebExtract } from "@/tools/web-extract";
-import { webActSchema, handleWebAct } from "@/tools/web-act";
-import { linkedinFeedSchema, handleLinkedinFeed } from "@/tools/linkedin-feed";
+import { webBrowseSchema, handleWebBrowse } from "./tools/web-browse";
+import { webExtractSchema, handleWebExtract } from "./tools/web-extract";
+import { webActSchema, handleWebAct } from "./tools/web-act";
+import { linkedinFeedSchema, handleLinkedinFeed } from "./tools/linkedin-feed";
 
 export const browserPack: PackManifest = {
   id: "browser",

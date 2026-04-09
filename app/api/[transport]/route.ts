@@ -1,5 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
-import { withLogging } from "@/lib/logging";
+import { withLogging } from "@/core/logging";
 import { checkMcpAuth } from "@/core/auth";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
 

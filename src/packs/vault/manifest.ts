@@ -1,19 +1,19 @@
 import type { PackManifest } from "@/core/types";
-import { vaultWriteSchema, handleVaultWrite } from "@/tools/vault-write";
-import { vaultReadSchema, handleVaultRead } from "@/tools/vault-read";
-import { vaultSearchSchema, handleVaultSearch } from "@/tools/vault-search";
-import { vaultListSchema, handleVaultList } from "@/tools/vault-list";
-import { vaultDeleteSchema, handleVaultDelete } from "@/tools/vault-delete";
-import { vaultMoveSchema, handleVaultMove } from "@/tools/vault-move";
-import { saveArticleSchema, handleSaveArticle } from "@/tools/save-article";
-import { readPaywalledSchema, handleReadPaywalled } from "@/tools/read-paywalled";
-import { vaultAppendSchema, handleVaultAppend } from "@/tools/vault-append";
-import { vaultBatchReadSchema, handleVaultBatchRead } from "@/tools/vault-batch-read";
-import { vaultRecentSchema, handleVaultRecent } from "@/tools/vault-recent";
-import { vaultStatsSchema, handleVaultStats } from "@/tools/vault-stats";
-import { vaultBacklinksSchema, handleVaultBacklinks } from "@/tools/vault-backlinks";
-import { vaultDueSchema, handleVaultDue } from "@/tools/vault-due";
-import { handleMyContext } from "@/tools/my-context";
+import { vaultWriteSchema, handleVaultWrite } from "./tools/vault-write";
+import { vaultReadSchema, handleVaultRead } from "./tools/vault-read";
+import { vaultSearchSchema, handleVaultSearch } from "./tools/vault-search";
+import { vaultListSchema, handleVaultList } from "./tools/vault-list";
+import { vaultDeleteSchema, handleVaultDelete } from "./tools/vault-delete";
+import { vaultMoveSchema, handleVaultMove } from "./tools/vault-move";
+import { saveArticleSchema, handleSaveArticle } from "./tools/save-article";
+import { readPaywalledSchema, handleReadPaywalled } from "./tools/read-paywalled";
+import { vaultAppendSchema, handleVaultAppend } from "./tools/vault-append";
+import { vaultBatchReadSchema, handleVaultBatchRead } from "./tools/vault-batch-read";
+import { vaultRecentSchema, handleVaultRecent } from "./tools/vault-recent";
+import { vaultStatsSchema, handleVaultStats } from "./tools/vault-stats";
+import { vaultBacklinksSchema, handleVaultBacklinks } from "./tools/vault-backlinks";
+import { vaultDueSchema, handleVaultDue } from "./tools/vault-due";
+import { handleMyContext } from "./tools/my-context";
 
 export const vaultPack: PackManifest = {
   id: "vault",

@@ -1,5 +1,5 @@
 import type { PackManifest } from "@/core/types";
-import { mcpLogsSchema, handleMcpLogs } from "@/tools/mcp-logs";
+import { mcpLogsSchema, handleMcpLogs } from "./tools/mcp-logs";
 
 export const adminPack: PackManifest = {
   id: "admin",
