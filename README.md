@@ -1,111 +1,155 @@
-# YassMCP
+# MyMCP
 
-Personal MCP server that connects Claude (Desktop & Code) to an Obsidian vault via GitHub.
+**Deploy your personal AI backend to Vercel in 5 minutes.**
 
-## What it does
+One endpoint. Your email, calendar, notes, and browser — all accessible to Claude, ChatGPT, or any MCP client. Open source. No Docker. No vendor lock-in.
 
-YassMCP turns your GitHub-backed Obsidian vault into a fully accessible knowledge base for Claude. Read, write, search, and organize your notes — all through natural language.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&env=MCP_AUTH_TOKEN&envDescription=Required%20env%20vars%20for%20MyMCP&envLink=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp%23configuration)
 
-## Features
+## What is this?
 
-- **Vault CRUD** — Read, write, append, delete, move notes with YAML frontmatter support
-- **Batch operations** — Read up to 20 notes in a single call
-- **Full-text search** — GitHub Code Search with tree grep fallback
-- **Recent activity** — See recently modified notes for reviews and catch-ups
-- **Vault stats** — Note counts, folder breakdown, inbox triage metrics
-- **Article saving** — Fetch any URL via Jina Reader, save as clean Markdown with metadata
-- **Paywall bypass** — Read Medium premium articles with stored session cookies
-- **Personal context** — Load your role, projects, and priorities from a context file
+MyMCP is a personal MCP server framework. It ships **38 pre-built tools** across 4 packs that you enable via env vars:
 
-## Tools
+| Pack | Tools | What it does |
+|------|-------|-------------|
+| **Google Workspace** | 18 | Gmail, Calendar, Contacts, Drive |
+| **Obsidian Vault** | 15 | Read, write, search notes via GitHub |
+| **Browser Automation** | 4 | AI-powered browsing via Stagehand/Browserbase |
+| **Admin** | 1 | Tool call logs |
 
-| Tool | What it does |
-|------|-------------|
-| `vault_read` | Read a note (parsed frontmatter + body + SHA) |
-| `vault_write` | Create or update a note |
-| `vault_append` | Append content to an existing note |
-| `vault_batch_read` | Read multiple notes at once (max 20) |
-| `vault_search` | Full-text search across the vault |
-| `vault_list` | Browse vault directory structure |
-| `vault_delete` | Delete a note |
-| `vault_move` | Move or rename a note |
-| `vault_recent` | Recently modified notes (with `since` filter) |
-| `vault_stats` | Vault statistics and metrics |
-| `vault_backlinks` | Find notes linking to a given note via `[[wikilinks]]` |
-| `vault_due` | Notes with `resurface:` date that has passed |
-| `save_article` | Save a web article to the vault |
-| `read_paywalled` | Read paywalled content without saving |
-| `my_context` | Load personal context |
+You fork, set env vars, deploy to Vercel. Done.
 
-## Setup
+## Quick Start
 
-### 1. Deploy to Vercel
+### 1. Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Yassinello/yass-mcp)
+Click the **Deploy with Vercel** button above, or:
 
-### 2. Environment Variables
+```bash
+git clone https://github.com/Yassinello/mymcp.git
+cd mymcp
+cp .env.example .env
+# Fill in your values
+npm install
+npm run dev
+```
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MCP_AUTH_TOKEN` | Yes | Auth token for the MCP endpoint |
-| `GITHUB_PAT` | Yes | GitHub Personal Access Token (`repo` scope) |
-| `GITHUB_REPO` | Yes | Your vault repo (`owner/repo`) |
-| `MEDIUM_SID` | No | Medium session cookie for premium articles |
+### 2. Configure
+
+Set env vars in Vercel (or `.env` locally). Packs auto-activate when their credentials are present:
+
+```bash
+# Required
+MCP_AUTH_TOKEN=your-secret-token
+
+# Google Workspace pack (set all 3 to enable)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+
+# Vault pack (set both to enable)
+GITHUB_PAT=...
+GITHUB_REPO=username/my-vault
+
+# Browser pack (set all 3 to enable)
+BROWSERBASE_API_KEY=...
+BROWSERBASE_PROJECT_ID=...
+OPENROUTER_API_KEY=...
+```
+
+See [`.env.example`](.env.example) for all options.
 
 ### 3. Connect to Claude Desktop
 
-Add to your `claude_desktop_config.json`:
+Add to your Claude Desktop config (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "YassMCP": {
-      "url": "https://your-app.vercel.app/api/mcp?token=YOUR_TOKEN"
+    "mymcp": {
+      "url": "https://your-app.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
     }
   }
 }
 ```
 
-### 4. Connect to Claude Code
-
-```bash
-claude mcp add yassmcp https://your-app.vercel.app/api/mcp \
-  --header "Authorization: Bearer YOUR_TOKEN"
-```
-
-## Tech Stack
-
-- **Framework**: Next.js (deployed on Vercel)
-- **MCP SDK**: `mcp-handler` + `@modelcontextprotocol/sdk`
-- **Storage**: GitHub Contents API (your Obsidian vault repo)
-- **Article extraction**: Jina Reader
-- **Schema validation**: Zod
-- **YAML**: js-yaml
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run locally
-npm run dev
-
-# Build
-npm run build
-```
-
 ## Architecture
 
 ```
-app/api/[transport]/route.ts   → MCP endpoint (auth + tool registration)
-src/tools/*.ts                 → Tool handlers (one per file)
-src/lib/github.ts              → GitHub API wrapper
-src/lib/logging.ts             → Observability
+src/
+  core/               ← Framework (types, registry, config, auth, logging)
+  packs/
+    google/           ← Google Workspace (18 tools)
+      manifest.ts     ← Pack definition + tool list
+      lib/            ← API wrappers (gmail, calendar, etc.)
+      tools/          ← Individual tool handlers
+    vault/            ← Obsidian Vault (15 tools)
+    browser/          ← Browser Automation (4 tools)
+    admin/            ← Admin (1 tool)
+app/
+  api/
+    [transport]/      ← MCP endpoint (reads from registry)
+    health/           ← Public liveness check
 ```
 
-All vault operations go through the GitHub Contents API. Notes are stored as Markdown files with optional YAML frontmatter. The MCP endpoint supports both `Authorization: Bearer` header and `?token=` query string authentication.
+**How it works:**
+1. Each pack has a `manifest.ts` declaring its tools and required env vars
+2. The registry checks which packs have their env vars set
+3. `route.ts` iterates enabled packs and registers their tools with the MCP server
+4. ~30 lines of route.ts replaces what used to be ~350 lines of hardcoded imports
+
+## Tool Packs
+
+### Google Workspace
+
+`gmail_inbox` `gmail_read` `gmail_send` `gmail_reply` `gmail_trash` `gmail_label` `gmail_search` `gmail_draft` `gmail_attachment` `calendar_events` `calendar_create` `calendar_update` `calendar_delete` `calendar_find_free` `calendar_rsvp` `contacts_search` `drive_search` `drive_read`
+
+### Obsidian Vault
+
+`vault_read` `vault_write` `vault_search` `vault_list` `vault_delete` `vault_move` `vault_append` `vault_batch_read` `vault_recent` `vault_stats` `vault_backlinks` `vault_due` `save_article` `read_paywalled` `my_context`
+
+### Browser Automation
+
+`web_browse` `web_extract` `web_act` `linkedin_feed`
+
+### Admin
+
+`mcp_logs`
+
+## Configuration
+
+All configuration is via environment variables. No config files to maintain.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MCP_AUTH_TOKEN` | Yes | Bearer token for MCP endpoint |
+| `ADMIN_AUTH_TOKEN` | No | Separate token for dashboard (falls back to MCP_AUTH_TOKEN) |
+| `MYMCP_TIMEZONE` | No | Timezone (default: UTC) |
+| `MYMCP_LOCALE` | No | Locale (default: en-US) |
+| `MYMCP_DISPLAY_NAME` | No | Display name (default: User) |
+| `MYMCP_CONTEXT_PATH` | No | Vault context file path (default: System/context.md) |
+
+### Pack Activation
+
+Packs activate automatically when all their required env vars are present. To force-disable:
+
+```bash
+MYMCP_DISABLE_GOOGLE=true
+```
+
+To explicitly control which packs activate:
+
+```bash
+MYMCP_ENABLED_PACKS=vault,admin
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add tools and packs.
 
 ## License
 
-Private project.
+[MIT](LICENSE)

@@ -1,6 +1,13 @@
 {
-  "name": "yass-mcp",
+  "name": "mymcp",
   "version": "1.0.0",
+  "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes",
+  "keywords": ["mcp", "model-context-protocol", "claude", "ai", "personal", "vercel", "gmail", "calendar", "obsidian"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yassinello/mymcp.git"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",
