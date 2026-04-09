@@ -87,18 +87,18 @@ Push to `main` → auto-deployed on Vercel. No CI/CD config needed beyond `verce
 
 **MyMCP — Personal MCP Framework**
 
-An open-source framework that lets technical users deploy a personal MCP server on Vercel in minutes. Users pick which tool packs to enable (Google Workspace, Obsidian vault, Browser automation), configure via a setup wizard, and get a single MCP endpoint that connects to Claude Desktop, Claude.ai, or any MCP client. Built with Next.js/TypeScript, deployed on Vercel free tier.
+An open-source framework that lets technical users deploy a personal MCP server on Vercel in minutes. Users configure tool packs (Google Workspace, Obsidian vault, Browser automation) via env vars, and get a single MCP endpoint that connects to Claude Desktop, Claude.ai, or any MCP client. Built with Next.js/TypeScript, deployed on Vercel free tier.
 
 **Core Value:** One deploy gives you a personal AI backend with all your tools — email, calendar, notes, browser — behind a single MCP endpoint.
 
 ### Constraints
 
 - **Stack**: Next.js on Vercel, TypeScript, MCP SDK via `mcp-handler` — no stack changes
-- **Deployment**: Must work on Vercel free tier (60s timeout, serverless)
-- **Backward compatibility**: Must not break existing tool functionality during refactor
-- **Browser tools**: Browserbase dependency for now, but architecture should allow alternatives later
-- **Naming**: Keep "Personal MCP" or "MyMCP" branding — open to rename later
-- **Simplicity**: Clean, minimal code over feature-rich. Well-designed > feature-complete.
+- **Deployment**: Must work on Vercel free tier (60s timeout, serverless) AND local dev
+- **Backward compatibility**: Contract-level — same tool names, schemas, behavior
+- **Browser tools**: Browserbase for now, clean module boundaries allow swap later
+- **Simplicity**: Clean, minimal code over feature-rich. Boring architecture > smart architecture.
+- **Upgradability**: `git pull upstream main` must never conflict (no user-modified tracked files)
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:research/STACK.md -->
