@@ -5,10 +5,7 @@ import { vaultWrite } from "../lib/github";
 export const vaultWriteSchema = {
   path: z.string().describe("Path in the vault, e.g. Veille/mon-article.md"),
   content: z.string().describe("Markdown content of the note"),
-  message: z
-    .string()
-    .optional()
-    .describe('Git commit message (default: "Update via MyMCP")'),
+  message: z.string().optional().describe('Git commit message (default: "Update via MyMCP")'),
   frontmatter: z
     .record(z.string(), z.any())
     .optional()
@@ -30,11 +27,13 @@ export async function handleVaultWrite(params: {
 
   // Prepend YAML frontmatter if provided (using js-yaml for safe serialization)
   if (params.frontmatter && Object.keys(params.frontmatter).length > 0) {
-    const yamlStr = yaml.dump(params.frontmatter, {
-      lineWidth: -1,
-      quotingType: '"',
-      forceQuotes: false,
-    }).trimEnd();
+    const yamlStr = yaml
+      .dump(params.frontmatter, {
+        lineWidth: -1,
+        quotingType: '"',
+        forceQuotes: false,
+      })
+      .trimEnd();
     const frontmatterBlock = `---\n${yamlStr}\n---\n\n`;
 
     // Replace existing frontmatter or prepend

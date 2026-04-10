@@ -15,10 +15,7 @@ interface GoogleFetchOpts extends Omit<RequestInit, "headers"> {
  * - Timeout (default 15s)
  * - Structured error messages
  */
-export async function googleFetch(
-  url: string,
-  opts: GoogleFetchOpts = {}
-): Promise<Response> {
+export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Promise<Response> {
   const token = await getGoogleAccessToken();
   const timeoutMs = opts.timeoutMs || 15_000;
 
@@ -55,7 +52,9 @@ export async function googleFetch(
         try {
           const json = JSON.parse(body);
           detail = json.error?.message || json.error_description || body;
-        } catch { /* not JSON */ }
+        } catch {
+          /* not JSON */
+        }
         throw new Error(`Google API ${res.status}: ${detail} (${opts.method || "GET"} ${url})`);
       }
 
@@ -66,7 +65,7 @@ export async function googleFetch(
           await sleep(INITIAL_BACKOFF_MS * Math.pow(2, attempt));
           continue;
         }
-        throw new Error(`Google API timeout after ${timeoutMs}ms: ${url}`);
+        throw new Error(`Google API timeout after ${timeoutMs}ms: ${url}`, { cause: err });
       }
       throw err;
     } finally {

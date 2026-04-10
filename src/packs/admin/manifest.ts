@@ -9,9 +9,11 @@ export const adminPack: PackManifest = {
   tools: [
     {
       name: "mcp_logs",
-      description: "View recent MCP tool call logs. Shows tool name, duration, status, and errors. Useful for debugging failed calls. Logs are in-memory and ephemeral (reset on cold start).",
+      description:
+        "View recent MCP tool call logs. Shows tool name, duration, status, and errors. Useful for debugging failed calls. Logs are in-memory and ephemeral (reset on cold start).",
       schema: mcpLogsSchema,
-      handler: async (params) => handleMcpLogs(params as { count?: number; filter?: "all" | "errors" | "success" }),
+      handler: async (params) =>
+        handleMcpLogs(params as { count?: number; filter?: "all" | "errors" | "success" }),
     },
   ],
 };

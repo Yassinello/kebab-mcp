@@ -7,7 +7,7 @@ export const gmailLabelSchema = {
     .string()
     .optional()
     .describe(
-      'Comma-separated label IDs to add. Common: STARRED, IMPORTANT, UNREAD, INBOX, TRASH, SPAM'
+      "Comma-separated label IDs to add. Common: STARRED, IMPORTANT, UNREAD, INBOX, TRASH, SPAM"
     ),
   remove: z
     .string()

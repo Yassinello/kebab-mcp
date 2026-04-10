@@ -23,11 +23,7 @@ export const googlePack: PackManifest = {
   id: "google",
   label: "Google Workspace",
   description: "Gmail, Calendar, Contacts, Drive",
-  requiredEnvVars: [
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "GOOGLE_REFRESH_TOKEN",
-  ],
+  requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
   diagnose: async () => {
     try {
       await getGoogleAccessToken();
@@ -53,8 +49,7 @@ export const googlePack: PackManifest = {
       description:
         "Read the full content of an email (body, headers, attachments list). Use the message ID from gmail_inbox.",
       schema: gmailReadSchema,
-      handler: async (params) =>
-        handleGmailRead(params as { message_id: string }),
+      handler: async (params) => handleGmailRead(params as { message_id: string }),
     },
     {
       name: "gmail_send",
@@ -78,17 +73,13 @@ export const googlePack: PackManifest = {
         "Reply to an existing email thread. Automatically sets In-Reply-To, References, and thread ID. Always show the reply to the user for approval before calling this tool.",
       schema: gmailReplySchema,
       handler: async (params) =>
-        handleGmailReply(
-          params as { message_id: string; body: string; cc?: string }
-        ),
+        handleGmailReply(params as { message_id: string; body: string; cc?: string }),
     },
     {
       name: "gmail_trash",
-      description:
-        "Move an email to trash. Requires the message ID from gmail_inbox.",
+      description: "Move an email to trash. Requires the message ID from gmail_inbox.",
       schema: gmailTrashSchema,
-      handler: async (params) =>
-        handleGmailTrash(params as { message_id: string }),
+      handler: async (params) => handleGmailTrash(params as { message_id: string }),
     },
     {
       name: "gmail_label",
@@ -96,9 +87,7 @@ export const googlePack: PackManifest = {
         "Add or remove labels on an email. Use to archive (remove INBOX), mark read (remove UNREAD), star (add STARRED), etc.",
       schema: gmailLabelSchema,
       handler: async (params) =>
-        handleGmailLabel(
-          params as { message_id: string; add?: string; remove?: string }
-        ),
+        handleGmailLabel(params as { message_id: string; add?: string; remove?: string }),
     },
     {
       name: "gmail_search",
@@ -130,17 +119,14 @@ export const googlePack: PackManifest = {
         "Download and read an email attachment. Returns text content for text files, or metadata for binary files. Get attachment IDs from gmail_read.",
       schema: gmailAttachmentSchema,
       handler: async (params) =>
-        handleGmailAttachment(
-          params as { message_id: string; attachment_id?: string }
-        ),
+        handleGmailAttachment(params as { message_id: string; attachment_id?: string }),
     },
     {
       name: "calendar_events",
       description:
         "List upcoming events from all Google Calendars (personal, shared, etc.). Returns event title, time, calendar name, location, and Meet link.",
       schema: calendarEventsSchema,
-      handler: async (params) =>
-        handleCalendarEvents(params as { days?: number }),
+      handler: async (params) => handleCalendarEvents(params as { days?: number }),
     },
     {
       name: "calendar_create",
@@ -165,9 +151,7 @@ export const googlePack: PackManifest = {
         "Delete/cancel an event from Google Calendar. Requires event ID from calendar_events.",
       schema: calendarDeleteSchema,
       handler: async (params) =>
-        handleCalendarDelete(
-          params as { event_id: string; calendar_id?: string }
-        ),
+        handleCalendarDelete(params as { event_id: string; calendar_id?: string }),
     },
     {
       name: "calendar_update",
@@ -221,9 +205,7 @@ export const googlePack: PackManifest = {
         "Search Google Contacts by name, email, phone, or company. Returns name, email, phone, organization, and job title. Use to find someone's email before sending.",
       schema: contactsSearchSchema,
       handler: async (params) =>
-        handleContactsSearch(
-          params as { query: string; max_results?: number }
-        ),
+        handleContactsSearch(params as { query: string; max_results?: number }),
     },
     {
       name: "drive_search",
@@ -238,8 +220,7 @@ export const googlePack: PackManifest = {
       description:
         "Read the content of a Google Drive file. Exports Google Docs as plain text, Sheets as CSV, Slides as text. For binary files (PDF, images), returns metadata with a link.",
       schema: driveReadSchema,
-      handler: async (params) =>
-        handleDriveRead(params as { file_id: string }),
+      handler: async (params) => handleDriveRead(params as { file_id: string }),
     },
   ],
 };

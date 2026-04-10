@@ -4,19 +4,11 @@ import { vaultRead, vaultWrite, vaultDelete } from "../lib/github";
 export const vaultMoveSchema = {
   from: z.string().describe("Current path, e.g. Inbox/note.md"),
   to: z.string().describe("New path, e.g. Veille/note.md"),
-  message: z
-    .string()
-    .optional()
-    .describe("Git commit message"),
+  message: z.string().optional().describe("Git commit message"),
 };
 
-export async function handleVaultMove(params: {
-  from: string;
-  to: string;
-  message?: string;
-}) {
-  const commitMsg =
-    params.message || `Move ${params.from} → ${params.to} via MyMCP`;
+export async function handleVaultMove(params: { from: string; to: string; message?: string }) {
+  const commitMsg = params.message || `Move ${params.from} → ${params.to} via MyMCP`;
 
   // Step 1: Read source (gets content + SHA in one call)
   const source = await vaultRead(params.from);

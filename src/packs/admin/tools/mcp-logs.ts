@@ -3,10 +3,7 @@ import { z } from "zod";
 import { getRecentLogs } from "@/core/logging";
 
 export const mcpLogsSchema = {
-  count: z
-    .number()
-    .optional()
-    .describe("Number of recent logs to return (default: 20, max: 100)"),
+  count: z.number().optional().describe("Number of recent logs to return (default: 20, max: 100)"),
   filter: z
     .enum(["all", "errors", "success"])
     .optional()

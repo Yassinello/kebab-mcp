@@ -48,7 +48,7 @@ interface GitHubSearchResponse {
   }>;
 }
 
-interface GitHubRepoResponse {
+interface _GitHubRepoResponse {
   id: number;
   full_name: string;
   private: boolean;
@@ -226,10 +226,9 @@ export async function vaultList(folder?: string): Promise<VaultListEntry[]> {
   if (folder) validateVaultPath(folder);
   const { pat, repo } = getConfig();
   const pathSegment = folder ? `/${encodeURIPath(folder)}` : "";
-  const res = await fetchWithTimeout(
-    `${GITHUB_API}/repos/${repo}/contents${pathSegment}`,
-    { headers: headers(pat) }
-  );
+  const res = await fetchWithTimeout(`${GITHUB_API}/repos/${repo}/contents${pathSegment}`, {
+    headers: headers(pat),
+  });
 
   if (!res.ok) {
     if (res.status === 404) throw new Error(`Folder not found: ${folder || "/"}`);
@@ -244,7 +243,7 @@ export async function vaultList(folder?: string): Promise<VaultListEntry[]> {
   return data.map((item) => ({
     name: item.name,
     path: item.path,
-    type: item.type === "dir" ? "dir" as const : "file" as const,
+    type: item.type === "dir" ? ("dir" as const) : ("file" as const),
     size: item.size || 0,
   }));
 }
@@ -336,9 +335,7 @@ async function treeGrep(
   const tree = (await treeRes.json()) as GitTreeResponse;
 
   // Filter to markdown files in target folder
-  let mdFiles = tree.tree.filter(
-    (t) => t.type === "blob" && t.path.endsWith(".md")
-  );
+  let mdFiles = tree.tree.filter((t) => t.type === "blob" && t.path.endsWith(".md"));
   if (folder) {
     const prefix = folder.replace(/\/$/, "");
     mdFiles = mdFiles.filter((t) => t.path.startsWith(prefix + "/") || t.path === prefix);
@@ -388,7 +385,10 @@ async function treeGrep(
         const idx = contentLower.indexOf(queryTerms[0]);
         const start = Math.max(0, idx - 50);
         const end = Math.min(content.length, idx + queryTerms[0].length + 50);
-        const fragment = (start > 0 ? "..." : "") + content.slice(start, end).trim() + (end < content.length ? "..." : "");
+        const fragment =
+          (start > 0 ? "..." : "") +
+          content.slice(start, end).trim() +
+          (end < content.length ? "..." : "");
 
         return {
           name: file.path.split("/").pop() || file.path,
@@ -464,10 +464,9 @@ export async function vaultRecentCommits(
     if (results.length >= limit) break;
 
     // Fetch commit details to get file list
-    const detailRes = await fetchWithTimeout(
-      `${GITHUB_API}/repos/${repo}/commits/${commit.sha}`,
-      { headers: headers(pat) }
-    );
+    const detailRes = await fetchWithTimeout(`${GITHUB_API}/repos/${repo}/commits/${commit.sha}`, {
+      headers: headers(pat),
+    });
     if (!detailRes.ok) continue;
 
     const detail = (await detailRes.json()) as {

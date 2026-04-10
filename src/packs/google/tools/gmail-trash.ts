@@ -4,9 +4,7 @@ import { trashEmail } from "../lib/gmail";
 export const gmailTrashSchema = {
   message_id: z
     .string()
-    .describe(
-      "Gmail message ID to trash. Get it from gmail_inbox results or gmail_search."
-    ),
+    .describe("Gmail message ID to trash. Get it from gmail_inbox results or gmail_search."),
 };
 
 export async function handleGmailTrash(params: { message_id: string }) {

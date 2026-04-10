@@ -3,13 +3,8 @@ import { z } from "zod";
 import { findFreeTime } from "../lib/calendar";
 
 export const calendarFindFreeSchema = {
-  duration_minutes: z
-    .number()
-    .describe("Duration of the slot needed in minutes (e.g. 30, 60)"),
-  days: z
-    .number()
-    .optional()
-    .describe("Number of days to look ahead (default: 5, max: 14)"),
+  duration_minutes: z.number().describe("Duration of the slot needed in minutes (e.g. 30, 60)"),
+  days: z.number().optional().describe("Number of days to look ahead (default: 5, max: 14)"),
   start_date: z
     .string()
     .optional()
@@ -52,8 +47,16 @@ export async function handleCalendarFindFree(params: {
       month: "short",
       timeZone: getInstanceConfig().timezone,
     });
-    const from = start.toLocaleTimeString(getInstanceConfig().locale, { hour: "2-digit", minute: "2-digit", timeZone: getInstanceConfig().timezone });
-    const to = end.toLocaleTimeString(getInstanceConfig().locale, { hour: "2-digit", minute: "2-digit", timeZone: getInstanceConfig().timezone });
+    const from = start.toLocaleTimeString(getInstanceConfig().locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: getInstanceConfig().timezone,
+    });
+    const to = end.toLocaleTimeString(getInstanceConfig().locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: getInstanceConfig().timezone,
+    });
     return `${day} ${from}–${to}`;
   });
 

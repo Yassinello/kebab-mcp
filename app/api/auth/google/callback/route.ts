@@ -45,11 +45,7 @@ export async function GET(request: Request) {
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
 
-  const google = new Google(
-    clientId,
-    clientSecret,
-    `${baseUrl}/api/auth/google/callback`
-  );
+  const google = new Google(clientId, clientSecret, `${baseUrl}/api/auth/google/callback`);
 
   try {
     const tokens = await google.validateAuthorizationCode(code, codeVerifier);
@@ -65,8 +61,7 @@ export async function GET(request: Request) {
           status: 200,
           headers: {
             "Content-Type": "text/html",
-            "Set-Cookie":
-              "mymcp_oauth=; Path=/; HttpOnly; Max-Age=0",
+            "Set-Cookie": "mymcp_oauth=; Path=/; HttpOnly; Max-Age=0",
           },
         }
       );
@@ -77,8 +72,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "Content-Type": "text/html",
-        "Set-Cookie":
-          "mymcp_oauth=; Path=/; HttpOnly; Max-Age=0",
+        "Set-Cookie": "mymcp_oauth=; Path=/; HttpOnly; Max-Age=0",
       },
     });
   } catch (err) {

@@ -16,14 +16,12 @@ export const vaultRecentSchema = {
   since: z
     .string()
     .optional()
-    .describe("ISO date string to filter notes modified after this date, e.g. '2026-03-25' or '2026-03-25T00:00:00Z'"),
+    .describe(
+      "ISO date string to filter notes modified after this date, e.g. '2026-03-25' or '2026-03-25T00:00:00Z'"
+    ),
 };
 
-export async function handleVaultRecent(params: {
-  n?: number;
-  folder?: string;
-  since?: string;
-}) {
+export async function handleVaultRecent(params: { n?: number; folder?: string; since?: string }) {
   const limit = params.n ?? 10;
   const results = await vaultRecentCommits(limit, params.folder, params.since);
 

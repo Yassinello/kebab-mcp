@@ -21,9 +21,7 @@ export async function handleVaultStats(params: { folder?: string }) {
     totalNotes++;
     totalSize += file.size || 0;
 
-    const folder = file.path.includes("/")
-      ? file.path.split("/").slice(0, -1).join("/")
-      : "(root)";
+    const folder = file.path.includes("/") ? file.path.split("/").slice(0, -1).join("/") : "(root)";
     folderCounts[folder] = (folderCounts[folder] || 0) + 1;
   }
 

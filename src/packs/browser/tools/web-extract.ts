@@ -61,7 +61,12 @@ export async function handleWebExtract(params: {
     };
   } catch (err: unknown) {
     return {
-      content: [{ type: "text" as const, text: `Error extracting from ${params.url}: ${sanitizeError(err)}` }],
+      content: [
+        {
+          type: "text" as const,
+          text: `Error extracting from ${params.url}: ${sanitizeError(err)}`,
+        },
+      ],
       isError: true,
     };
   } finally {

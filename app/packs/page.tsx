@@ -46,36 +46,81 @@ export default function PacksPage() {
             <p className="tool-desc">{pack.description}</p>
 
             <div style={{ marginTop: "1rem" }}>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <p
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted)",
+                  marginBottom: "0.5rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
                 Required env vars
               </p>
               <div className="usecase-tags">
                 {pack.requiredEnvVars.length > 0 ? (
                   pack.requiredEnvVars.map((v) => (
-                    <code key={v} style={{ background: "var(--bg-input)", padding: "2px 8px", borderRadius: "4px", fontSize: "0.78rem", color: "var(--yellow)" }}>
+                    <code
+                      key={v}
+                      style={{
+                        background: "var(--bg-input)",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        fontSize: "0.78rem",
+                        color: "var(--yellow)",
+                      }}
+                    >
                       {v}
                     </code>
                   ))
                 ) : (
-                  <span style={{ fontSize: "0.85rem", color: "var(--green)" }}>Always active — no credentials needed</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--green)" }}>
+                    Always active — no credentials needed
+                  </span>
                 )}
               </div>
             </div>
 
             <div style={{ marginTop: "1rem" }}>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <p
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted)",
+                  marginBottom: "0.5rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
                 Tools
               </p>
               {pack.tools.map((tool) => (
-                <div key={tool.name} style={{ display: "flex", gap: "0.75rem", padding: "0.4rem 0", borderBottom: "1px solid var(--border)", alignItems: "baseline" }}>
-                  <code style={{ color: "var(--accent)", fontSize: "0.82rem", fontWeight: 600, minWidth: "160px", flexShrink: 0 }}>
+                <div
+                  key={tool.name}
+                  style={{
+                    display: "flex",
+                    gap: "0.75rem",
+                    padding: "0.4rem 0",
+                    borderBottom: "1px solid var(--border)",
+                    alignItems: "baseline",
+                  }}
+                >
+                  <code
+                    style={{
+                      color: "var(--accent)",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      minWidth: "160px",
+                      flexShrink: 0,
+                    }}
+                  >
                     {tool.name}
                   </code>
                   <span style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
                     {tool.deprecated ? (
                       <span style={{ color: "var(--yellow)" }}>[Deprecated] </span>
                     ) : null}
-                    {tool.description.slice(0, 120)}{tool.description.length > 120 ? "..." : ""}
+                    {tool.description.slice(0, 120)}
+                    {tool.description.length > 120 ? "..." : ""}
                   </span>
                 </div>
               ))}
@@ -85,7 +130,10 @@ export default function PacksPage() {
       ))}
 
       <footer className="footer">
-        <a href="https://github.com/Yassinello/mymcp" style={{ color: "var(--accent)", textDecoration: "none" }}>
+        <a
+          href="https://github.com/Yassinello/mymcp"
+          style={{ color: "var(--accent)", textDecoration: "none" }}
+        >
           MyMCP on GitHub
         </a>
         {" — "}

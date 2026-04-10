@@ -18,9 +18,7 @@ export function logToolCall(log: ToolLog) {
 
   const emoji = log.status === "success" ? "✓" : "✗";
   const errorSuffix = log.error ? ` — ${log.error}` : "";
-  console.log(
-    `[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`
-  );
+  console.log(`[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
 
   // Fire error webhook if configured
   if (log.status === "error") {
@@ -36,7 +34,9 @@ export function logToolCall(log: ToolLog) {
           durationMs: log.durationMs,
           timestamp: log.timestamp,
         }),
-      }).catch(() => { /* best effort — don't crash on webhook failure */ });
+      }).catch(() => {
+        /* best effort — don't crash on webhook failure */
+      });
     }
   }
 }
@@ -97,8 +97,7 @@ export function withLogging<TParams, TResult>(
       });
       return result;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
       logToolCall({
         tool: toolName,
         durationMs: Date.now() - start,

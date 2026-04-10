@@ -11,7 +11,7 @@ export const webActSchema = {
   actions: z
     .array(z.string())
     .describe(
-      "List of actions in natural language, executed in order. Example: [\"click on 'Start a post'\", \"type 'Hello world' in the editor\", \"click Post\"]"
+      'List of actions in natural language, executed in order. Example: ["click on \'Start a post\'", "type \'Hello world\' in the editor", "click Post"]'
     ),
   context_name: z
     .string()
@@ -53,9 +53,7 @@ export async function handleWebAct(params: {
     }
 
     const finalUrl = page.url();
-    const summary = results
-      .map((r) => `- ${r.action} → ${r.status}`)
-      .join("\n");
+    const summary = results.map((r) => `- ${r.action} → ${r.status}`).join("\n");
 
     return {
       content: [
@@ -67,7 +65,9 @@ export async function handleWebAct(params: {
     };
   } catch (err: unknown) {
     return {
-      content: [{ type: "text" as const, text: `Error acting on ${params.url}: ${sanitizeError(err)}` }],
+      content: [
+        { type: "text" as const, text: `Error acting on ${params.url}: ${sanitizeError(err)}` },
+      ],
       isError: true,
     };
   } finally {

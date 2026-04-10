@@ -6,10 +6,7 @@ export const calendarDeleteSchema = {
   calendar_id: z.string().optional().describe('Calendar ID (default: "primary")'),
 };
 
-export async function handleCalendarDelete(params: {
-  event_id: string;
-  calendar_id?: string;
-}) {
+export async function handleCalendarDelete(params: { event_id: string; calendar_id?: string }) {
   const ok = await deleteEvent(params.event_id, params.calendar_id);
   return {
     content: [

@@ -9,7 +9,8 @@ export function middleware(request: NextRequest) {
     process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN
   )?.trim();
 
-  if ((pathname === "/" || pathname === "/setup") && adminToken) {
+  const protectedPaths = ["/", "/setup", "/playground"];
+  if (protectedPaths.includes(pathname) && adminToken) {
     const queryToken = request.nextUrl.searchParams.get("token")?.trim();
     const authHeader = request.headers.get("authorization");
     const bearer = authHeader?.replace(/^Bearer\s+/i, "").trim();
@@ -26,5 +27,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/setup"],
+  matcher: ["/", "/setup", "/playground"],
 };

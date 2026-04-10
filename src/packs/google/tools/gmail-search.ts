@@ -6,7 +6,7 @@ export const gmailSearchSchema = {
   query: z
     .string()
     .describe(
-      'Gmail search query. Supports all Gmail operators: from:, to:, subject:, has:attachment, after:2026/01/01, label:, is:starred, newer_than:7d, etc.'
+      "Gmail search query. Supports all Gmail operators: from:, to:, subject:, has:attachment, after:2026/01/01, label:, is:starred, newer_than:7d, etc."
     ),
   max_results: z
     .number()
@@ -14,10 +14,7 @@ export const gmailSearchSchema = {
     .describe("Max results (default: 5, max: 10). Each result includes full body."),
 };
 
-export async function handleGmailSearch(params: {
-  query: string;
-  max_results?: number;
-}) {
+export async function handleGmailSearch(params: { query: string; max_results?: number }) {
   const emails = await searchEmails({
     query: params.query,
     maxResults: params.max_results,

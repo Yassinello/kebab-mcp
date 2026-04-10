@@ -2,10 +2,7 @@ import { z } from "zod";
 import { vaultList } from "../lib/github";
 
 export const vaultListSchema = {
-  folder: z
-    .string()
-    .optional()
-    .describe("Folder path to list, e.g. Veille/ (default: vault root)"),
+  folder: z.string().optional().describe("Folder path to list, e.g. Veille/ (default: vault root)"),
 };
 
 export async function handleVaultList(params: { folder?: string }) {

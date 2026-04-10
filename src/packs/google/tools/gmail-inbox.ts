@@ -3,10 +3,7 @@ import { z } from "zod";
 import { listEmails } from "../lib/gmail";
 
 export const gmailInboxSchema = {
-  max_results: z
-    .number()
-    .optional()
-    .describe("Max emails to return (default: 10, max: 20)"),
+  max_results: z.number().optional().describe("Max emails to return (default: 10, max: 20)"),
   query: z
     .string()
     .optional()
@@ -15,10 +12,7 @@ export const gmailInboxSchema = {
     ),
 };
 
-export async function handleGmailInbox(params: {
-  max_results?: number;
-  query?: string;
-}) {
+export async function handleGmailInbox(params: { max_results?: number; query?: string }) {
   const emails = await listEmails({
     maxResults: Math.min(params.max_results || 10, 20),
     query: params.query || "",

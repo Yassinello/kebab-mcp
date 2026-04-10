@@ -5,16 +5,11 @@ import { checkAndIncrementDailyLimit } from "../lib/browserbase";
 const LINKEDIN_DAILY_LIMIT = 3;
 
 export const linkedinFeedSchema = {
-  max_posts: z
-    .number()
-    .optional()
-    .describe("Max posts to return (default: 20, max: 30)"),
+  max_posts: z.number().optional().describe("Max posts to return (default: 20, max: 30)"),
 };
 
 export async function handleLinkedinFeed(params: { max_posts?: number }) {
-  const { allowed, count } = await checkAndIncrementDailyLimit(
-    LINKEDIN_DAILY_LIMIT
-  );
+  const { allowed, count } = await checkAndIncrementDailyLimit(LINKEDIN_DAILY_LIMIT);
 
   if (!allowed) {
     return {

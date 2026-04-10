@@ -6,11 +6,10 @@ export const vaultDueSchema = {
   before: z
     .string()
     .optional()
-    .describe("ISO date string — return notes with resurface date on or before this date (default: today)"),
-  folder: z
-    .string()
-    .optional()
-    .describe("Restrict to a specific folder"),
+    .describe(
+      "ISO date string — return notes with resurface date on or before this date (default: today)"
+    ),
+  folder: z.string().optional().describe("Restrict to a specific folder"),
 };
 
 interface DueNote {
@@ -20,10 +19,7 @@ interface DueNote {
   snippet: string;
 }
 
-export async function handleVaultDue(params: {
-  before?: string;
-  folder?: string;
-}) {
+export async function handleVaultDue(params: { before?: string; folder?: string }) {
   const cutoff = params.before || new Date().toISOString().split("T")[0];
 
   // Get all markdown files

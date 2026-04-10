@@ -103,9 +103,7 @@ export async function listEventsAllCalendars(opts: {
     })
   );
 
-  return allEvents
-    .flat()
-    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return allEvents.flat().sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 }
 
 // --- Create event ---
@@ -156,10 +154,7 @@ export async function createEvent(opts: {
 
 // --- Delete event ---
 
-export async function deleteEvent(
-  eventId: string,
-  calendarId?: string
-): Promise<boolean> {
+export async function deleteEvent(eventId: string, calendarId?: string): Promise<boolean> {
   const calId = calendarId || "primary";
   const res = await googleFetch(
     `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}`,
@@ -255,11 +250,18 @@ export async function findFreeTime(opts: {
 
   // Get hour in Europe/Paris using Intl (handles DST correctly)
   function getParisHour(ts: number): number {
-    const s = new Date(ts).toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: getInstanceConfig().timezone });
+    const s = new Date(ts).toLocaleString("en-US", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: getInstanceConfig().timezone,
+    });
     return parseInt(s, 10);
   }
   function getParisDay(ts: number): number {
-    const s = new Date(ts).toLocaleDateString("en-US", { weekday: "short", timeZone: getInstanceConfig().timezone });
+    const s = new Date(ts).toLocaleDateString("en-US", {
+      weekday: "short",
+      timeZone: getInstanceConfig().timezone,
+    });
     return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(s);
   }
 
@@ -314,10 +316,12 @@ export async function rsvpEvent(opts: {
     `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(opts.eventId)}`
   );
 
-  const attendees = (event.attendees || []).map((a: { email: string; self?: boolean; responseStatus?: string }) => {
-    if (a.self) return { ...a, responseStatus: opts.response };
-    return a;
-  });
+  const attendees = (event.attendees || []).map(
+    (a: { email: string; self?: boolean; responseStatus?: string }) => {
+      if (a.self) return { ...a, responseStatus: opts.response };
+      return a;
+    }
+  );
 
   const res = await googleFetch(
     `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(opts.eventId)}?sendUpdates=all`,

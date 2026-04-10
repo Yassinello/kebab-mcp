@@ -19,7 +19,8 @@ export async function handleDriveRead(params: { file_id: string }) {
   const maxLen = 50_000;
   const content =
     file.content.length > maxLen
-      ? file.content.slice(0, maxLen) + `\n\n... [truncated at ${maxLen} chars, total: ${file.content.length}]`
+      ? file.content.slice(0, maxLen) +
+        `\n\n... [truncated at ${maxLen} chars, total: ${file.content.length}]`
       : file.content;
 
   return {

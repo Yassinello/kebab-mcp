@@ -20,9 +20,8 @@ export default async function SetupPage() {
 
   const configurable = packs.filter((p) => p.requiredEnvVars.length > 0);
   const configured = configurable.filter((p) => p.enabled);
-  const progress = configurable.length > 0
-    ? Math.round((configured.length / configurable.length) * 100)
-    : 100;
+  const progress =
+    configurable.length > 0 ? Math.round((configured.length / configurable.length) * 100) : 100;
 
   return (
     <div className="container">
@@ -40,19 +39,23 @@ export default async function SetupPage() {
 
       {/* Progress bar */}
       <div style={{ marginBottom: "2rem" }}>
-        <div style={{
-          background: "var(--bg-input)",
-          borderRadius: "6px",
-          height: "8px",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            background: progress === 100 ? "var(--green)" : "var(--accent)",
-            height: "100%",
-            width: `${progress}%`,
-            transition: "width 0.3s",
+        <div
+          style={{
+            background: "var(--bg-input)",
             borderRadius: "6px",
-          }} />
+            height: "8px",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              background: progress === 100 ? "var(--green)" : "var(--accent)",
+              height: "100%",
+              width: `${progress}%`,
+              transition: "width 0.3s",
+              borderRadius: "6px",
+            }}
+          />
         </div>
       </div>
 
@@ -68,19 +71,53 @@ export default async function SetupPage() {
           <p className="tool-desc">Gmail, Calendar, Contacts, Drive — 18 tools</p>
 
           {!googlePack?.enabled && (
-            <div style={{ background: "var(--bg-input)", borderRadius: "var(--radius-sm)", padding: "1.25rem", marginTop: "1rem" }}>
+            <div
+              style={{
+                background: "var(--bg-input)",
+                borderRadius: "var(--radius-sm)",
+                padding: "1.25rem",
+                marginTop: "1rem",
+              }}
+            >
               <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a Google Cloud OAuth app<br />
+                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a Google Cloud
+                OAuth app
+                <br />
                 Go to{" "}
-                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ color: "var(--accent)" }}
+                >
                   Google Cloud Console → APIs & Services → Credentials
-                </a><br />
-                Create an OAuth 2.0 Client ID (Web application type)<br />
-                Add callback URL: <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px", fontSize: "0.82rem" }}>
-                  {process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/api/auth/google/callback
-                </code><br /><br />
-                <strong style={{ color: "var(--text)" }}>Step 2:</strong> Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel env vars<br /><br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Click the button below to connect your Google account<br />
+                </a>
+                <br />
+                Create an OAuth 2.0 Client ID (Web application type)
+                <br />
+                Add callback URL:{" "}
+                <code
+                  style={{
+                    background: "var(--bg-card)",
+                    padding: "2px 6px",
+                    borderRadius: "3px",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  {process.env.VERCEL_URL
+                    ? `https://${process.env.VERCEL_URL}`
+                    : "http://localhost:3000"}
+                  /api/auth/google/callback
+                </code>
+                <br />
+                <br />
+                <strong style={{ color: "var(--text)" }}>Step 2:</strong> Set GOOGLE_CLIENT_ID and
+                GOOGLE_CLIENT_SECRET in Vercel env vars
+                <br />
+                <br />
+                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Click the button below to
+                connect your Google account
+                <br />
               </p>
               {process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? (
                 <a
@@ -121,17 +158,50 @@ export default async function SetupPage() {
           <p className="tool-desc">15 vault tools — read, write, search, backlinks, and more</p>
 
           {!vaultPack?.enabled && (
-            <div style={{ background: "var(--bg-input)", borderRadius: "var(--radius-sm)", padding: "1.25rem", marginTop: "1rem" }}>
+            <div
+              style={{
+                background: "var(--bg-input)",
+                borderRadius: "var(--radius-sm)",
+                padding: "1.25rem",
+                marginTop: "1rem",
+              }}
+            >
               <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a GitHub repo for your Obsidian vault<br />
+                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a GitHub repo for
+                your Obsidian vault
+                <br />
                 <strong style={{ color: "var(--text)" }}>Step 2:</strong> Generate a{" "}
-                <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>
+                <a
+                  href="https://github.com/settings/tokens"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ color: "var(--accent)" }}
+                >
                   GitHub Personal Access Token
                 </a>{" "}
-                with <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>repo</code> scope<br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in Vercel:<br />
-                <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>GITHUB_PAT</code> and{" "}
-                <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>GITHUB_REPO</code> (format: owner/repo)
+                with{" "}
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  repo
+                </code>{" "}
+                scope
+                <br />
+                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in
+                Vercel:
+                <br />
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  GITHUB_PAT
+                </code>{" "}
+                and{" "}
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  GITHUB_REPO
+                </code>{" "}
+                (format: owner/repo)
               </p>
             </div>
           )}
@@ -150,22 +220,57 @@ export default async function SetupPage() {
           <p className="tool-desc">4 tools — web browse, extract, act, LinkedIn feed</p>
 
           {!browserPack?.enabled && (
-            <div style={{ background: "var(--bg-input)", borderRadius: "var(--radius-sm)", padding: "1.25rem", marginTop: "1rem" }}>
+            <div
+              style={{
+                background: "var(--bg-input)",
+                borderRadius: "var(--radius-sm)",
+                padding: "1.25rem",
+                marginTop: "1rem",
+              }}
+            >
               <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
                 <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a{" "}
-                <a href="https://browserbase.com" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>
+                <a
+                  href="https://browserbase.com"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ color: "var(--accent)" }}
+                >
                   Browserbase
                 </a>{" "}
-                account (free tier: 1h/month)<br />
+                account (free tier: 1h/month)
+                <br />
                 <strong style={{ color: "var(--text)" }}>Step 2:</strong> Create an{" "}
-                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noopener"
+                  style={{ color: "var(--accent)" }}
+                >
                   OpenRouter
                 </a>{" "}
-                API key (for AI-powered browser actions)<br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in Vercel:<br />
-                <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>BROWSERBASE_API_KEY</code>,{" "}
-                <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>BROWSERBASE_PROJECT_ID</code>,{" "}
-                <code style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}>OPENROUTER_API_KEY</code>
+                API key (for AI-powered browser actions)
+                <br />
+                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in
+                Vercel:
+                <br />
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  BROWSERBASE_API_KEY
+                </code>
+                ,{" "}
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  BROWSERBASE_PROJECT_ID
+                </code>
+                ,{" "}
+                <code
+                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
+                >
+                  OPENROUTER_API_KEY
+                </code>
               </p>
             </div>
           )}

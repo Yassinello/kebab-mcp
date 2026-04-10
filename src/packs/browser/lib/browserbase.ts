@@ -18,9 +18,7 @@ const ALLOWED_CONTEXTS = new Set(["default", "linkedin"]);
 export function validateContextName(name: string): string {
   const normalized = name.toLowerCase();
   if (!ALLOWED_CONTEXTS.has(normalized)) {
-    throw new Error(
-      `Invalid context_name '${name}'. Allowed: ${[...ALLOWED_CONTEXTS].join(", ")}`
-    );
+    throw new Error(`Invalid context_name '${name}'. Allowed: ${[...ALLOWED_CONTEXTS].join(", ")}`);
   }
   return normalized;
 }
@@ -40,12 +38,7 @@ export function validatePublicUrl(url: string): void {
   const host = parsed.hostname.toLowerCase();
 
   // Block loopback / localhost
-  if (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "0.0.0.0" ||
-    host === "[::1]"
-  ) {
+  if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]") {
     throw new Error("Access to localhost is not allowed");
   }
 
@@ -57,7 +50,7 @@ export function validatePublicUrl(url: string): void {
       a === 10 ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
-      a === 169 && b === 254
+      (a === 169 && b === 254)
     ) {
       throw new Error("Access to private networks is not allowed");
     }
@@ -66,10 +59,10 @@ export function validatePublicUrl(url: string): void {
   // Block IPv6 private ranges
   const bare = host.replace(/^\[|\]$/g, "");
   if (
-    bare.startsWith("fd") ||    // fd00::/8 — unique local
-    bare.startsWith("fe80") ||  // fe80::/10 — link-local
-    bare.startsWith("fc") ||    // fc00::/7 — unique local
-    bare === "::1"              // loopback (also caught above)
+    bare.startsWith("fd") || // fd00::/8 — unique local
+    bare.startsWith("fe80") || // fe80::/10 — link-local
+    bare.startsWith("fc") || // fc00::/7 — unique local
+    bare === "::1" // loopback (also caught above)
   ) {
     throw new Error("Access to private networks is not allowed");
   }
@@ -138,16 +131,13 @@ export async function checkAndIncrementDailyLimit(
   let sha: string | undefined;
 
   try {
-    const res = await fetch(
-      `https://api.github.com/repos/${repo}/contents/${RATE_LIMIT_PATH}`,
-      { headers: { Authorization: `token ${pat}` } }
-    );
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${RATE_LIMIT_PATH}`, {
+      headers: { Authorization: `token ${pat}` },
+    });
     if (res.ok) {
       const file = (await res.json()) as { content: string; sha: string };
       sha = file.sha;
-      data = JSON.parse(
-        Buffer.from(file.content, "base64").toString("utf-8")
-      );
+      data = JSON.parse(Buffer.from(file.content, "base64").toString("utf-8"));
       // Reset if it's a new day
       if (data.date !== today) {
         data = { date: today, count: 0 };
@@ -165,21 +155,18 @@ export async function checkAndIncrementDailyLimit(
   data.count += 1;
   const content = Buffer.from(JSON.stringify(data)).toString("base64");
   try {
-    await fetch(
-      `https://api.github.com/repos/${repo}/contents/${RATE_LIMIT_PATH}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `token ${pat}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: `linkedin_feed call ${data.count}/${limit} — ${today} via MyMCP`,
-          content,
-          ...(sha && { sha }),
-        }),
-      }
-    );
+    await fetch(`https://api.github.com/repos/${repo}/contents/${RATE_LIMIT_PATH}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${pat}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: `linkedin_feed call ${data.count}/${limit} — ${today} via MyMCP`,
+        content,
+        ...(sha && { sha }),
+      }),
+    });
   } catch {
     // Write failed — allow the call anyway (fail open)
   }
@@ -187,9 +174,7 @@ export async function checkAndIncrementDailyLimit(
   return { allowed: true, count: data.count };
 }
 
-export async function createBrowserSession(
-  contextName = "default"
-): Promise<Stagehand> {
+export async function createBrowserSession(contextName = "default"): Promise<Stagehand> {
   const contextId = await getOrCreateContext(contextName);
 
   const stagehand = new Stagehand({

@@ -7,12 +7,12 @@ export const calendarCreateSchema = {
   start: z
     .string()
     .describe(
-      'Start time — ISO 8601 datetime (2026-04-07T09:00:00+02:00) or date (2026-04-07) for all-day events'
+      "Start time — ISO 8601 datetime (2026-04-07T09:00:00+02:00) or date (2026-04-07) for all-day events"
     ),
   end: z
     .string()
     .describe(
-      'End time — ISO 8601 datetime (2026-04-07T10:00:00+02:00) or date (2026-04-08) for all-day events'
+      "End time — ISO 8601 datetime (2026-04-07T10:00:00+02:00) or date (2026-04-08) for all-day events"
     ),
   description: z.string().optional().describe("Event description"),
   location: z.string().optional().describe("Event location"),

@@ -55,8 +55,12 @@ export async function searchDrive(opts: {
   }));
 }
 
-export async function readDriveFile(fileId: string): Promise<{ name: string; content: string; mimeType: string }> {
-  const meta = await googleFetchJSON<DriveFileMetadata>(`${DRIVE}/files/${fileId}?fields=name,mimeType`);
+export async function readDriveFile(
+  fileId: string
+): Promise<{ name: string; content: string; mimeType: string }> {
+  const meta = await googleFetchJSON<DriveFileMetadata>(
+    `${DRIVE}/files/${fileId}?fields=name,mimeType`
+  );
   const mimeType = meta.mimeType || "";
 
   // Google Docs/Sheets/Slides → export as text

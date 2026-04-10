@@ -16,8 +16,7 @@ export async function GET(request: Request) {
   if (!clientId || !clientSecret) {
     return Response.json(
       {
-        error:
-          "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set before using OAuth flow",
+        error: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set before using OAuth flow",
       },
       { status: 400 }
     );
@@ -27,11 +26,7 @@ export async function GET(request: Request) {
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
 
-  const google = new Google(
-    clientId,
-    clientSecret,
-    `${baseUrl}/api/auth/google/callback`
-  );
+  const google = new Google(clientId, clientSecret, `${baseUrl}/api/auth/google/callback`);
 
   const scopes = [
     "https://www.googleapis.com/auth/gmail.modify",

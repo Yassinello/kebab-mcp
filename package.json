@@ -23,7 +23,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:contract": "npx tsx scripts/contract-test.ts"
+    "lint": "eslint src/ app/",
+    "lint:fix": "eslint src/ app/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
+    "test:contract": "npx tsx scripts/contract-test.ts",
+    "test:e2e": "npx tsx scripts/e2e-test.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@browserbasehq/sdk": "^2.10.0",
@@ -40,9 +46,22 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
-    "typescript": "^6.0.2"
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.2",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.1"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
   }
 }

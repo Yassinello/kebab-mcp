@@ -10,7 +10,11 @@ export async function handleGmailRead(params: { message_id: string }) {
 
   const attachList = email.attachments.length
     ? `\n\nAttachments (${email.attachments.length}):\n` +
-      email.attachments.map((a) => `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)}KB, att_id:${a.id})`).join("\n")
+      email.attachments
+        .map(
+          (a) => `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)}KB, att_id:${a.id})`
+        )
+        .join("\n")
     : "";
 
   const text = [

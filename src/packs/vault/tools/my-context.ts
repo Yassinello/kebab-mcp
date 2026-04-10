@@ -15,8 +15,7 @@ export async function handleMyContext() {
       ],
     };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error";
 
     // If the context note doesn't exist yet, return a helpful message
     if (message.includes("not found")) {

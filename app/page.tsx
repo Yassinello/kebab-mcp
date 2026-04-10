@@ -18,9 +18,7 @@ export default async function DashboardPage() {
   // Check for token in URL query (for simple browser access)
   // Next.js doesn't expose query params in server components easily,
   // so we check the x-forwarded-* or referer for token
-  const adminToken = (
-    process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN
-  )?.trim();
+  const adminToken = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
 
   // For the dashboard, we allow access if no admin token is configured
   // Otherwise, the API endpoints handle auth
@@ -73,10 +71,7 @@ export default async function DashboardPage() {
     : "http://localhost:3000";
   const enabledPacks = registry.filter((p) => p.enabled);
   const disabledPacks = registry.filter((p) => !p.enabled);
-  const totalTools = enabledPacks.reduce(
-    (sum, p) => sum + p.manifest.tools.length,
-    0
-  );
+  const totalTools = enabledPacks.reduce((sum, p) => sum + p.manifest.tools.length, 0);
 
   return (
     <div className="container">
@@ -84,9 +79,7 @@ export default async function DashboardPage() {
       <header className="header">
         <div>
           <h1 className="header-title">MyMCP</h1>
-          <p className="header-subtitle">
-            Personal MCP Server — {config.displayName}
-          </p>
+          <p className="header-subtitle">Personal MCP Server — {config.displayName}</p>
         </div>
         <div className="header-badges">
           <span className="badge badge-green">
@@ -133,14 +126,10 @@ export default async function DashboardPage() {
           <div key={pack.manifest.id} className="tool-card">
             <div className="tool-header">
               <span className="tool-name">{pack.manifest.label}</span>
-              <span
-                className={`badge ${pack.enabled ? "badge-green" : "badge-dim"}`}
-              >
+              <span className={`badge ${pack.enabled ? "badge-green" : "badge-dim"}`}>
                 {pack.enabled ? "Active" : "Inactive"}
               </span>
-              <span className="badge badge-blue">
-                {pack.manifest.tools.length} tools
-              </span>
+              <span className="badge badge-blue">{pack.manifest.tools.length} tools</span>
             </div>
             <p className="tool-desc">
               {pack.enabled
@@ -167,14 +156,18 @@ export default async function DashboardPage() {
         <ConfigBlock
           title="Claude Desktop"
           subtitle="Add to claude_desktop_config.json"
-          config={JSON.stringify({
-            mcpServers: {
-              mymcp: {
-                url: `${baseUrl}/api/mcp`,
-                headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+          config={JSON.stringify(
+            {
+              mcpServers: {
+                mymcp: {
+                  url: `${baseUrl}/api/mcp`,
+                  headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+                },
               },
             },
-          }, null, 2)}
+            null,
+            2
+          )}
         />
 
         <div style={{ height: "1rem" }} />
@@ -182,15 +175,19 @@ export default async function DashboardPage() {
         <ConfigBlock
           title="Claude Code"
           subtitle="Add to ~/.claude/settings.json"
-          config={JSON.stringify({
-            mcpServers: {
-              mymcp: {
-                type: "http",
-                url: `${baseUrl}/api/mcp`,
-                headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+          config={JSON.stringify(
+            {
+              mcpServers: {
+                mymcp: {
+                  type: "http",
+                  url: `${baseUrl}/api/mcp`,
+                  headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+                },
               },
             },
-          }, null, 2)}
+            null,
+            2
+          )}
         />
 
         <div style={{ marginTop: "1rem" }}>
@@ -229,18 +226,14 @@ export default async function DashboardPage() {
                 <span
                   className="changelog-version"
                   style={{
-                    color:
-                      log.status === "success"
-                        ? "var(--green)"
-                        : "var(--red)",
+                    color: log.status === "success" ? "var(--green)" : "var(--red)",
                     minWidth: "140px",
                   }}
                 >
                   {log.tool}
                 </span>
                 <span className="changelog-desc">
-                  {log.status === "success" ? "OK" : log.error} —{" "}
-                  {log.durationMs}ms
+                  {log.status === "success" ? "OK" : log.error} — {log.durationMs}ms
                 </span>
               </div>
             ))}
@@ -249,7 +242,19 @@ export default async function DashboardPage() {
       )}
 
       <footer className="footer">
-        MyMCP v1.0.0 — Open Source Personal MCP Framework
+        <a href="/playground" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          Tool Playground
+        </a>
+        {" · "}
+        <a href="/setup" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          Setup
+        </a>
+        {" · "}
+        <a href="/packs" style={{ color: "var(--accent)", textDecoration: "none" }}>
+          Packs
+        </a>
+        {" · "}
+        MyMCP v1.0.0
       </footer>
     </div>
   );

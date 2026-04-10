@@ -91,7 +91,10 @@ function extractBody(payload: GmailMessagePart | undefined): string {
     for (const part of payload.parts) {
       if (part.mimeType === "text/html" && part.body?.data) {
         const html = Buffer.from(part.body.data, "base64url").toString("utf-8");
-        return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        return html
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
       }
     }
     for (const part of payload.parts) {
@@ -193,9 +196,7 @@ export async function searchEmails(opts: {
   );
   if (!listData.messages || listData.messages.length === 0) return [];
 
-  return Promise.all(
-    listData.messages.map(async (msg: { id: string }) => readEmail(msg.id))
-  );
+  return Promise.all(listData.messages.map(async (msg: { id: string }) => readEmail(msg.id)));
 }
 
 // --- Trash email ---
@@ -240,9 +241,7 @@ export async function replyToEmail(opts: {
   cc?: string;
 }): Promise<{ id: string; threadId: string }> {
   const original = await readEmail(opts.messageId);
-  const subject = original.subject.startsWith("Re:")
-    ? original.subject
-    : `Re: ${original.subject}`;
+  const subject = original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`;
 
   return sendEmail({
     to: original.from,
@@ -299,7 +298,5 @@ export async function getAttachment(
   messageId: string,
   attachmentId: string
 ): Promise<{ data: string; size: number }> {
-  return googleFetchJSON(
-    `${GMAIL}/messages/${messageId}/attachments/${attachmentId}`
-  );
+  return googleFetchJSON(`${GMAIL}/messages/${messageId}/attachments/${attachmentId}`);
 }

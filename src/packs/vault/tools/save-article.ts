@@ -7,18 +7,9 @@ const JINA_TIMEOUT = 15_000; // 15 seconds
 
 export const saveArticleSchema = {
   url: z.string().url().describe("URL of the article to save"),
-  title: z
-    .string()
-    .optional()
-    .describe("Article title (auto-extracted if omitted)"),
-  tags: z
-    .array(z.string())
-    .optional()
-    .describe("Tags to add, e.g. ['ai', 'strategy']"),
-  folder: z
-    .string()
-    .optional()
-    .describe('Target folder in vault (default: "Veille/")'),
+  title: z.string().optional().describe("Article title (auto-extracted if omitted)"),
+  tags: z.array(z.string()).optional().describe("Tags to add, e.g. ['ai', 'strategy']"),
+  folder: z.string().optional().describe('Target folder in vault (default: "Veille/")'),
 };
 
 export async function handleSaveArticle(params: {
@@ -67,7 +58,9 @@ export async function handleSaveArticle(params: {
 
   const markdown = await res.text();
   if (markdown.length > MAX_ARTICLE_SIZE) {
-    throw new Error(`Article content too large (${Math.round(markdown.length / 1024 / 1024)}MB). Max: 5MB`);
+    throw new Error(
+      `Article content too large (${Math.round(markdown.length / 1024 / 1024)}MB). Max: 5MB`
+    );
   }
 
   // Extract title: Jina metadata "Title:" > <title> tag > first # heading > URL path > hostname
@@ -137,7 +130,9 @@ export async function handleSaveArticle(params: {
     frontmatterObj.tags = params.tags;
   }
 
-  const yamlStr = yaml.dump(frontmatterObj, { lineWidth: -1, quotingType: '"', forceQuotes: false }).trimEnd();
+  const yamlStr = yaml
+    .dump(frontmatterObj, { lineWidth: -1, quotingType: '"', forceQuotes: false })
+    .trimEnd();
   const fullContent = `---\n${yamlStr}\n---\n\n${markdown}`;
 
   const result = await vaultWrite(path, fullContent, `Save article: ${slug} via MyMCP`);

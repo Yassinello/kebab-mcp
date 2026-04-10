@@ -7,7 +7,9 @@ export const vaultBatchReadSchema = {
     .array(z.string())
     .min(1)
     .max(20)
-    .describe("Array of paths to read, e.g. ['Projects/cadens.md', 'Journal/2026-04-01.md']. Max 20."),
+    .describe(
+      "Array of paths to read, e.g. ['Projects/cadens.md', 'Journal/2026-04-01.md']. Max 20."
+    ),
 };
 
 interface BatchReadResult {

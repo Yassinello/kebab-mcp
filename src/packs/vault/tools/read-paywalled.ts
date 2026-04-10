@@ -70,19 +70,20 @@ export async function handleReadPaywalled(params: { url: string }) {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(
-          {
-            title,
-            source: params.url,
-            contentLength: markdown.length,
-            paywallBypassed: !seemsPaywalled,
-            warning: seemsPaywalled
-              ? "Content may still be behind paywall. Check if MEDIUM_SID cookie is valid/fresh."
-              : undefined,
-          },
-          null,
-          2
-        ) +
+        text:
+          JSON.stringify(
+            {
+              title,
+              source: params.url,
+              contentLength: markdown.length,
+              paywallBypassed: !seemsPaywalled,
+              warning: seemsPaywalled
+                ? "Content may still be behind paywall. Check if MEDIUM_SID cookie is valid/fresh."
+                : undefined,
+            },
+            null,
+            2
+          ) +
           "\n\n---\n\n" +
           markdown,
       },

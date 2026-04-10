@@ -2,9 +2,7 @@ import { z } from "zod";
 import { vaultRead, vaultTree } from "../lib/github";
 
 export const vaultBacklinksSchema = {
-  path: z
-    .string()
-    .describe("Path of the note to find backlinks for, e.g. 'Projects/cadens.md'"),
+  path: z.string().describe("Path of the note to find backlinks for, e.g. 'Projects/cadens.md'"),
 };
 
 export async function handleVaultBacklinks(params: { path: string }) {
@@ -25,9 +23,7 @@ export async function handleVaultBacklinks(params: { path: string }) {
 
   // Get all markdown files in the vault
   const tree = await vaultTree();
-  const mdFiles = tree.filter(
-    (f) => f.path.endsWith(".md") && f.path !== params.path
-  );
+  const mdFiles = tree.filter((f) => f.path.endsWith(".md") && f.path !== params.path);
 
   // Read files in parallel (batch of 10 to avoid rate limiting)
   const BATCH_SIZE = 10;
@@ -50,9 +46,7 @@ export async function handleVaultBacklinks(params: { path: string }) {
       const { path, content } = result.value;
 
       // Check if any wikilink pattern exists in the content
-      const hasLink = wikiLinkPatterns.some((pattern) =>
-        content.includes(pattern)
-      );
+      const hasLink = wikiLinkPatterns.some((pattern) => content.includes(pattern));
       if (!hasLink) continue;
 
       // Extract context around the first match
