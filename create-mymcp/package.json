@@ -1,6 +1,6 @@
 {
   "name": "@yassinello/create-mymcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Set up your personal MCP server in minutes — interactive installer for MyMCP",
   "bin": {
     "create-mymcp": "./index.mjs"
