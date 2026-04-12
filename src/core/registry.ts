@@ -11,6 +11,7 @@ import { notionPack } from "@/packs/notion/manifest";
 import { composioPack } from "@/packs/composio/manifest";
 import { skillsPack } from "@/packs/skills/manifest";
 import { paywallPack } from "@/packs/paywall/manifest";
+import { apifyPack } from "@/packs/apify/manifest";
 
 const ALL_PACKS: PackManifest[] = [
   googlePack,
@@ -21,6 +22,7 @@ const ALL_PACKS: PackManifest[] = [
   composioPack,
   skillsPack,
   paywallPack,
+  apifyPack,
   adminPack,
 ];
 
