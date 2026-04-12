@@ -1,6 +1,6 @@
 {
   "name": "mymcp",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes",
   "keywords": [
     "mcp",
@@ -31,7 +31,7 @@
     "test:registry": "npx tsx scripts/registry-test.ts",
     "test:e2e": "npx tsx scripts/e2e-test.ts",
     "test": "npm run test:registry && npm run test:contract",
-    "update": "git remote get-url upstream > /dev/null 2>&1 || git remote add upstream https://github.com/Yassinello/mymcp.git && git fetch upstream && git merge upstream/main",
+    "update": "git fetch upstream && git merge upstream/main",
     "prepare": "husky"
   },
   "dependencies": {
@@ -39,7 +39,7 @@
     "@browserbasehq/stagehand": "^3.2.0",
     "@composio/core": "^0.6.10",
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "@mozilla/readability": "^0.5.0",
+    "@mozilla/readability": "^0.6.0",
     "@tailwindcss/postcss": "^4.2.2",
     "arctic": "^3.7.0",
     "js-yaml": "^4.1.1",
