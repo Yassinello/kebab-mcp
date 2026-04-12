@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@browserbasehq/sdk": "^2.10.0",
-    "@browserbasehq/stagehand": "^3.2.0",
+    "@browserbasehq/stagehand": "^3.2.1",
     "@composio/core": "^0.6.10",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@mozilla/readability": "^0.6.0",
