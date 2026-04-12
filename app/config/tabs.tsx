@@ -18,6 +18,7 @@ export interface PackSummary {
   reason: string;
   toolCount: number;
   requiredEnvVars: string[];
+  guide?: string;
   tools: { name: string; description: string; deprecated?: string }[];
 }
 
