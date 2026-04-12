@@ -41,7 +41,7 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Post first-run: /setup → /config unless ?add= ───────────────────
-  if (pathname === "/setup" && !request.nextUrl.searchParams.get("add")) {
+  if (pathname === "/setup" && !request.nextUrl.searchParams.has("add")) {
     return NextResponse.redirect(new URL("/config", request.url));
   }
   if (pathname === "/") {

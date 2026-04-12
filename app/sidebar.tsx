@@ -3,17 +3,14 @@
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { section: "OVERVIEW", items: [{ href: "/", label: "Dashboard", icon: "grid" }] },
-  {
-    section: "TOOLS",
-    items: [
-      { href: "/packs", label: "Packs", icon: "package" },
-      { href: "/playground", label: "Playground", icon: "terminal" },
-    ],
-  },
+  { section: "OVERVIEW", items: [{ href: "/config", label: "Dashboard", icon: "grid" }] },
   {
     section: "CONFIGURATION",
-    items: [{ href: "/setup", label: "Setup", icon: "settings" }],
+    items: [
+      { href: "/config?tab=packs", label: "Packs", icon: "package" },
+      { href: "/config?tab=tools", label: "Tools", icon: "terminal" },
+      { href: "/config?tab=settings", label: "Settings", icon: "settings" },
+    ],
   },
 ];
 

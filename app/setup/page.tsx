@@ -16,8 +16,10 @@ export default async function SetupPage({
   const isVercel = !!process.env.VERCEL;
   const config = getInstanceConfig();
 
-  // Post-first-run: /setup without ?add= redirects to /config
-  if (hasToken && !params.add) {
+  // Post-first-run: /setup without `add` query param redirects to /config.
+  // `add` present (even empty) means "add-pack mode".
+  const addMode = params.add !== undefined;
+  if (hasToken && !addMode) {
     redirect("/config");
   }
 
@@ -37,7 +39,7 @@ export default async function SetupPage({
         firstTime={isFirstTime}
         isVercel={isVercel}
         hasToken={hasToken}
-        initialPack={params.add}
+        initialPack={params.add || undefined}
       />
     </AppShell>
   );
