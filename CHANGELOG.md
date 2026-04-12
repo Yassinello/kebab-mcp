@@ -1,6 +1,17 @@
 # Changelog
 
 All notable changes to MyMCP.
+## [0.2.1] - 2026-04-12
+
+### Documentation
+
+- Update CHANGELOG for v0.2.0
+
+### Fixed
+
+- CLI installer — Windows path handling, quotes, empty dir check, Composio pack, tool counts
+- CLI UX overhaul + migrate composio-core to @composio/core v0.2.1
+
 ## [0.2.0] - 2026-04-11
 
 ### Added
