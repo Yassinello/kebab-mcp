@@ -1,3 +1,5 @@
+import { getKVStore } from "./kv-store";
+
 export interface ToolLog {
   tool: string;
   durationMs: number;
@@ -19,6 +21,15 @@ export function logToolCall(log: ToolLog) {
   const emoji = log.status === "success" ? "✓" : "✗";
   const errorSuffix = log.error ? ` — ${log.error}` : "";
   console.log(`[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
+
+  // Write to durable KV store if enabled (fire-and-forget)
+  if (process.env.MYMCP_DURABLE_LOGS === "true") {
+    const kv = getKVStore();
+    const key = `log:${Date.now()}:${log.tool}`;
+    kv.set(key, JSON.stringify(log)).catch((err: Error) =>
+      console.error("[MyMCP] Durable log write failed:", err.message)
+    );
+  }
 
   // Fire error webhook if configured
   if (log.status === "error") {
@@ -79,6 +90,39 @@ export function getToolStats(): {
 export function getRecentLogs(count?: number): ToolLog[] {
   const n = Math.min(count || 20, LOG_BUFFER_SIZE);
   return recentLogs.slice(-n);
+}
+
+export async function getDurableLogs(
+  count?: number,
+  filter?: "all" | "errors" | "success"
+): Promise<ToolLog[]> {
+  const kv = getKVStore();
+  const keys = await kv.list("log:");
+  // Keys are `log:<timestamp>:<tool>` — sort descending by timestamp
+  keys.sort((a, b) => {
+    const tsA = parseInt(a.split(":")[1] ?? "0", 10);
+    const tsB = parseInt(b.split(":")[1] ?? "0", 10);
+    return tsB - tsA;
+  });
+
+  const limit = Math.min(count || 20, 500);
+  const results: ToolLog[] = [];
+
+  for (const key of keys) {
+    if (results.length >= limit) break;
+    const raw = await kv.get(key);
+    if (!raw) continue;
+    try {
+      const entry = JSON.parse(raw) as ToolLog;
+      if (filter === "errors" && entry.status !== "error") continue;
+      if (filter === "success" && entry.status !== "success") continue;
+      results.push(entry);
+    } catch {
+      // skip malformed entries
+    }
+  }
+
+  return results;
 }
 
 export function withLogging<TParams, TResult>(
