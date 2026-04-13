@@ -1,6 +1,6 @@
 export default function Hero() {
   const deployUrl =
-    "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&env=MCP_AUTH_TOKEN,MYMCP_DISPLAY_NAME&envDescription=MCP%20auth%20token%20and%20display%20name%20required%20to%20start.&project-name=my-mcp&repository-name=my-mcp";
+    "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&env=MCP_AUTH_TOKEN,MYMCP_DISPLAY_NAME&envDescription=MCP%20auth%20token%20and%20display%20name%20required%20to%20start.&project-name=mymcp-me&repository-name=mymcp-me";
 
   return (
     <section id="deploy" className="pt-24 pb-20 px-6">
