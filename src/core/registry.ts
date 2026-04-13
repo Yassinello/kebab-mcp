@@ -12,6 +12,7 @@ import { composioPack } from "@/packs/composio/manifest";
 import { skillsPack } from "@/packs/skills/manifest";
 import { paywallPack } from "@/packs/paywall/manifest";
 import { apifyPack } from "@/packs/apify/manifest";
+import { githubPack } from "@/packs/github/manifest";
 
 const ALL_PACKS: PackManifest[] = [
   googlePack,
@@ -23,6 +24,7 @@ const ALL_PACKS: PackManifest[] = [
   skillsPack,
   paywallPack,
   apifyPack,
+  githubPack,
   adminPack,
 ];
 
