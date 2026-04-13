@@ -55,6 +55,11 @@ export function LogsTab({ initialLogs }: { initialLogs: ToolLog[] }) {
                 <span className="text-xs text-text-muted flex-1 truncate">
                   {log.status === "success" ? "OK" : log.error}
                 </span>
+                {log.tokenId && (
+                  <span className="font-mono text-[11px] text-text-muted bg-bg-muted px-1.5 py-0.5 rounded shrink-0">
+                    {log.tokenId}
+                  </span>
+                )}
                 <span className="font-mono text-[11px] text-text-muted shrink-0">
                   {log.durationMs}ms
                 </span>

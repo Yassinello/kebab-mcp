@@ -1,11 +1,13 @@
-import { timingSafeEqual } from "crypto";
+import { timingSafeEqual, createHash } from "crypto";
 
 /**
  * Auth utilities for MyMCP.
  *
  * Two auth scopes:
  * - MCP auth: protects the /api/mcp endpoint (MCP_AUTH_TOKEN)
+ *   Supports comma-separated list of tokens for multi-client deployments.
  * - Admin auth: protects the dashboard/setup UI (ADMIN_AUTH_TOKEN, falls back to MCP_AUTH_TOKEN)
+ *   Always single-token.
  */
 
 let adminTokenWarned = false;
@@ -35,6 +37,26 @@ function safeCompare(a: string, b: string): boolean {
   }
 }
 
+/**
+ * Split a comma-separated token env value into individual tokens.
+ * Trims whitespace and drops empty segments — safe to call with undefined.
+ */
+export function parseTokens(envValue: string | undefined): string[] {
+  if (!envValue) return [];
+  return envValue
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Returns the first 8 hex chars of a token's SHA-256 hash.
+ * Used for safe, non-reversible token identification in logs.
+ */
+export function tokenId(token: string): string {
+  return createHash("sha256").update(token).digest("hex").slice(0, 8);
+}
+
 export function extractToken(request: Request): string | null {
   // Check Authorization header
   const authHeader = request.headers.get("authorization");
@@ -58,15 +80,21 @@ export function extractToken(request: Request): string | null {
   return null;
 }
 
-/** Check MCP endpoint auth. Returns error Response or null if OK. */
-export function checkMcpAuth(request: Request): Response | null {
-  const token = process.env.MCP_AUTH_TOKEN?.trim();
-  if (!token) return null; // No token configured = open access
+/** Check MCP endpoint auth. Returns error Response or null if OK, plus the matched tokenId. */
+export function checkMcpAuth(request: Request): { error: Response | null; tokenId: string | null } {
+  const tokens = parseTokens(process.env.MCP_AUTH_TOKEN);
+  if (tokens.length === 0) return { error: null, tokenId: null }; // No tokens configured = open access
 
   const provided = extractToken(request);
-  if (provided && safeCompare(provided, token)) return null;
+  if (provided) {
+    for (const t of tokens) {
+      if (safeCompare(provided, t)) {
+        return { error: null, tokenId: tokenId(t) };
+      }
+    }
+  }
 
-  return new Response("Unauthorized", { status: 401 });
+  return { error: new Response("Unauthorized", { status: 401 }), tokenId: null };
 }
 
 /** Check admin dashboard auth. Returns error Response or null if OK. */

@@ -16,7 +16,7 @@ import { VERSION } from "@/core/version";
  *
  * Cost: a few ms to re-scan process.env + rebuild the tool list.
  */
-function buildHandler() {
+function buildHandler(callerTokenId?: string | null) {
   return createMcpHandler(
     (server) => {
       const enabledPacks = getEnabledPacks();
@@ -31,7 +31,7 @@ function buildHandler() {
             tool.name,
             desc,
             tool.schema,
-            withLogging(tool.name, async (params) => tool.handler(params))
+            withLogging(tool.name, async (params) => tool.handler(params), callerTokenId)
           );
         }
       }
@@ -102,7 +102,7 @@ function buildHandler() {
 }
 
 async function handler(request: Request): Promise<Response> {
-  const authError = checkMcpAuth(request);
+  const { error: authError, tokenId } = checkMcpAuth(request);
   if (authError) return authError;
 
   if (process.env.MYMCP_RATE_LIMIT_ENABLED === "true") {
@@ -122,7 +122,7 @@ async function handler(request: Request): Promise<Response> {
     }
   }
 
-  const mcpHandler = buildHandler();
+  const mcpHandler = buildHandler(tokenId);
   return mcpHandler(request);
 }
 

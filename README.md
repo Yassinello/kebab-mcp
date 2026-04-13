@@ -423,8 +423,18 @@ All configuration is via environment variables. See [`.env.example`](.env.exampl
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MCP_AUTH_TOKEN` | Yes | Bearer token for MCP endpoint |
+| `MCP_AUTH_TOKEN` | Yes | Bearer token(s) for MCP endpoint — supports comma-separated list |
 | `ADMIN_AUTH_TOKEN` | No | Separate token for dashboard (falls back to MCP_AUTH_TOKEN) |
+
+#### Multi-token authentication
+
+`MCP_AUTH_TOKEN` accepts a comma-separated list of tokens, one per MCP client:
+
+```env
+MCP_AUTH_TOKEN=token-for-claude-desktop,token-for-chatgpt,token-for-cursor
+```
+
+Each token must be at least 16 characters. An 8-character SHA-256 hash prefix of the matched token is stored with every log entry so you can identify which client made each call — without logging the token itself. `ADMIN_AUTH_TOKEN` remains single-token.
 
 ### Instance Settings
 

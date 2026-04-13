@@ -10,6 +10,7 @@ export interface ToolLog {
   errorCode?: string;
   retryable?: boolean;
   timestamp: string;
+  tokenId?: string;
 }
 
 // In-memory ring buffer for recent logs (survives across requests in same serverless instance)
@@ -66,8 +67,10 @@ export function getToolStats(): {
   errorCount: number;
   avgDurationMs: number;
   byTool: Record<string, { calls: number; errors: number; avgMs: number }>;
+  byToken: Record<string, { calls: number; errors: number }>;
 } {
   const byTool: Record<string, { calls: number; errors: number; totalMs: number }> = {};
+  const byToken: Record<string, { calls: number; errors: number }> = {};
 
   for (const log of recentLogs) {
     if (!byTool[log.tool]) {
@@ -76,6 +79,14 @@ export function getToolStats(): {
     byTool[log.tool].calls++;
     byTool[log.tool].totalMs += log.durationMs;
     if (log.status === "error") byTool[log.tool].errors++;
+
+    if (log.tokenId) {
+      if (!byToken[log.tokenId]) {
+        byToken[log.tokenId] = { calls: 0, errors: 0 };
+      }
+      byToken[log.tokenId].calls++;
+      if (log.status === "error") byToken[log.tokenId].errors++;
+    }
   }
 
   const totalCalls = recentLogs.length;
@@ -92,6 +103,7 @@ export function getToolStats(): {
         { calls: s.calls, errors: s.errors, avgMs: Math.round(s.totalMs / s.calls) },
       ])
     ),
+    byToken,
   };
 }
 
@@ -135,7 +147,8 @@ export async function getDurableLogs(
 
 export function withLogging<TParams>(
   toolName: string,
-  handler: (params: TParams) => Promise<ToolResult>
+  handler: (params: TParams) => Promise<ToolResult>,
+  callerTokenId?: string | null
 ): (params: TParams) => Promise<ToolResult> {
   return async (params: TParams) => {
     const start = Date.now();
@@ -146,6 +159,7 @@ export function withLogging<TParams>(
         durationMs: Date.now() - start,
         status: "success",
         timestamp: new Date().toISOString(),
+        ...(callerTokenId ? { tokenId: callerTokenId } : {}),
       });
       return result;
     } catch (error) {
@@ -161,6 +175,7 @@ export function withLogging<TParams>(
           errorCode: error.code,
           retryable: error.retryable,
           timestamp,
+          ...(callerTokenId ? { tokenId: callerTokenId } : {}),
         });
         return {
           content: [{ type: "text", text: error.userMessage }],
@@ -176,6 +191,7 @@ export function withLogging<TParams>(
         status: "error",
         error: message,
         timestamp,
+        ...(callerTokenId ? { tokenId: callerTokenId } : {}),
       });
       throw error;
     }

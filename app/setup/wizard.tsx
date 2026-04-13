@@ -631,6 +631,19 @@ export function SetupWizard({
             </div>
           </div>
 
+          <div className="mt-4 border border-border rounded-lg p-4 bg-bg-muted/30">
+            <p className="text-xs font-medium text-text-dim mb-1">Multi-token support</p>
+            <p className="text-[11px] text-text-muted">
+              To allow multiple MCP clients (e.g. Claude Desktop + ChatGPT), set{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">MCP_AUTH_TOKEN</code> to a
+              comma-separated list of tokens in your{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">.env</code>:{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">token1,token2,token3</code>. Each
+              token must be at least 16 characters. Token hashes appear in logs so you can identify
+              which client made each call.
+            </p>
+          </div>
+
           <div className="mt-8 flex justify-end">
             <button
               onClick={() => setStep(1)}

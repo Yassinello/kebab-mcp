@@ -104,6 +104,24 @@ export async function POST(request: Request) {
     }
   }
 
+  // Validate MCP_AUTH_TOKEN: each comma-separated segment must be >= 16 chars
+  const rawMcpToken = body.envVars["MCP_AUTH_TOKEN"];
+  if (rawMcpToken !== undefined && rawMcpToken !== "") {
+    const segments = rawMcpToken
+      .split(",")
+      .map((t: string) => t.trim())
+      .filter((t: string) => t.length > 0);
+    const short = segments.filter((t: string) => t.length < 16);
+    if (short.length > 0) {
+      return NextResponse.json(
+        {
+          error: `MCP_AUTH_TOKEN: each token must be at least 16 characters (${short.length} segment(s) too short)`,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   try {
     const store = getEnvStore();
     const result = await store.write(body.envVars);
