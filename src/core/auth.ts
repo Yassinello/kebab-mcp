@@ -8,6 +8,24 @@ import { timingSafeEqual } from "crypto";
  * - Admin auth: protects the dashboard/setup UI (ADMIN_AUTH_TOKEN, falls back to MCP_AUTH_TOKEN)
  */
 
+let adminTokenWarned = false;
+
+function warnAdminTokenFallback() {
+  if (adminTokenWarned) return;
+  if (!process.env.ADMIN_AUTH_TOKEN && !process.env.MCP_AUTH_TOKEN) {
+    console.warn(
+      "[MyMCP Security] No auth tokens configured. Admin dashboard is publicly accessible."
+    );
+    adminTokenWarned = true;
+  } else if (!process.env.ADMIN_AUTH_TOKEN && process.env.MCP_AUTH_TOKEN) {
+    console.warn(
+      "[MyMCP Security] ADMIN_AUTH_TOKEN is not set. Falling back to MCP_AUTH_TOKEN for admin access. " +
+        "Set a separate ADMIN_AUTH_TOKEN for better security isolation."
+    );
+    adminTokenWarned = true;
+  }
+}
+
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   try {
@@ -53,6 +71,7 @@ export function checkMcpAuth(request: Request): Response | null {
 
 /** Check admin dashboard auth. Returns error Response or null if OK. */
 export function checkAdminAuth(request: Request): Response | null {
+  warnAdminTokenFallback();
   const token = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
   if (!token) return null;
 
