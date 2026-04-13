@@ -20,6 +20,7 @@
   },
   "private": true,
   "scripts": {
+    "predev": "node scripts/check-updates.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -1,8 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
+
+type UpdateStatus =
+  | { state: "loading" }
+  | { state: "ready"; available: boolean; behind: number; remote: string; latest?: string | null }
+  | { state: "disabled"; reason: string }
+  | { state: "error"; error: string };
+
+type UpdateResult =
+  | { state: "idle" }
+  | { state: "pulling" }
+  | { state: "done"; pulled: number; note?: string }
+  | { state: "error"; reason: string };
 
 export function OverviewTab({
   baseUrl,
@@ -21,6 +33,56 @@ export function OverviewTab({
 }) {
   const [tokenRevealed, setTokenRevealed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [update, setUpdate] = useState<UpdateStatus>({ state: "loading" });
+  const [result, setResult] = useState<UpdateResult>({ state: "idle" });
+
+  useEffect(() => {
+    fetch("/api/config/update", { credentials: "include" })
+      .then((r) => r.json())
+      .then(
+        (d: {
+          available?: boolean;
+          behind?: number;
+          remote?: string;
+          latest?: string;
+          disabled?: string;
+        }) => {
+          if (d.disabled) {
+            setUpdate({ state: "disabled", reason: d.disabled });
+          } else {
+            setUpdate({
+              state: "ready",
+              available: !!d.available,
+              behind: d.behind || 0,
+              remote: d.remote || "",
+              latest: d.latest,
+            });
+          }
+        }
+      )
+      .catch((err) =>
+        setUpdate({ state: "error", error: err instanceof Error ? err.message : String(err) })
+      );
+  }, []);
+
+  const pullUpdates = async () => {
+    setResult({ state: "pulling" });
+    try {
+      const res = await fetch("/api/config/update", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setResult({ state: "done", pulled: data.pulled, note: data.note });
+        setUpdate((s) => (s.state === "ready" ? { ...s, available: false, behind: 0 } : s));
+      } else {
+        setResult({ state: "error", reason: data.reason || "Update failed" });
+      }
+    } catch (err) {
+      setResult({ state: "error", reason: err instanceof Error ? err.message : String(err) });
+    }
+  };
 
   const endpoint = `${baseUrl}/api/mcp`;
   const lastLog = logs[logs.length - 1];
@@ -33,6 +95,41 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Update banner */}
+      {update.state === "ready" && update.available && result.state !== "done" && (
+        <div className="border border-orange/30 bg-orange/5 rounded-lg p-4 flex items-center gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-dark">
+              {update.behind} {update.behind === 1 ? "update" : "updates"} available
+            </p>
+            <p className="text-xs text-text-dim mt-0.5">
+              New commits on {update.remote}/main
+              {update.latest ? ` (latest: ${update.latest})` : ""} — fast-forward safe.
+            </p>
+            {result.state === "error" && (
+              <p className="text-xs text-red mt-1.5 font-mono">{result.reason}</p>
+            )}
+          </div>
+          <button
+            onClick={pullUpdates}
+            disabled={result.state === "pulling"}
+            className="text-xs font-medium px-3 py-2 rounded-md bg-orange/10 text-orange-dark border border-orange/30 hover:bg-orange/20 transition-colors disabled:opacity-50"
+          >
+            {result.state === "pulling" ? "Updating..." : "Update now"}
+          </button>
+        </div>
+      )}
+      {result.state === "done" && result.pulled > 0 && (
+        <div className="border border-green/30 bg-green/5 rounded-lg p-4">
+          <p className="text-sm font-semibold text-green">
+            Pulled {result.pulled} commit{result.pulled === 1 ? "" : "s"} ✓
+          </p>
+          <p className="text-xs text-text-dim mt-0.5">
+            {result.note || "Restart the dev server to apply changes."}
+          </p>
+        </div>
+      )}
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Active tools" value={totalTools} accent />
