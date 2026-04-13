@@ -1,6 +1,29 @@
 # Changelog
 
 All notable changes to MyMCP.
+
+## [0.3.0] - 2026-04-13
+
+### Added
+
+- **GitHub Issues pack** — 6 new tools: `github_list_issues`, `github_get_issue`, `github_create_issue`, `github_update_issue`, `github_add_comment`, `github_search_issues`
+- **Structured error types** — `McpToolError` class with 8 typed error codes (`NOT_FOUND`, `UNAUTHORIZED`, `RATE_LIMITED`, `INVALID_INPUT`, `UPSTREAM_ERROR`, `TIMEOUT`, `QUOTA_EXCEEDED`, `INTERNAL`), retryable flag, and `withLogging()` integration
+- **Durable observability** — two-tier logging sink: in-memory ring buffer (fast path) + async KV persistence (Upstash/Filesystem) via fire-and-forget writes
+- **Per-token rate limiting** — sliding-window rate limiter backed by KV store, SHA-256 hashed keys, fail-open on store errors
+- **Startup auth warning** — logs a clear warning when `ADMIN_AUTH_TOKEN` is missing instead of silently accepting unauthenticated requests
+
+### Fixed
+
+- Version now read dynamically from `package.json` instead of a hardcoded string
+
+### Security
+
+- Added `SECURITY.md` with vulnerability reporting policy and responsible disclosure guidance
+
+### Documentation
+
+- Expanded `CONTRIBUTING.md` into a full community contribution guide covering setup, conventions, and PR workflow
+
 ## [0.2.1] - 2026-04-12
 
 ### Documentation

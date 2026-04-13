@@ -1,6 +1,6 @@
 {
   "name": "mymcp",
-  "version": "0.3.1",
+  "version": "0.3.0",
   "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes",
   "keywords": [
     "mcp",

@@ -124,9 +124,16 @@ process.env.MYMCP_ENABLED_PACKS = "google,admin";
 console.log("\nTest 7: All packs have manifests with tools");
 resetEnv();
 {
+  // Skills pack is user-defined and intentionally has 0 tools until skills are authored.
+  const DYNAMIC_EMPTY_PACKS = new Set(["skills"]);
   const reg = resolveRegistry();
   for (const pack of reg) {
-    assert(pack.manifest.tools.length > 0, `${pack.manifest.id} has ${pack.manifest.tools.length} tools`);
+    if (!DYNAMIC_EMPTY_PACKS.has(pack.manifest.id)) {
+      assert(
+        pack.manifest.tools.length > 0,
+        `${pack.manifest.id} has ${pack.manifest.tools.length} tools`
+      );
+    }
     assert(pack.manifest.id.length > 0, `${pack.manifest.id} has id`);
     assert(pack.manifest.label.length > 0, `${pack.manifest.id} has label`);
   }
