@@ -30,7 +30,9 @@
     "test:contract": "npx tsx scripts/contract-test.ts",
     "test:registry": "npx tsx scripts/registry-test.ts",
     "test:e2e": "npx tsx scripts/e2e-test.ts",
-    "test": "npm run test:registry && npm run test:contract",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test": "vitest run && npm run test:registry && npm run test:contract",
     "update": "git fetch upstream && git merge upstream/main",
     "prepare": "husky"
   },
@@ -59,13 +61,15 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/turndown": "^5.0.6",
+    "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.2",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.1"
+    "typescript-eslint": "^8.58.1",
+    "vitest": "^4.1.4"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

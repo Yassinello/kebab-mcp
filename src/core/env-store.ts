@@ -23,7 +23,10 @@ export interface EnvStore {
 
 const ENV_LINE = /^([A-Z_][A-Z0-9_]*)=(.*)$/;
 
-function parseEnvFile(content: string): { vars: Record<string, string>; rawLines: string[] } {
+export function parseEnvFile(content: string): {
+  vars: Record<string, string>;
+  rawLines: string[];
+} {
   const vars: Record<string, string> = {};
   const rawLines = content.split(/\r?\n/);
   for (const line of rawLines) {
@@ -43,7 +46,7 @@ function parseEnvFile(content: string): { vars: Record<string, string>; rawLines
   return { vars, rawLines };
 }
 
-function serializeEnv(existingLines: string[], updates: Record<string, string>): string {
+export function serializeEnv(existingLines: string[], updates: Record<string, string>): string {
   const pending = new Set(Object.keys(updates));
   const out: string[] = [];
 
