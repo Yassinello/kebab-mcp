@@ -23,6 +23,12 @@ export default async function SetupPage({
     redirect("/config");
   }
 
+  // The /setup wizard writes to .env via /api/setup/save which is disabled
+  // on Vercel. First-run on Vercel must go through /welcome instead.
+  if (isVercel && isFirstTime) {
+    redirect("/welcome");
+  }
+
   return (
     <AppShell
       title={isFirstTime ? "Welcome to MyMCP" : "Add a pack"}
