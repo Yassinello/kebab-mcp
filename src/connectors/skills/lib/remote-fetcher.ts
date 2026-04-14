@@ -112,38 +112,66 @@ async function validateRemoteUrl(url: string): Promise<{ ok: boolean; error?: st
   return { ok: true };
 }
 
+const MAX_REDIRECTS = 5;
+
+/**
+ * Manual redirect handler that re-runs validateRemoteUrl on every Location
+ * header before following. Without this, an attacker-controlled public URL
+ * can 302 → http://169.254.169.254/ (cloud metadata) or any internal IP,
+ * because fetch's built-in `redirect: "follow"` does not consult our
+ * SSRF allowlist. CVE-class issue.
+ */
 export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
-  const guard = await validateRemoteUrl(url);
-  if (!guard.ok) {
-    return { ok: false, error: guard.error };
-  }
+  let currentUrl = url;
+  let hops = 0;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const result = await fetchWithByteCap(
-      url,
-      {
-        signal: controller.signal,
-        redirect: "follow",
-        headers: {
-          "User-Agent": "MyMCP-Skills/1.0",
-          // Optimistic byte cap — many servers honor Range and save bandwidth.
-          // We still enforce MAX_BYTES via the streaming cap below.
-          Range: `bytes=0-${MAX_BYTES - 1}`,
+    while (hops <= MAX_REDIRECTS) {
+      const guard = await validateRemoteUrl(currentUrl);
+      if (!guard.ok) {
+        // Generic error — don't leak which IP/host failed (helps attackers map internal networks).
+        return { ok: false, error: "Blocked or unreachable URL" };
+      }
+
+      const result = await fetchWithByteCap(
+        currentUrl,
+        {
+          signal: controller.signal,
+          redirect: "manual",
+          headers: {
+            "User-Agent": "MyMCP-Skills/1.0",
+            Range: `bytes=0-${MAX_BYTES - 1}`,
+          },
         },
-      },
-      MAX_BYTES
-    );
-    // 206 = partial content (Range honored); 200 = full body (Range ignored).
-    if (result.status !== 200 && result.status !== 206) {
-      return { ok: false, error: `HTTP ${result.status}` };
+        MAX_BYTES
+      );
+
+      // Manual redirect handling: 3xx with a Location header → re-validate and loop.
+      if (result.status >= 300 && result.status < 400 && result.location) {
+        const next = new URL(result.location, currentUrl).toString();
+        currentUrl = next;
+        hops++;
+        continue;
+      }
+
+      if (result.status !== 200 && result.status !== 206) {
+        return { ok: false, error: `HTTP ${result.status}` };
+      }
+      if (result.truncated) {
+        return { ok: false, error: `response exceeds ${MAX_BYTES} bytes` };
+      }
+      return { ok: true, content: result.text };
     }
-    if (result.truncated) {
-      return { ok: false, error: `response exceeds ${MAX_BYTES} bytes` };
-    }
-    return { ok: true, content: result.text };
+    return { ok: false, error: `too many redirects (${MAX_REDIRECTS})` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Collapse low-level network errors into a generic message — internal
+    // hostnames in error text would help SSRF probing.
+    if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EHOSTUNREACH/i.test(msg)) {
+      return { ok: false, error: "Blocked or unreachable URL" };
+    }
     return { ok: false, error: msg };
   } finally {
     clearTimeout(timer);

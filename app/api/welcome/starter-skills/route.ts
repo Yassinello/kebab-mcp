@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
+import { isClaimer } from "@/core/first-run";
 import { STARTER_SKILLS } from "@/core/starter-skills";
 import { createSkill } from "@/connectors/skills/store";
 
@@ -7,19 +8,31 @@ import { createSkill } from "@/connectors/skills/store";
  * GET  /api/welcome/starter-skills              → list curated starter skills
  * POST /api/welcome/starter-skills  { id }      → install a starter skill into the user's store
  *
- * Auth: same as other admin routes. The /welcome flow has just minted a
- * permanent token by this point, so checkAdminAuth's claim-cookie or
- * Authorization header path will accept the request.
+ * Auth: admin-authed OR (during first-run + immediately after) the original
+ * /welcome claimer cookie. The relaxed path is necessary because the user
+ * lands on /welcome before they have an admin cookie set, so they couldn't
+ * install a starter skill without it. The claimer cookie identifies a single
+ * browser that successfully claimed this instance — same trust level as the
+ * /welcome init flow itself.
  */
 
+function checkWelcomeAuth(request: Request): Response | null {
+  // Standard admin auth wins fastest path.
+  const adminError = checkAdminAuth(request);
+  if (!adminError) return null;
+  // Fall back to the first-run claimer cookie.
+  if (isClaimer(request)) return null;
+  return adminError;
+}
+
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = checkWelcomeAuth(request);
   if (authError) return authError;
   return NextResponse.json({ skills: STARTER_SKILLS });
 }
 
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = checkWelcomeAuth(request);
   if (authError) return authError;
 
   let body: { id?: string };

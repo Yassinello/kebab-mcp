@@ -17,6 +17,9 @@ export interface FetchCapResult {
   truncated: boolean;
   status: number;
   finalUrl: string;
+  /** Location header for 3xx responses. Callers using `redirect: "manual"`
+   *  must read this and re-validate before following the redirect. */
+  location: string | null;
 }
 
 export async function fetchWithByteCap(
@@ -25,6 +28,20 @@ export async function fetchWithByteCap(
   maxBytes: number
 ): Promise<FetchCapResult> {
   const res = await fetch(url, init);
+
+  const location = res.headers.get("location");
+
+  // Short-circuit for 3xx redirects under `redirect: "manual"`. The body
+  // is uninteresting; just hand the Location header back to the caller.
+  if (init.redirect === "manual" && res.status >= 300 && res.status < 400) {
+    return {
+      text: "",
+      truncated: false,
+      status: res.status,
+      finalUrl: res.url || url,
+      location,
+    };
+  }
 
   const reader = res.body?.getReader();
   if (!reader) {
@@ -36,6 +53,7 @@ export async function fetchWithByteCap(
       truncated: bytes > maxBytes,
       status: res.status,
       finalUrl: res.url || url,
+      location,
     };
   }
 
@@ -77,5 +95,6 @@ export async function fetchWithByteCap(
     truncated,
     status: res.status,
     finalUrl: res.url || url,
+    location,
   };
 }

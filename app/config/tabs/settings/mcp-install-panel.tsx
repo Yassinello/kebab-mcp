@@ -20,24 +20,49 @@ const CLIENT_LABELS: Record<Client, string> = {
 /**
  * MCP install instructions for the Settings → MCP subtab.
  *
- * Reuses the same content as the /welcome TokenUsagePanel but tailored for
- * post-onboarding visits: assumes the user already has their token, lets
- * them re-copy install snippets when adding a new client.
+ * The actual token value is NEVER sent into the rendered HTML. The parent
+ * passes only `hasToken: boolean`. When the user clicks "Reveal", this
+ * component calls GET /api/config/auth-token (admin-authed) to fetch the
+ * token on demand and holds it only in client-side state.
  */
 export function McpInstallPanel({
   baseUrl,
-  token,
+  hasToken,
 }: {
   baseUrl: string;
-  token: string | null;
+  hasToken: boolean;
 }) {
   const [client, setClient] = useState<Client>("claude-desktop-connector");
-  const [revealed, setRevealed] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
+  const reveal = async () => {
+    if (token) {
+      // Already fetched — toggle hide.
+      setToken(null);
+      return;
+    }
+    setRevealing(true);
+    setRevealError(null);
+    try {
+      const res = await fetch("/api/config/auth-token", { credentials: "include" });
+      const data = (await res.json()) as { ok: boolean; token?: string; error?: string };
+      if (data.ok && data.token) {
+        setToken(data.token);
+      } else {
+        setRevealError(data.error || "Could not fetch token");
+      }
+    } catch {
+      setRevealError("Network error");
+    }
+    setRevealing(false);
+  };
+
   const url = `${baseUrl}/api/mcp`;
-  const displayToken = revealed && token ? token : token ? maskToken(token) : "<MCP_AUTH_TOKEN>";
-  const tokenForSnippet = revealed && token ? token : "<YOUR_TOKEN>";
+  const displayToken = token ? token : hasToken ? "••••••••••••" : "<MCP_AUTH_TOKEN>";
+  const tokenForSnippet = token ? token : "<YOUR_TOKEN>";
   const urlWithToken = `${url}?token=${encodeURIComponent(tokenForSnippet)}`;
 
   const desktopConfigSnippet = JSON.stringify(
@@ -96,17 +121,18 @@ export function McpInstallPanel({
         want to revoke one client without breaking the others.
       </p>
 
-      {/* Token reveal */}
+      {/* Token reveal — fetched on demand, never serialized into page HTML */}
       <div className="border border-border rounded-lg p-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold text-text">Your MCP token</p>
-          {token && (
+          {hasAuthTokenAction(hasToken) && (
             <button
               type="button"
-              onClick={() => setRevealed((v) => !v)}
-              className="text-[11px] text-accent hover:underline"
+              onClick={reveal}
+              disabled={revealing}
+              className="text-[11px] text-accent hover:underline disabled:opacity-50"
             >
-              {revealed ? "Hide" : "Reveal"}
+              {revealing ? "Loading…" : token ? "Hide" : "Reveal"}
             </button>
           )}
         </div>
@@ -114,7 +140,7 @@ export function McpInstallPanel({
           <code className="flex-1 break-all text-xs text-accent font-mono bg-bg-muted px-2.5 py-1.5 rounded border border-border">
             {displayToken}
           </code>
-          {token && revealed && (
+          {token && (
             <button
               type="button"
               onClick={() => copy("token", token)}
@@ -124,7 +150,10 @@ export function McpInstallPanel({
             </button>
           )}
         </div>
-        {!token && (
+        {revealError && (
+          <p className="text-[11px] text-red-500 mt-2">{revealError}</p>
+        )}
+        {!hasToken && (
           <p className="text-[11px] text-text-muted mt-2">
             No token configured on this server. Set <code>MCP_AUTH_TOKEN</code> in your environment.
           </p>
@@ -202,7 +231,6 @@ export function McpInstallPanel({
   );
 }
 
-function maskToken(token: string): string {
-  if (token.length <= 12) return "•".repeat(token.length);
-  return `${token.slice(0, 6)}${"•".repeat(token.length - 12)}${token.slice(-6)}`;
+function hasAuthTokenAction(hasToken: boolean): boolean {
+  return hasToken;
 }

@@ -63,11 +63,13 @@ export default async function ConfigPage({
   const dryRunMode = isFirstRunMode();
 
   const vaultEnabled = registry.some((p) => p.manifest.id === "vault" && p.enabled);
-  const docs = loadDocs();
-  // First token from MCP_AUTH_TOKEN (might be a comma-separated list).
-  // We only surface this on the Settings → MCP subtab where the operator
-  // is already admin-authed; the token is masked by default in the UI.
-  const authToken = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim() || null;
+  // Documentation tab content is loaded lazily — only when the user
+  // navigates there. Keeps cold-start cost off other tabs.
+  const docs = tab === "documentation" ? loadDocs() : [];
+  // Token presence is exposed (so the Reveal button knows what to show)
+  // but the value itself is fetched on click via /api/config/auth-token,
+  // never serialized into the page payload.
+  const hasAuthToken = !!(process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();
 
   return (
     <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
@@ -82,7 +84,7 @@ export default async function ConfigPage({
         config={config}
         docs={docs}
         vaultEnabled={vaultEnabled}
-        authToken={authToken}
+        hasAuthToken={hasAuthToken}
       />
     </AppShell>
   );

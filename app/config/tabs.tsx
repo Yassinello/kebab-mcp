@@ -33,7 +33,7 @@ export function ConfigTabs({
   config,
   docs,
   vaultEnabled,
-  authToken,
+  hasAuthToken,
 }: {
   activeTab: string;
   connectors: ConnectorSummary[];
@@ -44,7 +44,7 @@ export function ConfigTabs({
   config: InstanceConfig;
   docs: DocEntry[];
   vaultEnabled: boolean;
-  authToken: string | null;
+  hasAuthToken: boolean;
 }) {
   switch (activeTab) {
     case "connectors":
@@ -63,7 +63,7 @@ export function ConfigTabs({
           config={config}
           vaultEnabled={vaultEnabled}
           baseUrl={baseUrl}
-          authToken={authToken}
+          hasAuthToken={hasAuthToken}
         />
       );
     case "overview":

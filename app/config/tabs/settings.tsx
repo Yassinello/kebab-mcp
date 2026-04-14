@@ -38,12 +38,12 @@ export function SettingsTab({
   config,
   vaultEnabled,
   baseUrl,
-  authToken,
+  hasAuthToken,
 }: {
   config: InstanceConfig;
   vaultEnabled: boolean;
   baseUrl: string;
-  authToken: string | null;
+  hasAuthToken: boolean;
 }) {
   const [tab, setTab] = useState<SubTab>("user");
   const [values, setValues] = useState<Record<string, string>>({
@@ -156,7 +156,7 @@ export function SettingsTab({
       )}
 
       {tab === "mcp" && (
-        <McpInstallPanel baseUrl={baseUrl} token={authToken} />
+        <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />
       )}
     </div>
   );
