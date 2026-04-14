@@ -34,7 +34,6 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [snippetOpen, setSnippetOpen] = useState(false);
   const [permanent, setPermanent] = useState(false);
   const [autoMagicState, setAutoMagicState] = useState<AutoMagicState | null>(null);
 
@@ -276,13 +275,7 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
               </li>
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
-                <button
-                  type="button"
-                  onClick={() => setSnippetOpen((v) => !v)}
-                  className="text-left text-slate-300 hover:text-white"
-                >
-                  Configure Claude Desktop {snippetOpen ? "↑" : "↓"}
-                </button>
+                <span className="text-slate-300">Configure your MCP client (snippet below)</span>
               </li>
             </ol>
           );
@@ -332,35 +325,15 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
               </li>
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
-                <button
-                  type="button"
-                  onClick={() => setSnippetOpen((v) => !v)}
-                  className="text-left text-slate-300 hover:text-white"
-                >
-                  Configure Claude Desktop {snippetOpen ? "↑" : "↓"}
-                </button>
+                <span className="text-slate-300">Configure your MCP client (snippet below)</span>
               </li>
             </ol>
           </>
         );
       })()}
 
-      {snippetOpen && (
-        <pre className="mb-8 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">
-          {JSON.stringify(
-            {
-              mcpServers: {
-                mymcp: {
-                  url: `${instanceUrl || "https://YOUR-INSTANCE.vercel.app"}/api/mcp`,
-                  headers: { Authorization: `Bearer ${token || "<TOKEN>"}` },
-                },
-              },
-            },
-            null,
-            2
-          )}
-        </pre>
-      )}
+      {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
+      <MultiClientNote />
 
       <a
         href="/config"
@@ -370,6 +343,132 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       </a>
       <RecoveryFooter />
     </Shell>
+  );
+}
+
+function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: string }) {
+  const [tab, setTab] = useState<"desktop" | "code" | "other">("desktop");
+  const [copied, setCopied] = useState(false);
+
+  const url = `${instanceUrl || "https://YOUR-INSTANCE.vercel.app"}/api/mcp`;
+
+  const desktopSnippet = JSON.stringify(
+    {
+      mcpServers: {
+        mymcp: {
+          url,
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  const codeSnippet = `claude mcp add --transport http mymcp ${url} \\\n  --header "Authorization: Bearer ${token}"`;
+
+  const desktopPath =
+    typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)
+      ? "~/Library/Application Support/Claude/claude_desktop_config.json"
+      : "%APPDATA%\\Claude\\claude_desktop_config.json";
+
+  const snippet = tab === "desktop" ? desktopSnippet : tab === "code" ? codeSnippet : url;
+
+  const copySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-white">How to use this token</p>
+        <div className="flex items-center gap-1 bg-slate-950 rounded-md p-0.5 border border-slate-800">
+          {(
+            [
+              ["desktop", "Claude Desktop"],
+              ["code", "Claude Code"],
+              ["other", "Other"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setTab(k)}
+              className={`text-[11px] font-medium px-2.5 py-1 rounded transition-colors ${
+                tab === k ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "desktop" && (
+        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
+          Open <code className="font-mono text-slate-400">{desktopPath}</code> (create it if it
+          doesn&apos;t exist), paste the snippet below, then restart Claude Desktop.
+        </p>
+      )}
+
+      {tab === "code" && (
+        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
+          Run this in any terminal — registers MyMCP as an HTTP MCP server in your Claude Code
+          config.
+        </p>
+      )}
+
+      {tab === "other" && (
+        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
+          For Cursor, ChatGPT desktop, n8n, or any other MCP client: point it at the URL below and
+          send your token as a <code className="font-mono text-slate-400">Bearer</code> header in
+          the <code className="font-mono text-slate-400">Authorization</code> field. The exact UI
+          varies per client.
+        </p>
+      )}
+
+      <div className="relative">
+        <pre className="text-[11px] font-mono bg-slate-950 border border-slate-800 px-3 py-2.5 rounded-md text-slate-300 overflow-x-auto whitespace-pre-wrap break-all">
+          {snippet}
+        </pre>
+        <button
+          type="button"
+          onClick={copySnippet}
+          className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-1 rounded transition-colors ${
+            copied
+              ? "bg-emerald-900/60 text-emerald-300"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+          }`}
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+
+      <p className="text-[10px] text-slate-600 mt-3">
+        Endpoint: <code className="font-mono text-slate-500">{url}</code>
+      </p>
+    </div>
+  );
+}
+
+function MultiClientNote() {
+  return (
+    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/30 px-4 py-3">
+      <p className="text-xs font-semibold text-slate-300 mb-1">One token, any number of clients</p>
+      <p className="text-[11px] text-slate-500 leading-relaxed">
+        The same token works in <strong className="text-slate-300">every</strong> MCP client —
+        Claude Desktop, Claude Code, Cursor, ChatGPT, etc. Just paste it everywhere. Use multiple
+        comma-separated tokens (in the{" "}
+        <code className="font-mono text-slate-400">MCP_AUTH_TOKEN</code> env var) only if you want
+        to revoke one client without breaking the others.
+      </p>
+    </div>
   );
 }
 
