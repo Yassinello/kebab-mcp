@@ -111,7 +111,7 @@ class MemoryKV implements KVStore {
     const keys = [...this.map.keys()];
     return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
   }
-  async incr(key: string) {
+  async incr(key: string, _opts?: { ttlSeconds?: number }) {
     this.incrCalls++;
     const prev = parseInt(this.map.get(key) ?? "0", 10);
     const next = Number.isFinite(prev) ? prev + 1 : 1;

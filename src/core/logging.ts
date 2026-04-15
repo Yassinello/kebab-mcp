@@ -1,4 +1,4 @@
-import { getKVStore } from "./kv-store";
+import { getLogStore, type LogEntry } from "./log-store";
 import { McpToolError } from "./errors";
 import type { ToolResult } from "./types";
 
@@ -29,13 +29,28 @@ export function logToolCall(log: ToolLog) {
     : "";
   console.log(`[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
 
-  // Write to durable KV store if enabled (fire-and-forget)
+  // Write to the pluggable log store if durable logging is enabled.
+  // Fire-and-forget: a failing log write must never surface to the
+  // caller of the tool. The in-memory ring buffer above is what drives
+  // p95/metrics so we stay observable even if the store is misbehaving.
   if (process.env.MYMCP_DURABLE_LOGS === "true") {
-    const kv = getKVStore();
-    const key = `log:${Date.now()}:${log.tool}`;
-    kv.set(key, JSON.stringify(log)).catch((err: Error) =>
-      console.error("[MyMCP] Durable log write failed:", err.message)
-    );
+    try {
+      const store = getLogStore();
+      const entry: LogEntry = {
+        ts: Date.now(),
+        level: log.status === "error" ? "error" : "info",
+        message: `${log.tool} (${log.durationMs}ms)`,
+        meta: { ...log },
+      };
+      store
+        .append(entry)
+        .catch((err: Error) => console.error("[MyMCP] Durable log write failed:", err.message));
+    } catch (err) {
+      console.error(
+        "[MyMCP] Durable log store unavailable:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
   }
 
   // Fire error webhook if configured
@@ -140,32 +155,19 @@ export async function getDurableLogs(
   count?: number,
   filter?: "all" | "errors" | "success"
 ): Promise<ToolLog[]> {
-  const kv = getKVStore();
-  const keys = await kv.list("log:");
-  // Keys are `log:<timestamp>:<tool>` — sort descending by timestamp
-  keys.sort((a, b) => {
-    const tsA = parseInt(a.split(":")[1] ?? "0", 10);
-    const tsB = parseInt(b.split(":")[1] ?? "0", 10);
-    return tsB - tsA;
-  });
-
+  const store = getLogStore();
   const limit = Math.min(count || 20, 500);
+  // Pull a margin over `limit` so filtering doesn't starve the result.
+  const pulled = await store.recent(limit * 4);
   const results: ToolLog[] = [];
-
-  for (const key of keys) {
+  for (const entry of pulled) {
+    const meta = entry.meta as unknown as ToolLog | undefined;
+    if (!meta || typeof meta.tool !== "string") continue;
+    if (filter === "errors" && meta.status !== "error") continue;
+    if (filter === "success" && meta.status !== "success") continue;
+    results.push(meta);
     if (results.length >= limit) break;
-    const raw = await kv.get(key);
-    if (!raw) continue;
-    try {
-      const entry = JSON.parse(raw) as ToolLog;
-      if (filter === "errors" && entry.status !== "error") continue;
-      if (filter === "success" && entry.status !== "success") continue;
-      results.push(entry);
-    } catch {
-      // skip malformed entries
-    }
   }
-
   return results;
 }
 
