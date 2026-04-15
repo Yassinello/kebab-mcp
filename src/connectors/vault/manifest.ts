@@ -1,4 +1,4 @@
-import type { ConnectorManifest } from "@/core/types";
+import { defineTool, type ConnectorManifest } from "@/core/types";
 import { vaultWriteSchema, handleVaultWrite } from "./tools/vault-write";
 import { vaultReadSchema, handleVaultRead } from "./tools/vault-read";
 import { vaultSearchSchema, handleVaultSearch } from "./tools/vault-search";
@@ -78,134 +78,116 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
     }
   },
   tools: [
-    {
+    defineTool({
       name: "vault_write",
       description:
         "Create or update a note in the Obsidian vault. Handles base64 encoding, SHA resolution for updates, and optional YAML frontmatter. Pass 'sha' from a previous vault_read to skip an extra API call.",
       schema: vaultWriteSchema,
-      handler: async (params) =>
-        handleVaultWrite(
-          params as {
-            path: string;
-            content: string;
-            message?: string;
-            frontmatter?: Record<string, unknown>;
-            sha?: string;
-          }
-        ),
+      handler: async (args) => handleVaultWrite(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_read",
       description:
         "Read a note from the Obsidian vault. Returns the markdown body, parsed frontmatter (via js-yaml), and the file SHA (reusable for vault_write updates).",
       schema: vaultReadSchema,
-      handler: async (params) => handleVaultRead(params as { path: string }),
+      handler: async (args) => handleVaultRead(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_search",
       description:
         "Full-text search across the Obsidian vault via GitHub Search API. Supports pagination with page parameter.",
       schema: vaultSearchSchema,
-      handler: async (params) =>
-        handleVaultSearch(
-          params as { query: string; folder?: string; limit?: number; page?: number }
-        ),
+      handler: async (args) => handleVaultSearch(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_list",
       description:
         "List notes and folders in a vault directory. Useful for browsing the vault structure.",
       schema: vaultListSchema,
-      handler: async (params) => handleVaultList(params as { folder?: string }),
+      handler: async (args) => handleVaultList(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_delete",
       description: "Delete a note from the Obsidian vault.",
       schema: vaultDeleteSchema,
-      handler: async (params) => handleVaultDelete(params as { path: string; message?: string }),
+      handler: async (args) => handleVaultDelete(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_move",
       description:
         "Move or rename a note. Reads source, writes to new path, deletes original. Reports partial failures if delete fails after successful write.",
       schema: vaultMoveSchema,
-      handler: async (params) =>
-        handleVaultMove(params as { from: string; to: string; message?: string }),
+      handler: async (args) => handleVaultMove(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "save_article",
       description:
         "Save a web article to the vault. Fetches URL via Jina Reader (markdown extraction), adds YAML frontmatter (title, source, date, tags). Auto-detects Medium URLs and uses stored session cookie to bypass paywall. Max 5MB.",
       schema: saveArticleSchema,
-      handler: async (params) =>
-        handleSaveArticle(
-          params as { url: string; title?: string; tags?: string[]; folder?: string }
-        ),
+      handler: async (args) => handleSaveArticle(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_append",
       description:
         "Append content to an existing note without rewriting it. Reads the note, appends your content with a separator, and writes back in one operation. Ideal for journals, running logs, and accumulating ideas.",
       schema: vaultAppendSchema,
-      handler: async (params) =>
-        handleVaultAppend(params as { path: string; content: string; separator?: string }),
+      handler: async (args) => handleVaultAppend(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_batch_read",
       description:
         "Read multiple notes in a single call (max 20). Returns all contents with parsed frontmatter and SHA. Perfect for weekly reviews, daily digests, or loading context from several notes at once.",
       schema: vaultBatchReadSchema,
-      handler: async (params) => handleVaultBatchRead(params as { paths: string[] }),
+      handler: async (args) => handleVaultBatchRead(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_recent",
       description:
         "Get the N most recently modified notes in the vault (or a specific folder). Returns paths, commit messages, and dates. Essential for weekly reviews and catching up on recent activity.",
       schema: vaultRecentSchema,
-      handler: async (params) =>
-        handleVaultRecent(params as { n?: number; folder?: string; since?: string }),
+      handler: async (args) => handleVaultRecent(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_stats",
       description:
         "Get vault statistics: total notes, notes per folder, inbox count, total size. Useful for housekeeping and understanding vault structure at a glance.",
       schema: vaultStatsSchema,
-      handler: async (params) => handleVaultStats(params as { folder?: string }),
+      handler: async (args) => handleVaultStats(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_backlinks",
       description:
         "Find all notes that link to a given note via [[wikilinks]]. Also returns forward links from the target note. Enables graph-of-knowledge navigation.",
       schema: vaultBacklinksSchema,
-      handler: async (params) => handleVaultBacklinks(params as { path: string }),
+      handler: async (args) => handleVaultBacklinks(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "vault_due",
       description:
         "Find notes with a 'resurface' frontmatter field whose date has passed. Supports resurface: YYYY-MM-DD (date-based) and resurface: when_relevant (always included). Use for spaced repetition, reminders, and resurfacing forgotten insights.",
       schema: vaultDueSchema,
-      handler: async (params) => handleVaultDue(params as { before?: string; folder?: string }),
+      handler: async (args) => handleVaultDue(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "my_context",
       description:
         "Get personal context (role, active projects, priorities, tech stack). Reads from a configurable path in the vault (default: System/context.md).",
       schema: {},
       handler: async () => handleMyContext(),
       destructive: false,
-    },
+    }),
   ],
 };
