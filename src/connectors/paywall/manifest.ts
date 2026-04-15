@@ -1,4 +1,4 @@
-import type { ConnectorManifest, ToolDefinition } from "@/core/types";
+import { defineTool, type ConnectorManifest, type ToolDefinition } from "@/core/types";
 import { SOURCES, hasAtLeastOneSource } from "./sources";
 import { readPaywalledSchema, handleReadPaywalled } from "./tools/read-paywalled";
 import {
@@ -47,25 +47,26 @@ export const paywallConnector: ConnectorManifest = {
   // time, letting hot env edits register read_paywalled_hard without restart.
   get tools(): ToolDefinition[] {
     const tools: ToolDefinition[] = [
-      {
+      defineTool({
         name: "read_paywalled",
         description:
           "Read a paywalled article from a supported source (Medium, Substack) and return clean markdown. Uses your stored session cookie to bypass the paywall via a simple HTTP fetch + Readability extraction. Fast and cheap — try this first.",
         schema: readPaywalledSchema,
-        handler: async (params) => handleReadPaywalled(params as { url: string }),
+        handler: async (args) => handleReadPaywalled(args),
         destructive: false,
-      },
+      }),
     ];
     if (isBrowserPackConfigured()) {
-      tools.push({
-        name: "read_paywalled_hard",
-        description:
-          "Read a paywalled article using a full cloud browser (Browserbase). Use only if `read_paywalled` fails due to JavaScript rendering or anti-bot protection. Slower and consumes Browserbase credits.",
-        schema: readPaywalledHardSchema,
-        handler: async (params: Record<string, unknown>) =>
-          handleReadPaywalledHard(params as { url: string }),
-        destructive: false,
-      });
+      tools.push(
+        defineTool({
+          name: "read_paywalled_hard",
+          description:
+            "Read a paywalled article using a full cloud browser (Browserbase). Use only if `read_paywalled` fails due to JavaScript rendering or anti-bot protection. Slower and consumes Browserbase credits.",
+          schema: readPaywalledHardSchema,
+          handler: async (args) => handleReadPaywalledHard(args),
+          destructive: false,
+        })
+      );
     }
     return tools;
   },
