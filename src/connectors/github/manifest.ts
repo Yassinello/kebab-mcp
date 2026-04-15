@@ -1,4 +1,4 @@
-import type { ConnectorManifest } from "@/core/types";
+import { defineTool, type ConnectorManifest } from "@/core/types";
 import { githubFetch } from "./lib/github-api";
 import { githubListIssuesSchema, handleGithubListIssues } from "./tools/github_list_issues";
 import { githubGetIssueSchema, handleGithubGetIssue } from "./tools/github_get_issue";
@@ -40,104 +40,52 @@ A GitHub account and at least one repository. Works with both personal and org r
     }
   },
   tools: [
-    {
+    defineTool({
       name: "github_list_issues",
       description:
         "List issues in a GitHub repository. Filters: state (open/closed/all), labels, assignee, milestone. Returns issue numbers, titles, labels, and state.",
       schema: githubListIssuesSchema,
-      handler: async (params) =>
-        handleGithubListIssues(
-          params as {
-            repo?: string;
-            state?: "open" | "closed" | "all";
-            labels?: string;
-            assignee?: string;
-            milestone?: string;
-            limit?: number;
-          }
-        ),
+      handler: async (args) => handleGithubListIssues(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "github_get_issue",
       description: "Get full details of a GitHub issue by number, including body and comments.",
       schema: githubGetIssueSchema,
-      handler: async (params) =>
-        handleGithubGetIssue(
-          params as {
-            issue_number: number;
-            repo?: string;
-            include_comments?: boolean;
-          }
-        ),
+      handler: async (args) => handleGithubGetIssue(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "github_create_issue",
       description:
         "Create a new GitHub issue with title, body, labels, and assignees. Always show the issue content to the user for confirmation before calling.",
       schema: githubCreateIssueSchema,
-      handler: async (params) =>
-        handleGithubCreateIssue(
-          params as {
-            title: string;
-            body?: string;
-            labels?: string[];
-            assignees?: string[];
-            milestone?: number;
-            repo?: string;
-          }
-        ),
+      handler: async (args) => handleGithubCreateIssue(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "github_update_issue",
       description:
         "Update a GitHub issue: change title, body, state (open/closed), labels, or assignees. Always confirm changes with the user before calling.",
       schema: githubUpdateIssueSchema,
-      handler: async (params) =>
-        handleGithubUpdateIssue(
-          params as {
-            issue_number: number;
-            title?: string;
-            body?: string;
-            state?: "open" | "closed";
-            labels?: string[];
-            assignees?: string[];
-            milestone?: number | null;
-            repo?: string;
-          }
-        ),
+      handler: async (args) => handleGithubUpdateIssue(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "github_add_comment",
       description:
         "Add a comment to a GitHub issue. Always show the comment text to the user for approval before calling.",
       schema: githubAddCommentSchema,
-      handler: async (params) =>
-        handleGithubAddComment(
-          params as {
-            issue_number: number;
-            body: string;
-            repo?: string;
-          }
-        ),
+      handler: async (args) => handleGithubAddComment(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "github_search_issues",
       description:
         "Search GitHub issues using GitHub search syntax. Supports qualifiers: repo:owner/repo, is:open, is:closed, label:bug, assignee:user, author:user, in:title, in:body.",
       schema: githubSearchIssuesSchema,
-      handler: async (params) =>
-        handleGithubSearchIssues(
-          params as {
-            query: string;
-            limit?: number;
-          }
-        ),
+      handler: async (args) => handleGithubSearchIssues(args),
       destructive: false,
-    },
+    }),
   ],
 };
