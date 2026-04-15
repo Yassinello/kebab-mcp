@@ -27,6 +27,31 @@ Admin access (or approval) to install a custom app in a Slack workspace. Free Sl
 - _missing_scope_: add the scope under **OAuth & Permissions**, then reinstall the app.
 - _search fails_: \`search.messages\` requires a paid Slack workspace.`,
   requiredEnvVars: ["SLACK_BOT_TOKEN"],
+  testConnection: async (credentials) => {
+    const token = credentials.SLACK_BOT_TOKEN;
+    if (!token) return { ok: false, message: "Missing token" };
+    const res = await fetch("https://slack.com/api/auth.test", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = (await res.json()) as {
+      ok: boolean;
+      team?: string;
+      error?: string;
+      user?: string;
+    };
+    if (data.ok) {
+      return {
+        ok: true,
+        message: `Connected to ${data.team} as ${data.user || "bot"}`,
+      };
+    }
+    return {
+      ok: false,
+      message: "Slack auth failed",
+      detail: data.error || "Unknown Slack error",
+    };
+  },
   diagnose: async () => {
     try {
       const res = await fetch("https://slack.com/api/auth.test", {

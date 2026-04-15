@@ -1,6 +1,7 @@
 import { VERSION } from "@/core/version";
 import { resolveRegistry } from "@/core/registry";
 import { checkAdminAuth } from "@/core/auth";
+import { withTimeout } from "@/core/timeout";
 
 /**
  * Public health endpoint.
@@ -48,15 +49,11 @@ export async function GET(request: Request) {
         };
       }
       try {
-        const diag = await Promise.race([
+        const diag = await withTimeout(
           p.manifest.diagnose(),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`diagnose() timeout after ${PER_CONNECTOR_TIMEOUT_MS}ms`)),
-              PER_CONNECTOR_TIMEOUT_MS
-            )
-          ),
-        ]);
+          PER_CONNECTOR_TIMEOUT_MS,
+          `${p.manifest.id} diagnose()`
+        );
         return {
           connector: p.manifest.id,
           label: p.manifest.label,

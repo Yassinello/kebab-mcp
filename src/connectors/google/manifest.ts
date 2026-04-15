@@ -40,6 +40,62 @@ A Google account and a Google Cloud project where you can create an OAuth client
 - _Insufficient scopes_: re-consent with all required scopes (gmail, calendar, drive, contacts).
 - _App not verified_: for personal use, add your own email as a **Test user** on the OAuth consent screen.`,
   requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+  testConnection: async (credentials) => {
+    const clientId = credentials.GOOGLE_CLIENT_ID;
+    const clientSecret = credentials.GOOGLE_CLIENT_SECRET;
+    const refreshToken = credentials.GOOGLE_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret) {
+      return {
+        ok: false,
+        message: "Client ID and Secret are required",
+        detail: "Fill in both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET before testing.",
+      };
+    }
+    if (!refreshToken) {
+      return {
+        ok: true,
+        message:
+          "Client ID & Secret provided — get Refresh Token after deploy via /api/auth/google",
+      };
+    }
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    const tokenData = (await tokenRes.json()) as {
+      access_token?: string;
+      error?: string;
+      error_description?: string;
+    };
+    if (!tokenRes.ok || !tokenData.access_token) {
+      return {
+        ok: false,
+        message: "Google OAuth failed",
+        detail: tokenData.error_description || tokenData.error || `HTTP ${tokenRes.status}`,
+      };
+    }
+
+    const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    if (profileRes.ok) {
+      const profile = (await profileRes.json()) as { emailAddress?: string };
+      return { ok: true, message: `Connected as ${profile.emailAddress || "Google user"}` };
+    }
+    return {
+      ok: true,
+      message:
+        "OAuth credentials valid (Gmail scope not granted — other Google APIs may still work)",
+    };
+  },
   diagnose: async () => {
     try {
       await getGoogleAccessToken();

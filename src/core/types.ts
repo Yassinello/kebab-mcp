@@ -85,6 +85,14 @@ export function defineTool<TSchema extends z.ZodRawShape>(
   return def as unknown as ToolDefinition;
 }
 
+/** Result of a connector-level testConnection() call. */
+export interface TestConnectionResult {
+  ok: boolean;
+  message: string;
+  /** Optional debug detail shown under the ok/fail message in the wizard. */
+  detail?: string;
+}
+
 /** Pack manifest — groups related tools */
 export interface ConnectorManifest {
   /** Pack identifier (e.g., "google", "vault") */
@@ -109,6 +117,16 @@ export interface ConnectorManifest {
   tools: ToolDefinition[];
   /** Optional async health check — verifies credentials actually work */
   diagnose?: () => Promise<{ ok: boolean; message: string }>;
+  /**
+   * Optional pre-install credential test used by the /welcome and
+   * /config setup flows. Receives the credential draft the user typed
+   * into the wizard (keys mirror `requiredEnvVars`) and returns a
+   * simple ok/message pair with optional debug detail. Unlike
+   * `diagnose()` (which runs against `process.env`), this is called
+   * BEFORE the credentials have been persisted — so implementations
+   * must read from the `credentials` argument, not from env.
+   */
+  testConnection?: (credentials: Record<string, string>) => Promise<TestConnectionResult>;
   /**
    * Optional markdown guide shown in `/config → Packs` for per-pack credential
    * instructions that go beyond a simple key/value form (e.g., per-source

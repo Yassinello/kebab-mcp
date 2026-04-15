@@ -168,6 +168,24 @@ An [Apify](https://apify.com) account with credits or a paid plan. The LinkedIn 
 - _Actor run succeeds but dataset is empty_: LinkedIn actors occasionally get blocked; retry or switch to a different actor via \`apify_search_actors\`.
 - _Out of credits_: top up your Apify account; each LinkedIn run consumes a small amount.`,
   requiredEnvVars: ["APIFY_TOKEN"],
+  testConnection: async (credentials) => {
+    const token = credentials.APIFY_TOKEN;
+    if (!token) return { ok: false, message: "Missing Apify token" };
+    const res = await fetch("https://api.apify.com/v2/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { data?: { username?: string; email?: string } };
+      const user = data?.data?.username || data?.data?.email || "Apify user";
+      return { ok: true, message: `Connected as ${user}` };
+    }
+    const errText = await res.text().catch(() => "");
+    return {
+      ok: false,
+      message: `Apify: ${res.status}`,
+      detail: errText || `HTTP ${res.status}`,
+    };
+  },
   diagnose: async () => {
     try {
       const token = process.env.APIFY_TOKEN;

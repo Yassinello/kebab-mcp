@@ -36,6 +36,34 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
 - _409 conflict on write_: someone (or another sync) committed between your read and write; retry — MyMCP passes \`sha\` to handle this.
 - _Search returns nothing fresh_: GitHub's search index lags by 1–2 minutes after a commit; that's normal.`,
   requiredEnvVars: ["GITHUB_PAT", "GITHUB_REPO"],
+  testConnection: async (credentials) => {
+    const pat = credentials.GITHUB_PAT;
+    const repo = credentials.GITHUB_REPO;
+    if (!pat || !repo) {
+      return {
+        ok: false,
+        message: "Missing PAT or repo",
+        detail: "Both GITHUB_PAT and GITHUB_REPO are required.",
+      };
+    }
+    const repoNorm = repo.replace(/.*github\.com\//, "").replace(/\/+$/, "");
+    const res = await fetch(`https://api.github.com/repos/${repoNorm}`, {
+      headers: { Authorization: `token ${pat}`, "User-Agent": "MyMCP" },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { full_name?: string; private?: boolean };
+      return {
+        ok: true,
+        message: `Connected to ${data.full_name}${data.private ? " (private)" : ""}`,
+      };
+    }
+    const errData = (await res.json().catch(() => ({}))) as { message?: string };
+    return {
+      ok: false,
+      message: `GitHub: ${res.status}`,
+      detail: errData.message || `HTTP ${res.status} from GitHub API`,
+    };
+  },
   diagnose: async () => {
     try {
       const repo = process.env.GITHUB_REPO;

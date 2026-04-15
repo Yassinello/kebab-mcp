@@ -25,6 +25,26 @@ A Notion workspace where you can install integrations. Notion integrations only 
 - _Cannot update properties_: property names are case-sensitive and must match the database schema exactly.
 - _API version errors_: MyMCP sends \`Notion-Version: 2022-06-28\` — that's still supported.`,
   requiredEnvVars: ["NOTION_API_KEY"],
+  testConnection: async (credentials) => {
+    const key = credentials.NOTION_API_KEY;
+    if (!key) return { ok: false, message: "Missing API key" };
+    const res = await fetch("https://api.notion.com/v1/users/me", {
+      headers: { Authorization: `Bearer ${key}`, "Notion-Version": "2022-06-28" },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { name?: string; type?: string };
+      return {
+        ok: true,
+        message: `Connected as ${data.name || "Notion integration"} (${data.type || "bot"})`,
+      };
+    }
+    const errData = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
+    return {
+      ok: false,
+      message: `Notion: ${res.status}`,
+      detail: errData.message || errData.code || `HTTP ${res.status}`,
+    };
+  },
   diagnose: async () => {
     try {
       const res = await fetch("https://api.notion.com/v1/users/me", {

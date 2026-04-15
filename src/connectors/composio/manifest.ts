@@ -23,6 +23,12 @@ A Composio account. You'll connect each target app _inside_ the Composio dashboa
 - _Action fails with permission error_: re-auth the Composio connection with broader scopes.
 - _Rate limits_: each underlying app (e.g. HubSpot) enforces its own — Composio passes those errors through.`,
   requiredEnvVars: ["COMPOSIO_API_KEY"],
+  testConnection: async (credentials) => {
+    const key = credentials.COMPOSIO_API_KEY;
+    if (!key) return { ok: false, message: "Missing API key" };
+    // Light check — actual validation happens on first use.
+    return { ok: true, message: "API key provided — verify in Composio dashboard" };
+  },
   diagnose: async () => {
     try {
       const { Composio } = await import("@composio/core");

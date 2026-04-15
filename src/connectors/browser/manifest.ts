@@ -26,6 +26,11 @@ Two accounts:
 - _Stagehand cannot find element_: the page may be behind login — use \`web_act\` first to sign in, or provide a saved context.
 - _Model errors_: verify OpenRouter has credits and the configured model is available.`,
   requiredEnvVars: ["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID", "OPENROUTER_API_KEY"],
+  testConnection: async (credentials) => {
+    const bbKey = credentials.BROWSERBASE_API_KEY;
+    if (!bbKey) return { ok: false, message: "Missing Browserbase API key" };
+    return { ok: true, message: "Credentials provided — will be verified on first use" };
+  },
   tools: [
     {
       name: "web_browse",
