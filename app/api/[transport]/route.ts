@@ -4,7 +4,14 @@ import { checkMcpAuth, extractToken } from "@/core/auth";
 import { isFirstRunMode } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
+import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
+
+// NIT-03: Log the registry state once at module load, then re-log only
+// when env.changed fires. Previous behavior logged on every MCP request,
+// which dominated dev console output and produced log spam in production.
+logRegistryState();
+on("env.changed", logRegistryState);
 
 /**
  * Build a fresh MCP handler that reflects the current registry state.
@@ -23,7 +30,6 @@ function buildHandler(callerTokenId?: string | null) {
   return createMcpHandler(
     (server) => {
       const enabledPacks = getEnabledPacks();
-      logRegistryState();
 
       for (const pack of enabledPacks) {
         for (const tool of pack.manifest.tools) {
