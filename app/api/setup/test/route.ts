@@ -72,10 +72,32 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(result);
   } catch (err) {
+    // v0.6 HIGH-3: never echo raw err.message to the caller. Test
+    // connections hit arbitrary third-party APIs whose error bodies may
+    // contain the credentials the caller just tried (e.g., an OAuth
+    // provider echoing back `client_secret=sk_live_…` in a 401 body,
+    // or a Slack API dumping the bot token when the scope is wrong).
+    // We surface a generic message + the error class only.
     return NextResponse.json({
       ok: false,
       message: "Connection failed",
-      detail: err instanceof Error ? err.message : String(err),
+      detail: sanitizeSetupTestError(err),
     });
   }
+}
+
+/**
+ * Produce a caller-safe string from a test-connection failure. We keep
+ * the error constructor name for debuggability but drop the message.
+ */
+function sanitizeSetupTestError(err: unknown): string {
+  if (err instanceof Error) {
+    // Common benign shapes we can safely preserve.
+    const name = err.name && err.name !== "Error" ? err.name : "Error";
+    if (err.name === "AbortError" || /timeout/i.test(err.message)) {
+      return `${name}: timeout`;
+    }
+    return name;
+  }
+  return "Error";
 }
