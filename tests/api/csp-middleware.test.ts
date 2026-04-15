@@ -70,4 +70,18 @@ describe("proxy.ts CSP middleware", () => {
     expect(res.status).toBe(401);
     expect(res.headers.get("Content-Security-Policy")).toContain("nonce-");
   });
+
+  it("forwards the x-nonce request header into the rewritten request (HIGH-2)", () => {
+    // The CSP nonce in the response must match the `x-nonce` request
+    // header that the root layout reads via `headers()`. NextResponse
+    // exposes the rewritten request headers on `x-middleware-override-headers`
+    // + `x-middleware-request-<name>`.
+    const res = proxy(nextReq("/"));
+    const csp = res.headers.get("Content-Security-Policy")!;
+    const responseNonce = csp.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
+    expect(responseNonce).toBeTruthy();
+
+    const forwarded = res.headers.get("x-middleware-request-x-nonce");
+    expect(forwarded).toBe(responseNonce);
+  });
 });
