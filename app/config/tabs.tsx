@@ -37,6 +37,7 @@ export function ConfigTabs({
   hasAuthToken,
   version,
   commitSha,
+  tenantId,
 }: {
   activeTab: string;
   connectors: ConnectorSummary[];
@@ -50,6 +51,7 @@ export function ConfigTabs({
   hasAuthToken: boolean;
   version: string;
   commitSha?: string;
+  tenantId?: string | null;
 }) {
   let tab: React.ReactNode;
   let section: string;
@@ -99,6 +101,7 @@ export function ConfigTabs({
           config={config}
           version={version}
           commitSha={commitSha}
+          tenantId={tenantId}
         />
       );
       break;

@@ -9,7 +9,7 @@
  * its tools are off regardless of per-tool toggle.
  */
 
-import { getKVStore } from "./kv-store";
+import { getKVStore, getTenantKVStore } from "./kv-store";
 import { emit, on } from "./events";
 
 const KEY_PREFIX = "tool:disabled:";
@@ -62,5 +62,22 @@ export async function getDisabledTools(): Promise<Set<string>> {
     disabled.add(toolName);
   }
   cachedDisabledTools = { at: now, value: disabled };
+  return disabled;
+}
+
+/**
+ * Get disabled tools scoped to a specific tenant.
+ * Reads from the tenant-prefixed KV namespace.
+ * Not cached — tenant dashboard requests are infrequent.
+ */
+export async function getDisabledToolsForTenant(tenantId: string): Promise<Set<string>> {
+  const kv = getTenantKVStore(tenantId);
+  const keys = await kv.list(KEY_PREFIX);
+  const disabled = new Set<string>();
+  for (const key of keys) {
+    // Tenant KV list returns keys with tenant prefix stripped
+    const toolName = key.slice(KEY_PREFIX.length);
+    disabled.add(toolName);
+  }
   return disabled;
 }

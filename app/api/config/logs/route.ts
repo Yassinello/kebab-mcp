@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getRecentLogs, getDurableLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
+import { getTenantId, TenantError } from "@/core/tenant";
 
 /**
  * GET /api/config/logs?count=100&filter=all|errors|success
@@ -20,6 +21,17 @@ import { getLogStore } from "@/core/log-store";
 export async function GET(request: Request) {
   const authError = checkAdminAuth(request);
   if (authError) return authError;
+
+  // Tenant scoping: if x-mymcp-tenant header is present, filter logs
+  // by tokenId prefix (tenant tokens are namespaced). When absent, show all.
+  let tenantId: string | null = null;
+  try {
+    tenantId = getTenantId(request);
+  } catch (err) {
+    if (err instanceof TenantError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 400 });
+    }
+  }
 
   const url = new URL(request.url);
   const count = parseInt(url.searchParams.get("count") || "100", 10);
@@ -46,6 +58,10 @@ export async function GET(request: Request) {
     logs = logs.filter((l) => l.status === "error");
   } else if (filter === "success") {
     logs = logs.filter((l) => l.status === "success");
+  }
+  // Scope logs by tenant: filter to logs whose tokenId matches the tenant
+  if (tenantId) {
+    logs = logs.filter((l) => l.tokenId === tenantId);
   }
   return NextResponse.json({ ok: true, logs, source: "memory" });
 }

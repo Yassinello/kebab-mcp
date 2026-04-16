@@ -268,3 +268,146 @@ export function replaceSkill(skill: Skill): Promise<void> {
     await writeRaw(all);
   });
 }
+
+// ── Skill versioning ──────────────────────────────────────────────────
+//
+// Storage model:
+// - `skill:<id>:meta` — JSON { currentVersion: N }
+// - `skill:<id>:v<N>` — JSON snapshot { content, savedAt }
+//
+// On every create/update, the version is incremented and stored.
+
+interface SkillVersionEntry {
+  version: number;
+  content: string;
+  name: string;
+  description: string;
+  savedAt: string;
+}
+
+interface SkillVersionMeta {
+  currentVersion: number;
+}
+
+function versionMetaKey(skillId: string): string {
+  return `skill:${skillId}:meta`;
+}
+
+function versionKey(skillId: string, version: number): string {
+  return `skill:${skillId}:v${version}`;
+}
+
+async function getVersionMeta(skillId: string): Promise<SkillVersionMeta | null> {
+  const kv = getKVStore();
+  const raw = await kv.get(versionMetaKey(skillId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SkillVersionMeta;
+  } catch {
+    return null;
+  }
+}
+
+async function saveVersion(skill: Skill): Promise<number> {
+  const kv = getKVStore();
+  const meta = await getVersionMeta(skill.id);
+  const nextVersion = (meta?.currentVersion ?? 0) + 1;
+  const entry: SkillVersionEntry = {
+    version: nextVersion,
+    content: skill.content,
+    name: skill.name,
+    description: skill.description,
+    savedAt: new Date().toISOString(),
+  };
+  await kv.set(versionKey(skill.id, nextVersion), JSON.stringify(entry));
+  await kv.set(versionMetaKey(skill.id), JSON.stringify({ currentVersion: nextVersion }));
+  return nextVersion;
+}
+
+/** List all version numbers for a skill, sorted ascending. */
+export async function listSkillVersions(skillId: string): Promise<number[]> {
+  const kv = getKVStore();
+  const prefix = `skill:${skillId}:v`;
+  const keys = await kv.list(prefix);
+  const versions: number[] = [];
+  for (const k of keys) {
+    const suffix = k.slice(prefix.length);
+    const n = parseInt(suffix, 10);
+    if (Number.isFinite(n)) versions.push(n);
+  }
+  return versions.sort((a, b) => a - b);
+}
+
+/** Get a specific version of a skill. */
+export async function getSkillVersion(
+  skillId: string,
+  version: number
+): Promise<SkillVersionEntry | null> {
+  const kv = getKVStore();
+  const raw = await kv.get(versionKey(skillId, version));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SkillVersionEntry;
+  } catch {
+    return null;
+  }
+}
+
+/** Get the current version number for a skill. */
+export async function getSkillCurrentVersion(skillId: string): Promise<number> {
+  const meta = await getVersionMeta(skillId);
+  return meta?.currentVersion ?? 0;
+}
+
+/**
+ * Rollback a skill to a previous version. Creates a new version (N+1)
+ * with the old content, so the history is always append-only.
+ */
+export function rollbackSkill(skillId: string, version: number): Promise<Skill | null> {
+  return enqueueWrite(async () => {
+    const all = await readRaw();
+    const idx = all.findIndex((s) => s.id === skillId);
+    if (idx === -1) return null;
+
+    const entry = await getSkillVersion(skillId, version);
+    if (!entry) return null;
+
+    const prev = all[idx];
+    const now = new Date().toISOString();
+    const updated: Skill = {
+      ...prev,
+      content: entry.content,
+      name: entry.name,
+      description: entry.description,
+      updatedAt: now,
+    };
+    all[idx] = updated;
+    await writeRaw(all);
+    await saveVersion(updated);
+    return updated;
+  });
+}
+
+// Patch createSkill and updateSkill to auto-version
+const _originalCreateSkill = createSkill;
+
+/**
+ * Wrapped createSkill that also saves the first version.
+ */
+export async function createSkillVersioned(input: SkillCreateInput): Promise<Skill> {
+  const skill = await _originalCreateSkill(input);
+  await saveVersion(skill);
+  return skill;
+}
+
+/**
+ * Wrapped updateSkill that also saves a new version.
+ */
+export async function updateSkillVersioned(
+  id: string,
+  patch: SkillUpdateInput
+): Promise<Skill | null> {
+  const result = await updateSkill(id, patch);
+  if (result) await saveVersion(result);
+  return result;
+}

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import {
   getSkill,
-  updateSkill,
   deleteSkill,
   skillUpdateInputSchema,
+  updateSkillVersioned,
 } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 
@@ -44,7 +44,7 @@ export async function PATCH(request: Request, ctx: RouteContext) {
   }
 
   try {
-    let skill = await updateSkill(id, parsed.data);
+    let skill = await updateSkillVersioned(id, parsed.data);
     if (!skill) {
       return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     }

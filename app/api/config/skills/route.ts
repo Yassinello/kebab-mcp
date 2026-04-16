@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
-import { listSkills, createSkill, skillCreateInputSchema } from "@/connectors/skills/store";
+import {
+  listSkills,
+  skillCreateInputSchema,
+  createSkillVersioned,
+} from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 import { getEnabledPacks } from "@/core/registry";
 
@@ -57,7 +61,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let skill = await createSkill(parsed.data);
+    let skill = await createSkillVersioned(parsed.data);
 
     // If remote, do an initial fetch so the skill has content immediately.
     if (skill.source.type === "remote") {

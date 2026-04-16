@@ -54,6 +54,14 @@ const emptyDraft = (): DraftState => ({
   arguments: [],
 });
 
+interface SkillVersionSummary {
+  version: number;
+  savedAt: string;
+  name: string;
+  description: string;
+  contentPreview: string;
+}
+
 export function SkillsTab() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,17 +72,44 @@ export function SkillsTab() {
   const [flash, setFlash] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [versionMap, setVersionMap] = useState<Record<string, number>>({});
+  const [historyOpen, setHistoryOpen] = useState<string | null>(null);
+  const [historyData, setHistoryData] = useState<SkillVersionSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+
+  const loadVersions = useCallback(async (skillIds: string[]) => {
+    const map: Record<string, number> = {};
+    await Promise.all(
+      skillIds.map(async (id) => {
+        try {
+          const res = await fetch(`/api/config/skill-versions?id=${id}`, {
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (data.ok) map[id] = data.currentVersion || 0;
+        } catch {
+          /* ignore */
+        }
+      })
+    );
+    setVersionMap((prev) => ({ ...prev, ...map }));
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/config/skills", { credentials: "include" });
       const data = await res.json();
-      if (data.ok) setSkills(data.skills || []);
+      if (data.ok) {
+        const skillList = data.skills || [];
+        setSkills(skillList);
+        loadVersions(skillList.map((s: Skill) => s.id));
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadVersions]);
 
   useEffect(() => {
     reload();
@@ -218,6 +253,57 @@ export function SkillsTab() {
     window.location.href = `/api/config/skills/${id}/export`;
   };
 
+  const toggleHistory = async (skillId: string) => {
+    if (historyOpen === skillId) {
+      setHistoryOpen(null);
+      setHistoryData([]);
+      return;
+    }
+    setHistoryOpen(skillId);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/config/skill-versions?id=${skillId}`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.ok) setHistoryData(data.versions || []);
+      else setHistoryData([]);
+    } catch {
+      setHistoryData([]);
+    }
+    setHistoryLoading(false);
+  };
+
+  const rollbackTo = async (skillId: string, version: number) => {
+    if (
+      !confirm(
+        `Rollback to version ${version}? A new version will be created with the old content.`
+      )
+    )
+      return;
+    setRollingBack(true);
+    try {
+      const res = await fetch("/api/config/skill-rollback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: skillId, version }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setFlash("Rolled back");
+        setTimeout(() => setFlash(null), 2000);
+        setHistoryOpen(null);
+        await reload();
+      } else {
+        alert(data.error || "Rollback failed");
+      }
+    } catch {
+      alert("Network error");
+    }
+    setRollingBack(false);
+  };
+
   if (loading) {
     return <p className="text-sm text-text-muted">Loading skills...</p>;
   }
@@ -327,6 +413,11 @@ export function SkillsTab() {
                 >
                   {skill.source.type}
                 </span>
+                {versionMap[skill.id] != null && versionMap[skill.id] > 0 && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
+                    v{versionMap[skill.id]}
+                  </span>
+                )}
                 {skill.source.type === "remote" && skill.source.lastError && (
                   <span className="text-[11px] font-medium text-red bg-red-bg px-2 py-0.5 rounded-full">
                     fetch error
@@ -349,6 +440,13 @@ export function SkillsTab() {
                 </button>
               )}
               <button
+                onClick={() => toggleHistory(skill.id)}
+                className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
+                title="View version history"
+              >
+                History
+              </button>
+              <button
                 onClick={() => exportSkill(skill.id)}
                 className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
                 title="Download as Claude Skill (.md)"
@@ -369,6 +467,49 @@ export function SkillsTab() {
               </button>
             </div>
           </div>
+          {historyOpen === skill.id && (
+            <div className="border-t border-border px-5 py-4 bg-bg-muted/30">
+              <h4 className="text-xs font-semibold text-text-muted mb-2">Version History</h4>
+              {historyLoading ? (
+                <p className="text-xs text-text-muted">Loading...</p>
+              ) : historyData.length === 0 ? (
+                <p className="text-xs text-text-muted">No version history available.</p>
+              ) : (
+                <div className="space-y-2">
+                  {[...historyData].reverse().map((v) => (
+                    <div
+                      key={v.version}
+                      className="flex items-center gap-3 text-xs border border-border rounded-md px-3 py-2"
+                    >
+                      <span className="font-mono font-medium text-accent shrink-0">
+                        v{v.version}
+                      </span>
+                      <span className="text-text-muted shrink-0">
+                        {new Date(v.savedAt).toLocaleString()}
+                      </span>
+                      <span className="text-text-dim flex-1 truncate">
+                        {v.contentPreview || "(empty)"}
+                      </span>
+                      {v.version !== versionMap[skill.id] && (
+                        <button
+                          onClick={() => rollbackTo(skill.id, v.version)}
+                          disabled={rollingBack}
+                          className="text-xs text-orange hover:underline shrink-0 disabled:opacity-50"
+                        >
+                          Rollback
+                        </button>
+                      )}
+                      {v.version === versionMap[skill.id] && (
+                        <span className="text-[10px] font-medium text-green bg-green-bg px-1.5 py-0.5 rounded shrink-0">
+                          current
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
     </div>

@@ -6,6 +6,7 @@ import { isFirstRunMode } from "@/core/first-run";
 import { loadDocs } from "@/core/docs";
 import { ConfigTabs } from "./tabs";
 import { DryRunBanner } from "./dry-run-banner";
+import { cookies } from "next/headers";
 import packageJson from "../../package.json";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +24,16 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
 export default async function ConfigPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; tenant?: string }>;
 }) {
   const params = await searchParams;
   const tab = params.tab || "overview";
   const meta = PAGE_META[tab] || PAGE_META.overview;
   const config = await getInstanceConfigAsync();
+
+  // Tenant scoping: read from cookie (set by admin) or query param
+  const cookieStore = await cookies();
+  const tenantId = cookieStore.get("mymcp-tenant")?.value || params.tenant || null;
 
   const registry = resolveRegistry();
   const logs = getRecentLogs(100);
@@ -90,6 +95,7 @@ export default async function ConfigPage({
         hasAuthToken={hasAuthToken}
         version={version}
         commitSha={commitSha}
+        tenantId={tenantId}
       />
     </AppShell>
   );

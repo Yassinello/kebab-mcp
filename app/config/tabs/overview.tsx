@@ -27,6 +27,7 @@ export function OverviewTab({
   config,
   version,
   commitSha,
+  tenantId,
 }: {
   baseUrl: string;
   totalTools: number;
@@ -36,6 +37,7 @@ export function OverviewTab({
   config: InstanceConfig;
   version: string;
   commitSha?: string;
+  tenantId?: string | null;
 }) {
   const [tokenRevealed, setTokenRevealed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -130,6 +132,14 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Tenant badge */}
+      {tenantId && (
+        <div className="flex items-center gap-2 border border-accent/30 bg-accent/5 rounded-lg px-4 py-2.5">
+          <span className="text-xs font-semibold text-accent uppercase tracking-wide">Tenant:</span>
+          <span className="font-mono text-sm text-text">{tenantId}</span>
+        </div>
+      )}
+
       {/* Instance health widget */}
       <HealthWidget />
 
