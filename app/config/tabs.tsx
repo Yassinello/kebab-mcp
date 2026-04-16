@@ -34,6 +34,8 @@ export function ConfigTabs({
   docs,
   vaultEnabled,
   hasAuthToken,
+  version,
+  commitSha,
 }: {
   activeTab: string;
   connectors: ConnectorSummary[];
@@ -45,6 +47,8 @@ export function ConfigTabs({
   docs: DocEntry[];
   vaultEnabled: boolean;
   hasAuthToken: boolean;
+  version: string;
+  commitSha?: string;
 }) {
   switch (activeTab) {
     case "connectors":
@@ -76,6 +80,8 @@ export function ConfigTabs({
           connectorCount={connectors.length}
           logs={logs}
           config={config}
+          version={version}
+          commitSha={commitSha}
         />
       );
   }

@@ -39,6 +39,17 @@ Skills appear under their `skill_<name>` tool name in your MCP client, and as na
 
 `/config → Skills → Import from URL`. Paste a raw GitHub markdown URL or a `skills.sh` skill page. MyMCP fetches it (with byte cap and SSRF protection), parses the frontmatter into a skill definition, and shows a preview before saving.
 
+## Skill Composer
+
+`/config → Skills → Compose` opens a visual wizard that creates a skill by wrapping an existing tool:
+
+1. **Pick a tool** — search and select from all registered tools.
+2. **Configure arguments** — for each field in the tool's schema, either pre-fill a value or mark it as a `{{placeholder}}` that callers provide at invocation time.
+3. **Set metadata** — name, description, optional tags.
+4. **Preview and save** — review the generated skill content and create it.
+
+The composer is the fastest way to create "shortcut" skills that call a tool with pre-filled defaults while exposing only the fields the user needs to change.
+
 ## Tips
 
 - Keep the source short. Skills are templates, not whole conversations.

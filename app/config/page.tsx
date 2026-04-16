@@ -6,6 +6,7 @@ import { isFirstRunMode } from "@/core/first-run";
 import { loadDocs } from "@/core/docs";
 import { ConfigTabs } from "./tabs";
 import { DryRunBanner } from "./dry-run-banner";
+import packageJson from "../../package.json";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ export default async function ConfigPage({
   // but the value itself is fetched on click via /api/config/auth-token,
   // never serialized into the page payload.
   const hasAuthToken = !!(process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();
+  const version = packageJson.version;
+  const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || undefined;
 
   return (
     <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
@@ -85,6 +88,8 @@ export default async function ConfigPage({
         docs={docs}
         vaultEnabled={vaultEnabled}
         hasAuthToken={hasAuthToken}
+        version={version}
+        commitSha={commitSha}
       />
     </AppShell>
   );

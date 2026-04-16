@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { InfoTooltip } from "./settings/info-tooltip";
 import { ImportSkillModal } from "./skills-import-modal";
+import { SkillComposer } from "./skill-composer";
 
 interface SkillArgument {
   name: string;
@@ -62,6 +63,7 @@ export function SkillsTab() {
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -232,13 +234,19 @@ export function SkillsTab() {
               {flash}
             </span>
           )}
-          {!draft && (
+          {!draft && !composerOpen && (
             <>
+              <button
+                onClick={() => setComposerOpen(true)}
+                className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
+              >
+                Compose
+              </button>
               <button
                 onClick={() => setImportOpen(true)}
                 className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
               >
-                ↓ Import from URL
+                Import from URL
               </button>
               <button
                 onClick={startCreate}
@@ -257,6 +265,18 @@ export function SkillsTab() {
           onImported={async () => {
             setImportOpen(false);
             setFlash("Skill imported");
+            setTimeout(() => setFlash(null), 2500);
+            await reload();
+          }}
+        />
+      )}
+
+      {composerOpen && (
+        <SkillComposer
+          onClose={() => setComposerOpen(false)}
+          onCreated={async () => {
+            setComposerOpen(false);
+            setFlash("Skill created via composer");
             setTimeout(() => setFlash(null), 2500);
             await reload();
           }}

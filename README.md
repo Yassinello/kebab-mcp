@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MyMCP</h1>
-  <p align="center"><strong>Your personal AI backend. One endpoint. 65 tools. Deploy in 5 minutes.</strong></p>
+  <p align="center"><strong>Your personal AI backend. One endpoint. 84+ tools. Deploy in 5 minutes.</strong></p>
 </p>
 
 <p align="center">
@@ -30,20 +30,22 @@
 └──────────────────────────────┬──────────────────────────────────────┘
                                │ MCP (Streamable HTTP)
                                ▼
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                            MyMCP on Vercel / Docker                              │
-│                                                                                  │
-│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐  │
-│  │  Google   │ │ Vault  │ │Browser │ │ Slack │ │ Notion │ │Composio │ │Apify │  │
-│  │ Workspace │ │Obsidian│ │  Auto  │ │       │ │        │ │ 1000+   │ │ LI + │  │
-│  │ 18 tools  │ │14 tools│ │4 tools │ │6 tools│ │5 tools │ │  apps   │ │actors│  │
-│  └─────┬─────┘ └───┬────┘ └───┬────┘ └───┬───┘ └───┬────┘ └────┬────┘ └──┬───┘  │
-│        │           │          │          │         │           │         │       │
-│      Registry ← Connector Manifests ← Env vars (auto-activation)                    │
-└────────┼───────────┼──────────┼──────────┼─────────┼───────────┼─────────┼───────┘
-         │           │          │          │         │           │         │
-         ▼           ▼          ▼          ▼         ▼           ▼         ▼
-    Google APIs  GitHub API  Browserbase  Slack API  Notion API  Composio  Apify
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MyMCP on Vercel / Docker                                   │
+│                                                                                         │
+│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
+│  │  Google   │ │ Vault  │ │Browser │ │ Slack │ │ Notion │ │Composio │ │Apify │         │
+│  │ Workspace │ │Obsidian│ │  Auto  │ │       │ │        │ │ 1000+   │ │ LI + │         │
+│  │ 18 tools  │ │14 tools│ │4 tools │ │6 tools│ │5 tools │ │  apps   │ │actors│         │
+│  └──────────┘ └────────┘ └────────┘ └───────┘ └────────┘ └─────────┘ └──────┘         │
+│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
+│  │  GitHub   │ │ Linear │ │Airtable│ │Paywall│ │Webhook │ │ Skills  │ │Admin │         │
+│  │  Issues   │ │ Issues │ │ Bases  │ │Reader │ │Receiver│ │Composer │ │ Logs │         │
+│  │  6 tools  │ │6 tools │ │7 tools │ │2 tools│ │2 tools │ │ dynamic │ │4 tool│         │
+│  └──────────┘ └────────┘ └────────┘ └───────┘ └────────┘ └─────────┘ └──────┘         │
+│                                                                                         │
+│  Registry ← Connector Manifests ← Env vars (auto-activation) ← Per-tool toggles        │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## The Story
@@ -54,12 +56,12 @@ I built MyMCP because I wanted a single MCP server that works everywhere (Claude
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
 
-MyMCP gives you **one server, one endpoint, 65 tools** — deployed on Vercel's free tier (or Docker). You own everything.
+MyMCP gives you **one server, one endpoint, 84+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
 | | MyMCP | Separate MCP servers | Hosted platforms |
 |---|---|---|---|
 | **Setup** | Fork + env vars + deploy | 5 repos, 5 configs | Sign up + monthly fee |
-| **Tools** | 65 pre-built | Build your own | 1000s (but vendor lock-in) |
+| **Tools** | 84+ pre-built | Build your own | 1000s (but vendor lock-in) |
 | **Endpoint** | 1 | 5+ | 1 (their server) |
 | **Cost** | Free (Vercel free tier) | Free but complex | $0-80/month |
 | **Data** | Your Vercel, your keys | Your machines | Their servers |
@@ -300,7 +302,7 @@ Equivalent to `git fetch upstream && git merge upstream/main`. Useful when you'r
 
 ## Connectors
 
-MyMCP ships **65 production-ready tools** organized in 10 connectors. Each connector activates automatically when its credentials are present in env vars.
+MyMCP ships **84+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
 
 ### Google Workspace — 18 tools
 
@@ -378,11 +380,12 @@ LinkedIn scraping and general actor execution via the Apify platform.
 
 **Requires:** `APIFY_TOKEN`
 
-### Paywall — 1 tool
+### Paywall — 2 tools
 
 | Tool | What it does |
 |------|-------------|
-| `read_paywalled` | Read paywalled articles via a reader service (with hard-bypass fallback) |
+| `read_paywalled` | Read paywalled articles via a reader service |
+| `read_paywalled_hard` | Hard-bypass fallback for stubborn paywalls |
 
 No credentials required — always active.
 
@@ -424,15 +427,37 @@ Connect your apps in the [Composio dashboard](https://composio.dev), then use `c
 
 **Requires:** `COMPOSIO_API_KEY`
 
-### Admin — 1 tool
+### Webhook Receiver — 2 tools
 
-`mcp_logs` — View recent tool calls, errors, latency. Always active, no credentials needed.
+| Tool | What it does |
+|------|-------------|
+| `webhook_last` | Retrieve the most recent payload for a named webhook |
+| `webhook_list` | List all webhooks that have received at least one payload |
+
+**Requires:** `MYMCP_WEBHOOKS` (comma-separated list of webhook names, e.g. `stripe,github`)
+
+Optional per-webhook HMAC-SHA256 validation via `MYMCP_WEBHOOK_SECRET_<NAME>`.
+
+### Skills — dynamic tools
+
+User-defined prompt templates exposed as MCP tools and prompts. Create skills via the dashboard's **Skill Composer** (visual tool-wrapping wizard) or manually. Each skill becomes `skill_<name>` in your MCP client. Always active, no credentials needed.
+
+### Admin — 4 tools
+
+| Tool | What it does |
+|------|-------------|
+| `mcp_logs` | View recent tool calls, errors, latency |
+| `mcp_cache_evict` | Clear internal caches (KV, API response, etc.) |
+| `mcp_backup_export` | Export skills and settings as a JSON backup |
+| `mcp_backup_import` | Restore skills and settings from a backup |
+
+Always active, no credentials needed.
 
 ## Architecture
 
 ```
 src/
-  core/                 ← Framework: types, registry, config, auth, logging
+  core/                 ← Framework: types, registry, config, auth, logging, events, metrics
   connectors/
     google/             ← Google Workspace (18 tools)
       manifest.ts       ← Connector definition (single source of truth)
@@ -443,18 +468,24 @@ src/
     slack/              ← Slack (6 tools)
     notion/             ← Notion (5 tools)
     apify/              ← Apify — LinkedIn + actors (8 tools)
-    paywall/            ← Paywall readers (1 tool)
+    paywall/            ← Paywall readers (2 tools)
     composio/           ← Composio bridge (2 tools → 1000+ integrations)
-    admin/              ← Admin & Observability (1 tool)
+    github/             ← GitHub Issues (6 tools)
+    linear/             ← Linear Issues (6 tools)
+    airtable/           ← Airtable Bases (7 tools)
+    webhook/            ← Webhook Receiver (2 tools)
+    skills/             ← Skills — dynamic user-defined tools
+    admin/              ← Admin & Observability (4 tools)
 
 app/
   api/mcp               ← MCP endpoint (~30 lines — reads from registry)
-  api/health            ← Public liveness: { ok, version }
-  api/admin/*           ← Private: status, stats, verify, call (auth-gated)
+  api/health            ← Public liveness + deep health checks
+  api/admin/*           ← Private: status, stats, verify, call, health-history (auth-gated)
+  api/webhook/*         ← Inbound webhook receiver
   api/auth/google       ← OAuth consent flow
   /                     ← Private status dashboard (redirects to /config)
-  /setup                ← Guided setup with progress bar
-  /config               ← Unified configuration UI (connectors, tools, skills, logs, settings)
+  /welcome              ← Guided onboarding with progress bar
+  /config               ← Unified dashboard (connectors, tools, skills, logs, docs, settings)
 ```
 
 ### How it works
@@ -513,39 +544,62 @@ MYMCP_DISABLE_GOOGLE=true          # Force-disable even with credentials
 MYMCP_ENABLED_PACKS=vault,admin    # Only listed connectors are considered
 ```
 
+## What's New
+
+### v0.7
+
+- **Webhook connector** — receive and query external webhook payloads (Stripe, GitHub, etc.) via MCP tools
+- **Multi-tenant auth** — per-tenant `MCP_AUTH_TOKEN_<TENANTID>` with `x-mymcp-tenant` header routing
+- **Per-tool toggle** — disable individual tools from the dashboard without removing connectors
+- **Skill Composer** — visual wizard to create skills by wrapping existing tools (pick tool, configure args, preview, save)
+- **Backup/restore** — export and import skills + settings as JSON via `mcp_backup_export` / `mcp_backup_import`
+- **Deep health checks** — `GET /api/health?deep=1` runs connector `diagnose()`, with history tracked over time
+- **Health dashboard** — connector SLA sparklines, instance health widget, version display in Overview tab
+- **Durable observability** — opt-in persistent tool logs via KV store, with configurable retention and rotation
+- **Per-token rate limiting** — configurable RPM cap per auth token
+- **Event bus** — internal pub/sub for cache invalidation and connector state changes
+- **KV cache layer** — shared key-value store (filesystem locally, Upstash on Vercel)
+- **GitHub Issues connector** — 6 tools for listing, creating, updating, commenting, and searching issues
+- **Linear connector** — 6 tools for issue management with name resolution
+- **Airtable connector** — 7 tools for bases, tables, records, and search
+
 ## Dashboard & Tools
 
 | Page | Auth | Description |
 |------|------|-------------|
 | `/` | Admin | Redirects to `/config` |
-| `/setup` | Admin | Guided setup — progress bar, OAuth flow, credential checks |
-| `/config` | Admin | Unified dashboard — connectors, tools, skills, logs, settings |
+| `/welcome` | Public* | Guided onboarding — first-run token minting, OAuth, credential checks |
+| `/config` | Admin | Unified dashboard — connectors, tools, skills, logs, docs, settings |
+
+\* `/welcome` is only accessible during first-run mode before a token is minted.
 
 ## API Endpoints
 
 | Endpoint | Auth | Description |
 |----------|------|-------------|
 | `POST /api/mcp` | MCP_AUTH_TOKEN | MCP Streamable HTTP |
-| `GET /api/health` | Public | `{ ok, version }` |
+| `GET /api/health` | Public | `{ ok, version }` — add `?deep=1` for connector diagnostics |
 | `GET /api/admin/status` | Admin | Connector diagnostics + diagnose() results |
 | `GET /api/admin/stats` | Admin | Tool usage analytics (ephemeral) |
 | `GET /api/admin/verify` | Admin | Live credential verification |
 | `POST /api/admin/call` | Admin | Invoke any tool (playground API) |
+| `GET /api/admin/health-history` | Admin | Historical deep health check results |
+| `POST /api/webhook/:name` | Webhook secret | Inbound webhook receiver |
 | `GET /api/auth/google` | Admin | Google OAuth redirect |
-| `GET /api/cron/health` | Cron | Daily health check + webhook alert |
+| `GET /api/cron/health` | Cron | Scheduled health check + webhook alert |
 
 ## Security
 
 | Layer | Protection |
 |-------|-----------|
-| **Auth** | Timing-safe token comparison (MCP + Admin) |
+| **Auth** | Timing-safe token comparison (MCP + Admin), multi-tenant support |
 | **SSRF** | Browser tools block localhost, private IPs (v4+v6), cloud metadata |
 | **Errors** | API keys stripped from error messages |
-| **Rate limiting** | LinkedIn feed: 3 calls/day (vault-persisted counter) |
+| **Rate limiting** | Per-token RPM cap (configurable), LinkedIn feed: 3 calls/day |
 | **OAuth** | State parameter validation, PKCE, HttpOnly cookies |
 | **Dashboard** | Private by default — all admin routes require auth |
-| **Webhooks** | Error alerts on tool failures (opt-in) |
-| **CI** | ESLint (no-any enforced), Prettier, contract tests, build checks |
+| **Webhooks** | HMAC-SHA256 signature validation (opt-in per webhook) |
+| **CI** | ESLint (no-any enforced), Prettier, Vitest, contract tests, build checks |
 
 ## Development
 

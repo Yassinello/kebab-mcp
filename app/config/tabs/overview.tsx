@@ -25,6 +25,8 @@ export function OverviewTab({
   connectorCount,
   logs,
   config,
+  version,
+  commitSha,
 }: {
   baseUrl: string;
   totalTools: number;
@@ -32,6 +34,8 @@ export function OverviewTab({
   connectorCount: number;
   logs: ToolLog[];
   config: InstanceConfig;
+  version: string;
+  commitSha?: string;
 }) {
   const [tokenRevealed, setTokenRevealed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -190,6 +194,12 @@ export function OverviewTab({
         />
         <StatCard label="Display name" value={config.displayName} small />
       </div>
+
+      {/* Version info */}
+      <Section title="Version">
+        <Row label="Version" value={version} />
+        {commitSha && <Row label="Commit" value={commitSha} />}
+      </Section>
 
       {/* Endpoint */}
       <Section title="MCP endpoint">
