@@ -10,6 +10,7 @@ import { SkillsTab } from "./tabs/skills";
 import { LogsTab } from "./tabs/logs";
 import { SettingsTab } from "./tabs/settings";
 import { DocumentationTab, type DocEntry } from "./tabs/documentation";
+import { PlaygroundTab } from "./tabs/playground";
 
 export interface ConnectorSummary {
   id: string;
@@ -68,6 +69,10 @@ export function ConfigTabs({
     case "skills":
       section = "Skills";
       tab = <SkillsTab />;
+      break;
+    case "playground":
+      section = "Playground";
+      tab = <PlaygroundTab />;
       break;
     case "logs":
       section = "Logs";

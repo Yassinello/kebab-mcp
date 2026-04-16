@@ -16,6 +16,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   connectors: { title: "Connectors", subtitle: "Enable, configure, and test your connectors." },
   tools: { title: "Tools", subtitle: "Browse and run any registered tool." },
   skills: { title: "Skills", subtitle: "Create and manage user-defined skills." },
+  playground: { title: "Playground", subtitle: "Try tools interactively." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
   documentation: { title: "Documentation", subtitle: "Guides and reference for MyMCP." },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },

@@ -253,6 +253,33 @@ export function SkillsTab() {
     window.location.href = `/api/config/skills/${id}/export`;
   };
 
+  /** Client-side export to Claude Desktop .skill format (JSON). */
+  const exportClaudeSkill = (skill: Skill) => {
+    const body =
+      skill.content || (skill.source.type === "remote" ? skill.source.cachedContent || "" : "");
+    const payload = {
+      name: skill.name,
+      description: skill.description || skill.name,
+      content: body,
+      metadata: {
+        source: "mymcp",
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${skill.id}.skill`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const toggleHistory = async (skillId: string) => {
     if (historyOpen === skillId) {
       setHistoryOpen(null);
@@ -449,9 +476,16 @@ export function SkillsTab() {
               <button
                 onClick={() => exportSkill(skill.id)}
                 className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
-                title="Download as Claude Skill (.md)"
+                title="Download as Markdown (.md)"
               >
                 Export
+              </button>
+              <button
+                onClick={() => exportClaudeSkill(skill)}
+                className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
+                title="Download as Claude Desktop Skill (.skill)"
+              >
+                Claude
               </button>
               <button
                 onClick={() => startEdit(skill)}

@@ -11,6 +11,7 @@ const PRIMARY_NAV = [
   { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
   { href: "/config?tab=tools", tab: "tools", label: "Tools", icon: "terminal" },
   { href: "/config?tab=skills", tab: "skills", label: "Skills", icon: "sparkles" },
+  { href: "/config?tab=playground", tab: "playground", label: "Playground", icon: "play" },
   { href: "/config?tab=logs", tab: "logs", label: "Logs", icon: "activity" },
 ];
 
@@ -26,6 +27,7 @@ const ICONS: Record<string, string> = {
   terminal: "m4 17 6-6-6-6m8 14h8",
   sparkles:
     "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
+  play: "M5 3l14 9-14 9V3z",
   activity: "M22 12h-4l-3 9L9 3l-3 9H2",
   book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z",
   settings:
