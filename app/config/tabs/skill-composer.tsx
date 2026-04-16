@@ -35,6 +35,14 @@ interface ComposerState {
   skillTags: string;
 }
 
+/** Escape a YAML value if it contains special characters. */
+function yamlEscape(v: string): string {
+  if (/[:#\n]/.test(v) || v !== v.trim()) {
+    return `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return v;
+}
+
 const initialState: ComposerState = {
   step: 1,
   selectedTool: null,
@@ -128,8 +136,8 @@ export function SkillComposer({
 
     const lines: string[] = [];
     lines.push("---");
-    if (state.skillName) lines.push(`name: ${state.skillName}`);
-    if (state.skillDescription) lines.push(`description: ${state.skillDescription}`);
+    if (state.skillName) lines.push(`name: ${yamlEscape(state.skillName)}`);
+    if (state.skillDescription) lines.push(`description: ${yamlEscape(state.skillDescription)}`);
     if (state.skillTags) lines.push(`tags: [${state.skillTags}]`);
     lines.push("---");
     lines.push("");

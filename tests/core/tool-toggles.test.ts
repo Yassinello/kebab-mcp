@@ -22,14 +22,21 @@ vi.mock("@/core/kv-store", () => ({
 
 vi.mock("@/core/events", () => ({
   emit: vi.fn(),
+  on: vi.fn(() => vi.fn()),
 }));
 
-import { isToolDisabled, setToolDisabled, getDisabledTools } from "@/core/tool-toggles";
+import {
+  isToolDisabled,
+  setToolDisabled,
+  getDisabledTools,
+  __resetDisabledToolsCacheForTests,
+} from "@/core/tool-toggles";
 import { emit } from "@/core/events";
 
 describe("tool-toggles", () => {
   beforeEach(() => {
     for (const key of Object.keys(mockKV)) delete mockKV[key];
+    __resetDisabledToolsCacheForTests();
     vi.clearAllMocks();
   });
 
