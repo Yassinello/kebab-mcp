@@ -4,6 +4,7 @@ import { checkMcpAuth, extractToken } from "@/core/auth";
 import { isFirstRunMode } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
+import { hydrateCredentialsFromKV } from "@/core/credential-store";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
@@ -44,6 +45,11 @@ async function buildHandler(
   tenantId?: string | null,
   requestId?: string | null
 ) {
+  // Hydrate KV-stored credentials into process.env before resolving
+  // the registry. This ensures connectors whose credentials live in
+  // Upstash (Vercel deployments) activate on cold start.
+  await hydrateCredentialsFromKV();
+
   return createMcpHandler(
     (server) => {
       const enabledPacks = getEnabledPacks();

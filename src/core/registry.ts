@@ -1,6 +1,7 @@
 import type { ConnectorManifest, ConnectorState } from "./types";
 import { getEnabledPacksOverride } from "./config";
 import { on } from "./events";
+import { hydrateCredentialsFromKV } from "./credential-store";
 
 // Import all pack manifests — static, deterministic, no auto-discovery
 import { googleConnector } from "@/connectors/google/manifest";
@@ -162,6 +163,19 @@ function resolveRegistryUncached(): ConnectorState[] {
 
     return { manifest: pack, enabled: true, reason: "active" };
   });
+}
+
+/**
+ * Async variant that hydrates KV-stored credentials into process.env
+ * before resolving. Call this from entry points (MCP route, dashboard)
+ * to ensure credentials saved to Upstash are visible to the registry.
+ */
+export async function resolveRegistryAsync(): Promise<ConnectorState[]> {
+  await hydrateCredentialsFromKV();
+  // Hydration may have populated new env vars — invalidate cache
+  // so resolveRegistry() re-scans.
+  cachedRegistry = null;
+  return resolveRegistry();
 }
 
 /** Get only the enabled packs */

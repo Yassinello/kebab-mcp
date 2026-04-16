@@ -6,6 +6,7 @@ import type { InstanceConfig } from "@/core/types";
 import { ContextFileField } from "./settings/context-file-field";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
 import { InfoTooltip } from "./settings/info-tooltip";
+import { StorageSection } from "./settings/storage-section";
 
 const USER_FIELDS: {
   key: string;
@@ -33,7 +34,7 @@ const USER_FIELDS: {
   },
 ];
 
-type SubTab = "user" | "mcp";
+type SubTab = "user" | "mcp" | "storage";
 
 export function SettingsTab({
   config,
@@ -51,7 +52,8 @@ export function SettingsTab({
   const searchParams = useSearchParams();
   const router = useRouter();
   const subFromUrl = searchParams.get("sub");
-  const initialSub: SubTab = subFromUrl === "mcp" ? "mcp" : "user";
+  const initialSub: SubTab =
+    subFromUrl === "mcp" ? "mcp" : subFromUrl === "storage" ? "storage" : "user";
   const [tab, setTabState] = useState<SubTab>(initialSub);
   const setTab = (next: SubTab) => {
     setTabState(next);
@@ -101,6 +103,7 @@ export function SettingsTab({
           [
             ["user", "User settings"],
             ["mcp", "MCP install"],
+            ["storage", "Storage"],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -168,6 +171,8 @@ export function SettingsTab({
       )}
 
       {tab === "mcp" && <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />}
+
+      {tab === "storage" && <StorageSection />}
     </div>
   );
 }

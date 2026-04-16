@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getEnvStore, maskValue } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
+import {
+  detectStorageBackend,
+  saveCredentialsToKV,
+  clearBootstrap,
+  type StorageBackend,
+} from "@/core/credential-store";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -108,12 +114,34 @@ export async function PUT(request: Request) {
     const { kvVars, envVars } = splitVars(vars);
     await persistKvSettings(kvVars);
 
-    const store = getEnvStore();
-    let result: { written: number; note?: string } = { written: 0 };
-    if (Object.keys(envVars).length > 0) {
-      result = await store.write(envVars);
-    }
     const kvWritten = Object.keys(kvVars).length;
+    const storageBackend: StorageBackend = detectStorageBackend();
+    let result: { written: number; note?: string } = { written: 0 };
+
+    if (Object.keys(envVars).length > 0) {
+      // Determine how to persist credentials based on the storage backend.
+      if (storageBackend === "upstash") {
+        // Save credentials to KV — instant, no redeploy needed.
+        await saveCredentialsToKV(envVars);
+        // Reset hydration so next registry resolve picks up new creds.
+        clearBootstrap();
+        result = { written: Object.keys(envVars).length, note: "Saved to Upstash KV." };
+      } else if (storageBackend === "none") {
+        // Vercel without Upstash or VERCEL_TOKEN — can't persist.
+        // Return a signal so the frontend can show the storage choice card.
+        return NextResponse.json({
+          ok: false,
+          needsStorage: true,
+          error:
+            "No persistent storage available on Vercel. Set up Upstash Redis or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+        });
+      } else {
+        // "vercel-api" or "filesystem" — use EnvStore as before.
+        const store = getEnvStore();
+        result = await store.write(envVars);
+      }
+    }
+
     // Invalidate the registry cache so the next resolveRegistry() call
     // re-scans process.env and sees any newly-satisfied connectors or
     // force-disable toggles.
@@ -121,7 +149,7 @@ export async function PUT(request: Request) {
     emit("env.changed");
     return NextResponse.json({
       ok: true,
-      kind: store.kind,
+      storageBackend,
       ...result,
       written: result.written + kvWritten,
       kvWritten,
@@ -132,9 +160,15 @@ export async function PUT(request: Request) {
     // VERCEL_TOKEN + VERCEL_PROJECT_ID, the FilesystemEnvStore tries to
     // write .env and hits EROFS. Surface a helpful message.
     const isReadOnly = msg.includes("EROFS") || msg.includes("read-only");
-    const error = isReadOnly
-      ? "Cannot save — Vercel filesystem is read-only. Add VERCEL_TOKEN and VERCEL_PROJECT_ID to your Vercel project env vars, then redeploy."
-      : msg;
-    return NextResponse.json({ ok: false, error }, { status: 500 });
+    if (isReadOnly) {
+      // Treat EROFS the same as "none" backend — show storage choice card.
+      return NextResponse.json({
+        ok: false,
+        needsStorage: true,
+        error:
+          "Vercel filesystem is read-only. Set up Upstash Redis for instant credential storage, or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+      });
+    }
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }

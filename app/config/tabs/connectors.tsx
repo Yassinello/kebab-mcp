@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { ConnectorSummary } from "../tabs";
 import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
+import { StorageSetupCard } from "./storage-setup-card";
 
 export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }) {
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -16,7 +17,9 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   >({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [savedBackend, setSavedBackend] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<Record<string, string>>({});
+  const [needsStoragePack, setNeedsStoragePack] = useState<string | null>(null);
 
   // Load current env on mount
   useEffect(() => {
@@ -78,12 +81,13 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   const savePack = async (packId: string) => {
     setSavingId(packId);
     setSaveError((p) => ({ ...p, [packId]: "" }));
+    setNeedsStoragePack(null);
     const packDef = PACKS.find((p) => p.id === packId);
     if (!packDef) return;
     const vars: Record<string, string> = {};
     for (const v of packDef.vars) {
       const edited = edits[v.key];
-      if (edited !== undefined && edited !== "" && !edited.includes("•")) {
+      if (edited !== undefined && edited !== "" && !edited.includes("\u2022")) {
         vars[v.key] = v.key === "GITHUB_REPO" ? normalizeGitHubRepo(edited) : edited;
       }
     }
@@ -106,8 +110,22 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
           for (const k of Object.keys(vars)) delete next[k];
           return next;
         });
+        // Show backend in the flash message
+        const backendLabel =
+          data.storageBackend === "upstash"
+            ? "Saved to Upstash"
+            : data.storageBackend === "vercel-api"
+              ? "Saved to Vercel"
+              : "Saved";
         setSavedFlash(packId);
-        setTimeout(() => setSavedFlash(null), 3000);
+        setSavedBackend(backendLabel);
+        setTimeout(() => {
+          setSavedFlash(null);
+          setSavedBackend(null);
+        }, 3000);
+      } else if (data.needsStorage) {
+        // Vercel without Upstash — show storage choice card
+        setNeedsStoragePack(packId);
       } else {
         setSaveError((p) => ({ ...p, [packId]: data.error || "Save failed" }));
       }
@@ -215,7 +233,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                   <span className="text-[11px] text-text-muted">{pack.toolCount} tools</span>
                   {savedFlash === pack.id && (
                     <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
-                      Saved
+                      {savedBackend || "Saved"}
                     </span>
                   )}
                 </div>
@@ -352,6 +370,24 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                       </span>
                     )}
                   </div>
+                  {needsStoragePack === pack.id && (
+                    <StorageSetupCard
+                      pendingVars={(() => {
+                        const vars: Record<string, string> = {};
+                        for (const v of packDef.vars) {
+                          const edited = edits[v.key];
+                          if (edited !== undefined && edited !== "" && !edited.includes("\u2022")) {
+                            vars[v.key] =
+                              v.key === "GITHUB_REPO" ? normalizeGitHubRepo(edited) : edited;
+                          }
+                        }
+                        return vars;
+                      })()}
+                      allEnvVars={envVars}
+                      onRetry={() => savePack(pack.id)}
+                      onDismiss={() => setNeedsStoragePack(null)}
+                    />
+                  )}
                   {saveError[pack.id] && (
                     <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
                       <p className="font-semibold mb-1">Save failed</p>
