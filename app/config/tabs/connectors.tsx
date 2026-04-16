@@ -16,6 +16,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   >({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<Record<string, string>>({});
 
   // Load current env on mount
   useEffect(() => {
@@ -76,6 +77,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
 
   const savePack = async (packId: string) => {
     setSavingId(packId);
+    setSaveError((p) => ({ ...p, [packId]: "" }));
     const packDef = PACKS.find((p) => p.id === packId);
     if (!packDef) return;
     const vars: Record<string, string> = {};
@@ -105,12 +107,12 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
           return next;
         });
         setSavedFlash(packId);
-        setTimeout(() => setSavedFlash(null), 2000);
+        setTimeout(() => setSavedFlash(null), 3000);
       } else {
-        alert(data.error || "Save failed");
+        setSaveError((p) => ({ ...p, [packId]: data.error || "Save failed" }));
       }
     } catch {
-      alert("Network error");
+      setSaveError((p) => ({ ...p, [packId]: "Network error — check your connection" }));
     }
     setSavingId(null);
   };
@@ -132,7 +134,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         window.location.reload();
       }
     } catch {
-      alert("Failed to toggle connector");
+      setSaveError((p) => ({ ...p, [packId]: "Failed to toggle connector" }));
     }
   };
 
@@ -350,6 +352,12 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                       </span>
                     )}
                   </div>
+                  {saveError[pack.id] && (
+                    <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
+                      <p className="font-semibold mb-1">Save failed</p>
+                      <p className="break-words">{saveError[pack.id]}</p>
+                    </div>
+                  )}
                   {test && !test.ok && (test.detail || test.message) && (
                     <details className="bg-red-bg border border-red/20 rounded-md p-3 group">
                       <summary className="cursor-pointer text-xs font-semibold text-red select-none list-none flex items-center gap-1.5">

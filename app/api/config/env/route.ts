@@ -127,9 +127,14 @@ export async function PUT(request: Request) {
       kvWritten,
     });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    // Vercel's filesystem is read-only. If the user hasn't configured
+    // VERCEL_TOKEN + VERCEL_PROJECT_ID, the FilesystemEnvStore tries to
+    // write .env and hits EROFS. Surface a helpful message.
+    const isReadOnly = msg.includes("EROFS") || msg.includes("read-only");
+    const error = isReadOnly
+      ? "Cannot save — Vercel filesystem is read-only. Add VERCEL_TOKEN and VERCEL_PROJECT_ID to your Vercel project env vars, then redeploy."
+      : msg;
+    return NextResponse.json({ ok: false, error }, { status: 500 });
   }
 }
