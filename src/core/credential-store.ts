@@ -9,7 +9,7 @@
  * Key prefix: `cred:` — distinct from `settings:` (user config).
  */
 
-import { getKVStore } from "./kv-store";
+import { getKVStore, kvScanAll } from "./kv-store";
 
 export const CRED_PREFIX = "cred:";
 
@@ -81,7 +81,7 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
   if (kv.kind !== "upstash") return;
 
   try {
-    const keys = await kv.list(CRED_PREFIX);
+    const keys = await kvScanAll(kv, `${CRED_PREFIX}*`);
     if (keys.length === 0) return;
 
     const values = kv.mget ? await kv.mget(keys) : await Promise.all(keys.map((k) => kv.get(k)));
@@ -116,7 +116,7 @@ export function resetHydrationFlag(): void {
  * Clear the bootstrap flag so hydration re-runs on next resolveRegistry.
  * Called after credentials are saved to KV to ensure they're visible.
  */
-export function clearBootstrap(): void {
+export function resetCredentialHydration(): void {
   hydrated = false;
 }
 
@@ -126,7 +126,11 @@ export function clearBootstrap(): void {
  */
 export async function readAllCredentialsFromKV(): Promise<Record<string, string>> {
   const kv = getKVStore();
-  const keys = await kv.list(CRED_PREFIX);
+  // On Vercel without Upstash the KV is an ephemeral /tmp filesystem —
+  // reading from it is useless (data doesn't survive cold starts).
+  if (process.env.VERCEL === "1" && kv.kind !== "upstash") return {};
+
+  const keys = await kvScanAll(kv, `${CRED_PREFIX}*`);
   if (keys.length === 0) return {};
 
   const values = kv.mget ? await kv.mget(keys) : await Promise.all(keys.map((k) => kv.get(k)));

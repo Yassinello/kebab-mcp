@@ -140,7 +140,7 @@ class FilesystemKV implements KVStore {
   async get(key: string): Promise<string | null> {
     // Drain any in-flight writes before reading so the caller always
     // sees the latest state. Matters for tests and for race-prone
-    // sequences like clearBootstrap() → immediate rehydrate.
+    // sequences like resetCredentialHydration() → immediate rehydrate.
     await this.writeQueue;
     const map = await this.readAll();
     return map[key] ?? null;

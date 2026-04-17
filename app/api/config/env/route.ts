@@ -5,7 +5,7 @@ import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
 import {
   detectStorageBackend,
   saveCredentialsToKV,
-  clearBootstrap,
+  resetCredentialHydration,
   type StorageBackend,
 } from "@/core/credential-store";
 
@@ -124,17 +124,20 @@ export async function PUT(request: Request) {
         // Save credentials to KV — instant, no redeploy needed.
         await saveCredentialsToKV(envVars);
         // Reset hydration so next registry resolve picks up new creds.
-        clearBootstrap();
+        resetCredentialHydration();
         result = { written: Object.keys(envVars).length, note: "Saved to Upstash KV." };
       } else if (storageBackend === "none") {
         // Vercel without Upstash or VERCEL_TOKEN — can't persist.
         // Return a signal so the frontend can show the storage choice card.
-        return NextResponse.json({
-          ok: false,
-          needsStorage: true,
-          error:
-            "No persistent storage available on Vercel. Set up Upstash Redis or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
-        });
+        return NextResponse.json(
+          {
+            ok: false,
+            needsStorage: true,
+            error:
+              "No persistent storage available on Vercel. Set up Upstash Redis or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+          },
+          { status: 422 }
+        );
       } else {
         // "vercel-api" or "filesystem" — use EnvStore as before.
         const store = getEnvStore();
@@ -162,12 +165,15 @@ export async function PUT(request: Request) {
     const isReadOnly = msg.includes("EROFS") || msg.includes("read-only");
     if (isReadOnly) {
       // Treat EROFS the same as "none" backend — show storage choice card.
-      return NextResponse.json({
-        ok: false,
-        needsStorage: true,
-        error:
-          "Vercel filesystem is read-only. Set up Upstash Redis for instant credential storage, or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
-      });
+      return NextResponse.json(
+        {
+          ok: false,
+          needsStorage: true,
+          error:
+            "Vercel filesystem is read-only. Set up Upstash Redis for instant credential storage, or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+        },
+        { status: 422 }
+      );
     }
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }

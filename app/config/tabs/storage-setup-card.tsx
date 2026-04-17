@@ -8,7 +8,7 @@ interface StorageSetupCardProps {
   /** All current env vars (for complete .env export). */
   allEnvVars: Record<string, string>;
   /** Called when the user clicks "Retry" after setting up Upstash. */
-  onRetry: () => void;
+  onRetry: () => void | Promise<void>;
   /** Called to dismiss the card. */
   onDismiss: () => void;
 }
@@ -27,9 +27,11 @@ export function StorageSetupCard({
 
   const handleRetry = async () => {
     setRetrying(true);
-    onRetry();
-    // Give it a moment — onRetry is async upstream
-    setTimeout(() => setRetrying(false), 2000);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const handleDownloadEnv = () => {
