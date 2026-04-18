@@ -1,3 +1,17 @@
+# Block accidental .env commits — .env.example is the only allowed file
+# matching the .env* prefix. Override with --no-verify if you really mean
+# it (you almost never do).
+staged_env=$(git diff --cached --name-only --diff-filter=AM | \
+  grep -E '(^|/)\.env(\.|$)' | grep -Ev '(^|/)\.env\.example(\.|$)' || true)
+if [ -n "$staged_env" ]; then
+  echo "✗ Refusing to commit env file(s):"
+  echo "$staged_env" | sed 's/^/    /'
+  echo ""
+  echo "  Why: .env files contain secrets. Use .env.example for templates."
+  echo "  If you really mean it, re-run with --no-verify."
+  exit 1
+fi
+
 npx lint-staged
 npm run test:contract
 npm run test:doc-counts
