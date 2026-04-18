@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose an enhancement to MyMCP
+title: "[feat] "
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Great — describe it in terms of **what you're trying to do** first, the proposal second. That helps us understand whether the proposal is the right shape, or whether a different solution would serve the use case better.
+
+        For new connectors specifically, please use the "New connector" template instead.
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What are you trying to accomplish? What does your workflow look like today, and where does MyMCP fall short?
+      placeholder: "I'm building a daily digest skill that needs to filter Slack messages by sentiment, but..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How could MyMCP help? A new tool, a new connector option, a dashboard change, an env var, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you try, or what other approaches did you think about? Why didn't they work?
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Are you willing to contribute a PR?
+      options:
+        - "Yes, I can lead the implementation"
+        - "Yes, with some guidance"
+        - "Maybe, depending on scope"
+        - "No, I'm just proposing the idea"
+    validations:
+      required: true

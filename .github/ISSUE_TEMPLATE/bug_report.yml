@@ -1,0 +1,119 @@
+name: Bug report
+description: Something isn't working as documented
+title: "[bug] "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much detail as you can — the more reproducible the report, the faster the fix.
+
+        Before filing: check that you're on the latest release (sidebar footer shows the version) and that there isn't an open issue for the same problem.
+
+  - type: input
+    id: version
+    attributes:
+      label: MyMCP version
+      description: From the dashboard sidebar footer, or `package.json`.
+      placeholder: "0.3.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: Deploy target
+      options:
+        - Vercel
+        - Docker (single container)
+        - Docker (multi-instance)
+        - Local dev (npm run dev)
+        - Other (please describe in "What happened")
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage mode
+      description: From /config → Storage badge. If unsure, pick "unsure".
+      options:
+        - "Upstash Redis (KV)"
+        - "Filesystem"
+        - "Filesystem (temporary) — Vercel /tmp"
+        - "Static (env-vars only)"
+        - "KV unreachable"
+        - "unsure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connector
+    attributes:
+      label: Connector affected
+      description: Which connector is the bug related to? Pick "Other" for framework-level issues.
+      multiple: false
+      options:
+        - Google Workspace
+        - Obsidian Vault
+        - Browser Automation
+        - Slack
+        - Notion
+        - Apify
+        - GitHub Issues
+        - Linear
+        - Airtable
+        - Composio
+        - Paywall
+        - Webhook Receiver
+        - Skills
+        - Admin
+        - Other / not connector-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the actual behavior you observed.
+      placeholder: "I called gmail_search and got an empty result for a query that should have matched..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Include exact tool names, arguments (with secrets redacted), and any UI clicks.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: From /config → Logs (filter by the affected connector). Redact tokens before pasting.
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues for the same problem
+          required: true
+        - label: I have redacted any tokens, API keys, or personal data from the logs above
+          required: true
