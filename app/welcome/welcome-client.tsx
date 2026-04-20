@@ -2074,30 +2074,65 @@ function MultiClientNote() {
  * Without this form, the link back to /config produces a bare 401 at
  * the very end of an otherwise-smooth flow.
  */
+/**
+ * Accept either the bare 64-char hex token OR the full MCP URL that
+ * the welcome Connect step hands out (`https://…/api/mcp?token=…`).
+ * Users save whichever is most convenient and shouldn't have to
+ * remember which form the form field wants.
+ */
+function extractTokenFromInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const t = parsed.searchParams.get("token")?.trim();
+      if (t) return t;
+    } catch {
+      // fall through — pasted garbage, treat as literal
+    }
+  }
+  return trimmed;
+}
+
 function AlreadyInitializedPanel() {
   const [tokenInput, setTokenInput] = useState("");
-  const trimmed = tokenInput.trim();
-  const href = trimmed ? `/config?token=${encodeURIComponent(trimmed)}` : undefined;
+  const extracted = extractTokenFromInput(tokenInput);
+  const href = extracted ? `/config?token=${encodeURIComponent(extracted)}` : undefined;
+  const inputLooksLikeUrl = /^https?:\/\//i.test(tokenInput.trim());
   return (
     <Shell>
       <h1 className="text-2xl font-bold text-white mb-2">Already initialized</h1>
       <p className="text-slate-400 mb-6 leading-relaxed">
-        This instance has a durable token — setup is done. Paste your saved token below to unlock
-        the dashboard. We&apos;ll set the cookie and strip the token from the URL on the next hop so
-        nothing leaks into your browser history.
+        This instance has a durable token — setup is done. Paste your saved token OR the full MCP
+        URL below to unlock the dashboard. We&apos;ll set the cookie and strip the token from the
+        URL on the next hop so nothing leaks into your browser history.
       </p>
       <label className="block mb-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-        Your auth token
+        Your auth token (or full MCP URL)
       </label>
       <input
         type="password"
         value={tokenInput}
         onChange={(e) => setTokenInput(e.target.value)}
-        placeholder="64-character hex string"
+        placeholder="64-char hex OR https://…/api/mcp?token=…"
         autoComplete="off"
         spellCheck={false}
-        className="w-full font-mono text-sm bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-blue-200 focus:outline-none focus:border-blue-600 mb-4"
+        className="w-full font-mono text-sm bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-blue-200 focus:outline-none focus:border-blue-600 mb-2"
       />
+      {inputLooksLikeUrl && extracted && (
+        <p className="text-[11px] text-emerald-400 mb-4">
+          ✓ Detected MCP URL — token extracted from the <code className="font-mono">?token=</code>{" "}
+          parameter.
+        </p>
+      )}
+      {inputLooksLikeUrl && !extracted && (
+        <p className="text-[11px] text-amber-400 mb-4">
+          URL detected but no <code className="font-mono">?token=</code> parameter found — paste the
+          token directly, or the full URL that contains it.
+        </p>
+      )}
+      {!inputLooksLikeUrl && <div className="mb-4" />}
       <a
         href={href}
         aria-disabled={!href}
