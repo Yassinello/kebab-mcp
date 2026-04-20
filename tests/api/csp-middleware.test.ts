@@ -30,53 +30,53 @@ describe("proxy.ts CSP middleware", () => {
     process.env = { ...origEnv };
   });
 
-  it("sets Content-Security-Policy on a passthrough response", () => {
-    const res = proxy(nextReq("/"));
+  it("sets Content-Security-Policy on a passthrough response", async () => {
+    const res = await proxy(nextReq("/"));
     const csp = res.headers.get("Content-Security-Policy");
     expect(csp).toBeTruthy();
     expect(csp).toContain("nonce-");
     expect(csp).toContain("default-src 'self'");
   });
 
-  it("does not include 'unsafe-inline' in script-src when NODE_ENV=production", () => {
-    const res = proxy(nextReq("/"));
+  it("does not include 'unsafe-inline' in script-src when NODE_ENV=production", async () => {
+    const res = await proxy(nextReq("/"));
     const csp = res.headers.get("Content-Security-Policy")!;
     // Extract script-src directive.
-    const scriptSrc = csp.split(";").find((d) => d.trim().startsWith("script-src"));
+    const scriptSrc = csp.split(";").find((d: string) => d.trim().startsWith("script-src"));
     expect(scriptSrc).toBeDefined();
     expect(scriptSrc!).not.toContain("'unsafe-inline'");
     expect(scriptSrc!).toMatch(/'nonce-[A-Za-z0-9+/=]+'/);
   });
 
-  it("includes 'unsafe-inline' in script-src in development (HMR needs it)", () => {
+  it("includes 'unsafe-inline' in script-src in development (HMR needs it)", async () => {
     (process.env as Record<string, string>).NODE_ENV = "development";
-    const res = proxy(nextReq("/"));
+    const res = await proxy(nextReq("/"));
     const csp = res.headers.get("Content-Security-Policy")!;
-    const scriptSrc = csp.split(";").find((d) => d.trim().startsWith("script-src"))!;
+    const scriptSrc = csp.split(";").find((d: string) => d.trim().startsWith("script-src"))!;
     expect(scriptSrc).toContain("'unsafe-inline'");
   });
 
-  it("mints a fresh nonce per request", () => {
-    const a = proxy(nextReq("/")).headers.get("Content-Security-Policy")!;
-    const b = proxy(nextReq("/")).headers.get("Content-Security-Policy")!;
+  it("mints a fresh nonce per request", async () => {
+    const a = (await proxy(nextReq("/"))).headers.get("Content-Security-Policy")!;
+    const b = (await proxy(nextReq("/"))).headers.get("Content-Security-Policy")!;
     const extract = (csp: string) => csp.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1] ?? "";
     expect(extract(a)).toBeTruthy();
     expect(extract(b)).toBeTruthy();
     expect(extract(a)).not.toBe(extract(b));
   });
 
-  it("sets CSP even on the 401 unauthorized branch for admin routes", () => {
-    const res = proxy(nextReq("/config"));
+  it("sets CSP even on the 401 unauthorized branch for admin routes", async () => {
+    const res = await proxy(nextReq("/config"));
     expect(res.status).toBe(401);
     expect(res.headers.get("Content-Security-Policy")).toContain("nonce-");
   });
 
-  it("forwards the x-nonce request header into the rewritten request (HIGH-2)", () => {
+  it("forwards the x-nonce request header into the rewritten request (HIGH-2)", async () => {
     // The CSP nonce in the response must match the `x-nonce` request
     // header that the root layout reads via `headers()`. NextResponse
     // exposes the rewritten request headers on `x-middleware-override-headers`
     // + `x-middleware-request-<name>`.
-    const res = proxy(nextReq("/"));
+    const res = await proxy(nextReq("/"));
     const csp = res.headers.get("Content-Security-Policy")!;
     const responseNonce = csp.match(/'nonce-([A-Za-z0-9+/=]+)'/)?.[1];
     expect(responseNonce).toBeTruthy();

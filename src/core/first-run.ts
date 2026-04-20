@@ -85,7 +85,15 @@ async function loadBootstrapFromKv(): Promise<BootstrapPayload | null> {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as BootstrapPayload;
     if (!parsed?.claimId || !parsed?.token || !parsed?.createdAt) return null;
-    if (Date.now() - parsed.createdAt > BOOTSTRAP_TTL_MS) return null;
+    // No TTL check: KV is durable, unlike /tmp. The BOOTSTRAP_TTL_MS was
+    // sized to match Vercel's /tmp container lifetime (~15 min), which
+    // makes sense there but would punish any cold lambda that wakes up
+    // >15 min after the user minted their token — the KV bootstrap is
+    // the authoritative, permanent record of "this instance is set up"
+    // on no-auto-magic deploys, and we want it to restore
+    // `process.env.MCP_AUTH_TOKEN` regardless of age. forceReset() is
+    // the explicit path for invalidating a bootstrap (delete /tmp +
+    // delete KV key + clear in-memory state).
     return parsed;
   } catch (err) {
     console.info(

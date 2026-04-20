@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { ensureBootstrapRehydratedFromUpstash } from "@/core/first-run-edge";
 
 /**
  * Build the per-request Content-Security-Policy header.
@@ -97,8 +98,17 @@ function isAuthorized(request: NextRequest, adminToken: string): boolean {
   );
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Rehydrate MCP_AUTH_TOKEN from Upstash when the current lambda doesn't
+  // have it in process.env yet. Without this, a cold lambda that hasn't
+  // served any welcome/handler traffic (which would have rehydrated via
+  // first-run.ts) sees MCP_AUTH_TOKEN as undefined and incorrectly treats
+  // /config as first-time-setup — redirecting to /welcome and locking the
+  // user out of their own dashboard. The helper short-circuits when the
+  // env var is already present, so warm lambdas pay no cost.
+  await ensureBootstrapRehydratedFromUpstash();
 
   // ── CSP nonce + header setup ───────────────────────────────────────
   // Done first so every return path below inherits the nonce/CSP via

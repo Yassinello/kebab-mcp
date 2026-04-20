@@ -79,7 +79,7 @@ describe("request-id — proxy middleware", () => {
     const { proxy } = await import("../../proxy");
     const request = makeNextRequest({ pathname: "/" });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = proxy(request as any);
+    const response = await proxy(request as any);
     const requestId = response.headers.get("x-request-id");
     expect(requestId).toBeTruthy();
     // UUID v4 format check
@@ -94,7 +94,7 @@ describe("request-id — proxy middleware", () => {
       headers: { "x-request-id": clientRequestId },
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = proxy(request as any);
+    const response = await proxy(request as any);
     expect(response.headers.get("x-request-id")).toBe(clientRequestId);
   });
 });
