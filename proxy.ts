@@ -194,10 +194,18 @@ export async function proxy(request: NextRequest) {
       );
     }
 
-    // If authorized via query token, set a cookie so subsequent page/API calls work
+    // If authorized via query token, set the cookie AND redirect to the
+    // same path with `?token=` stripped. Two wins: (1) the token doesn't
+    // linger in browser history / Referer headers / shared URLs, (2) the
+    // URL bar is clean for the user who just finished /welcome and
+    // clicked "Open dashboard". Browser follows the redirect with the
+    // freshly-set cookie, second hit passes the auth check without the
+    // query param.
     const queryToken = request.nextUrl.searchParams.get("token")?.trim();
     if (queryToken && safeEqual(queryToken, adminToken)) {
-      const res = NextResponse.next({ request: { headers: requestHeaders } });
+      const cleanUrl = new URL(request.url);
+      cleanUrl.searchParams.delete("token");
+      const res = finalize(NextResponse.redirect(cleanUrl));
       res.cookies.set("mymcp_admin_token", adminToken, {
         httpOnly: true,
         // Strict: the dashboard is never legitimately loaded by following a
@@ -208,7 +216,7 @@ export async function proxy(request: NextRequest) {
         path: "/",
         maxAge: 60 * 60 * 24 * 7,
       });
-      return finalize(res);
+      return res;
     }
   }
 

@@ -1330,7 +1330,13 @@ function renderStepConnect(props: {
         primary={{
           label: canContinue ? "Open dashboard →" : "Test your MCP connection first",
           enabled: canContinue,
-          href: canContinue ? "/config" : undefined,
+          // Pass the token as `?token=` so the middleware sets the
+          // `mymcp_admin_token` cookie on the first hit. Without this,
+          // /config is admin-gated and returns 401 the moment we land
+          // — the user finishes welcome only to be told "Unauthorized".
+          // The middleware redirects to a cookied URL after validating,
+          // so the token is in the address bar for one request tops.
+          href: canContinue && token ? `/config?token=${encodeURIComponent(token)}` : undefined,
         }}
         tertiary={
           !canContinue && !skipTest
