@@ -1,9 +1,6 @@
-export default function Hero() {
-  // Zero-config: no env vars required at deploy time. The /welcome page
-  // generates the token after the first visit.
-  const deployUrl =
-    "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me";
+import { VERCEL_DEPLOY_URL } from "./deploy-url";
 
+export default function Hero() {
   return (
     <section id="deploy" className="pt-24 pb-20 px-6">
       <div className="max-w-4xl mx-auto text-center">
@@ -19,7 +16,7 @@ export default function Hero() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a
-            href={deployUrl}
+            href={VERCEL_DEPLOY_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-white text-slate-900 hover:bg-slate-100 transition-colors px-6 py-3 rounded-lg font-semibold text-sm"

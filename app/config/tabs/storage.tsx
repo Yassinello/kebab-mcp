@@ -91,6 +91,8 @@ export function StorageTab() {
 
   return (
     <div className="space-y-5">
+      <WhatIsStorageExplainer />
+
       <ModeCard status={status} meta={meta} onRecheck={() => load(true)} rechecking={rechecking} />
 
       {status.mode === "kv" && (
@@ -121,6 +123,59 @@ export function StorageTab() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * First-time orientation: what "storage" means in Kebab MCP terms, why the
+ * user should care, and which backends are viable. Kept collapsible so it
+ * doesn't clutter the page for users who already know the layout — but
+ * open by default the first time the tab loads, since the subsequent
+ * status cards assume the reader has this context.
+ */
+function WhatIsStorageExplainer() {
+  return (
+    <details className="border border-border rounded-lg bg-bg-muted/20 group" open>
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold flex items-center justify-between">
+        <span>What is storage, and why does this page matter?</span>
+        <span className="text-[11px] text-text-muted group-open:hidden">expand</span>
+      </summary>
+      <div className="border-t border-border px-4 py-4 space-y-3 text-xs text-text-dim leading-relaxed">
+        <p>
+          Kebab MCP persists three things: your{" "}
+          <strong className="text-text">connector credentials</strong> (API keys for Google, Notion,
+          Slack, etc.), your <strong className="text-text">skills</strong> (user-defined prompts),
+          and your <strong className="text-text">context</strong> (the markdown file every AI
+          request pre-loads). Storage is where those land when you save them from this dashboard.
+        </p>
+        <p>
+          This page tells you which backend is currently active and whether it&apos;s healthy. If
+          something goes wrong here, dashboard saves either vanish silently (ephemeral) or fail
+          outright (KV unreachable) — both worth noticing immediately.
+        </p>
+        <ul className="space-y-1 list-disc list-inside">
+          <li>
+            <strong className="text-text">Upstash Redis</strong> — hosted key-value store.
+            Recommended for Vercel. Free tier, saves survive cold starts, latency typically
+            &lt;100ms.
+          </li>
+          <li>
+            <strong className="text-text">Local filesystem</strong> — writes{" "}
+            <code className="font-mono">./data/kv.json</code>. Good for Docker with a mounted volume
+            or local dev. Per-instance, so not for horizontally-scaled deploys.
+          </li>
+          <li>
+            <strong className="text-text">Env vars only</strong> — no runtime saves. Credentials are
+            defined at deploy time in your hosting platform&apos;s env vars. Every change requires a
+            redeploy.
+          </li>
+        </ul>
+        <p className="text-[11px] text-text-muted">
+          You can switch backends any time: set the env vars, redeploy, come back and click Recheck.
+          File → KV migrations have a dedicated helper (see below).
+        </p>
+      </div>
+    </details>
   );
 }
 

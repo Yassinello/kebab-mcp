@@ -163,7 +163,18 @@ export default function WelcomeClient({
   const [storageChecking, setStorageChecking] = useState(false);
   const [ack, setAck] = useState<AckValue>(null);
   const [ackPersisted, setAckPersisted] = useState(true);
-  // Wizard state
+  // Token save confirmation — gates step 2 "Continue" button. Defaults to
+  // true when the user is re-entering an already-bootstrapped instance
+  // (initialBootstrap) so returning users aren't re-prompted to re-ack a
+  // token they saved weeks ago. Fresh users (first mint in this session)
+  // must explicitly check the box.
+  const [tokenSaved, setTokenSaved] = useState<boolean>(initialBootstrap);
+  // Wizard state — step 1 = Storage, step 2 = Auth token, step 3 = Connect.
+  // Storage first because the token is minted into whatever storage is
+  // active: if user sets up Upstash BEFORE minting, the token lands in KV
+  // (durable across cold starts). If they mint before storage is ready,
+  // the token lives in /tmp only and vanishes with the next container
+  // recycle — the fragility that motivated the v4 flow reorder.
   const [step, setStep] = useState<WizardStep>(1);
   /**
    * Active "Upstash setup in progress" mode. Triggered when the user clicks
@@ -523,6 +534,28 @@ export default function WelcomeClient({
     }
   }, [token]);
 
+  // Emit a small .env snippet the user can drop into a password-manager
+  // note, a local .env, or a secrets vault. Name is scoped so it doesn't
+  // collide with other tokens if they're saving several at once.
+  const downloadToken = useCallback(() => {
+    if (!token) return;
+    const content = [
+      "# Kebab MCP auth token — save this in a password manager",
+      "# and paste it into your MCP client's Authorization header.",
+      `MCP_AUTH_TOKEN=${token}`,
+      "",
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "kebab-mcp-token.env";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [token]);
+
   // Vercel doesn't expose precise team/project slugs at runtime without a
   // VERCEL_TOKEN — we link to the dashboard root and let the user navigate.
   const vercelEnvUrl = "https://vercel.com/dashboard";
@@ -567,45 +600,28 @@ export default function WelcomeClient({
     );
   }
 
-  // claim === "new" or "claimer" — allow init.
-  if (!token && !initialBootstrap) {
-    return (
-      <Shell>
-        <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">Welcome to Kebab MCP</h1>
-        <p className="text-slate-400 mb-8 leading-relaxed">
-          Click below to generate your permanent auth token and unlock this instance. The token will
-          be shown once — save it somewhere safe.
-        </p>
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={initialize}
-          disabled={busy}
-          className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold text-sm transition-colors"
-        >
-          {busy ? "Generating…" : "Initialize this instance"}
-        </button>
-        <a href="/config" className="block mt-4 text-sm text-slate-500 hover:text-slate-300">
-          Or explore the dashboard first →
-        </a>
-        <RecoveryFooter />
-      </Shell>
-    );
-  }
+  // Persistence gate for step-2 → step-3 transition. Durable backends
+  // (KV, durable file) auto-persist the bootstrap token via first-run.ts,
+  // so the user can continue as soon as mint succeeds. Ephemeral /tmp
+  // users must still wait for `permanent` (Vercel env-var paste + redeploy).
+  const stepTwoPersistenceReady =
+    permanent ||
+    storageStatus?.mode === "kv" ||
+    (storageStatus?.mode === "file" && !storageStatus.ephemeral);
 
-  // ── Token-visible state: 3-step wizard ─────────────────────────────
-  // Step 1: Auth token (token reveal + Vercel deploy status).
-  // Step 2: Storage (the 3-card chooser, ack, upstash setup with active polling).
+  // claim === "new" or "claimer" — render the 3-step wizard.
+  // ── 3-step wizard ──────────────────────────────────────────────────
+  // Step 1: Storage (detect + optional Upstash install).
+  // Step 2: Auth token (mint on click + save UX + ack).
   // Step 3: Connect (snippet, MCP test, optional starter skill).
   //
-  // We split the historically monolithic post-claim render into three
-  // focused panels so the user has one job per screen. Step 1 auto-skips
-  // when the user re-enters with an already-permanent token (they've
-  // already seen and saved the token; landing them back here is friction).
+  // The storage-first order means the token gets minted into the chosen
+  // backend: Upstash → durable across cold starts; durable file → also
+  // persistent; ack'd ephemeral → user was warned it won't survive. The
+  // prior order (token first, storage second) created a window where
+  // freshly-minted tokens lived only in lambda-local /tmp and silently
+  // vanished on Vercel's container recycle, trapping users in a
+  // "locked out of my own instance" state.
   return (
     <Shell wide>
       {previewMode && (
@@ -617,36 +633,25 @@ export default function WelcomeClient({
 
       <WizardStepper
         current={step}
-        permanent={permanent}
         storageReady={Boolean(storageReady)}
+        tokenSavedConfirmed={Boolean(token) && tokenSaved && stepTwoPersistenceReady}
         testOk={testStatus === "ok"}
         onGoTo={(target) => {
           // Forward navigation requires the prior step's gate to be met.
-          // Backward navigation is always allowed (revisit the token,
-          // change storage choice, etc.).
+          // Backward navigation is always allowed (revisit storage, or
+          // re-view the token once it's been shown).
           if (target < step) {
             setStep(target);
             return;
           }
-          if (target === 2 && permanent) setStep(2);
-          else if (target === 3 && permanent && storageReady) setStep(3);
+          if (target === 2 && storageReady) setStep(2);
+          else if (target === 3 && storageReady && tokenSaved && stepTwoPersistenceReady)
+            setStep(3);
         }}
       />
 
       <div className="mt-8">
         {step === 1 &&
-          renderStepToken({
-            token,
-            copied,
-            copyToken,
-            permanent,
-            autoMagicState,
-            vercelEnvUrl,
-            vercelDeployUrl,
-            onContinue: () => setStep(2),
-          })}
-
-        {step === 2 &&
           renderStepStorage({
             storageStatus,
             storageChecking,
@@ -661,9 +666,29 @@ export default function WelcomeClient({
             stopUpstashCheck,
             loadStorageStatus,
             acknowledge,
+            onContinue: () => setStep(2),
+            storageReady: Boolean(storageReady),
+          })}
+
+        {step === 2 &&
+          renderStepToken({
+            token,
+            copied,
+            copyToken,
+            downloadToken,
+            busy,
+            error,
+            initialize,
+            tokenSaved,
+            setTokenSaved,
+            storageMode: storageStatus?.mode ?? null,
+            storageEphemeral: Boolean(storageStatus?.ephemeral),
+            permanent,
+            autoMagicState,
+            vercelEnvUrl,
+            vercelDeployUrl,
             onBack: () => setStep(1),
             onContinue: () => setStep(3),
-            storageReady: Boolean(storageReady),
           })}
 
         {step === 3 &&
@@ -694,83 +719,304 @@ function renderStepToken(props: {
   token: string | null;
   copied: boolean;
   copyToken: () => void;
+  downloadToken: () => void;
+  busy: boolean;
+  error: string | null;
+  initialize: () => Promise<void>;
+  tokenSaved: boolean;
+  setTokenSaved: (v: boolean) => void;
+  storageMode: StorageMode | null;
+  storageEphemeral: boolean;
   permanent: boolean;
   autoMagicState: AutoMagicState | null;
   vercelEnvUrl: string;
   vercelDeployUrl: string;
+  onBack: () => void;
   onContinue: () => void;
 }) {
   const {
     token,
     copied,
     copyToken,
+    downloadToken,
+    busy,
+    error,
+    initialize,
+    tokenSaved,
+    setTokenSaved,
+    storageMode,
+    storageEphemeral,
     permanent,
     autoMagicState,
     vercelEnvUrl,
     vercelDeployUrl,
+    onBack,
     onContinue,
   } = props;
+
+  // No token yet → show the "Generate" call-to-action. This branch covers
+  // fresh users who've just finished step 1 (storage) and are now ready to
+  // mint into the chosen backend.
+  if (!token) {
+    return (
+      <section>
+        <StepHeader
+          title="Generate your auth token"
+          subtitle="Your AI client uses this token as a bearer credential on every request. It's the only way to authenticate against this instance."
+        />
+
+        <TokenGenerateExplainer storageMode={storageMode} storageEphemeral={storageEphemeral} />
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        <StepFooter
+          secondary={{ label: "← Storage", onClick: onBack }}
+          primary={{
+            label: busy ? "Generating…" : "Generate my token",
+            enabled: !busy,
+            onClick: () => void initialize(),
+          }}
+        />
+      </section>
+    );
+  }
+
+  // Token minted → save UX. Continue is gated on tokenSaved plus a
+  // persistence check that depends on the backend:
+  //   - Durable backend (KV / durable file): bootstrap-to-KV handled by
+  //     first-run.ts makes the token survive cold starts on its own, so
+  //     we don't need to wait for `permanent` (= Vercel env-var presence).
+  //     Once the token is in React state, the mint succeeded and KV
+  //     persistence fires asynchronously.
+  //   - Ephemeral backend (/tmp): no durable persistence, so the user
+  //     MUST paste the token into Vercel env vars and trigger a redeploy.
+  //     Wait for `permanent` (i.e. the status poll detects MCP_AUTH_TOKEN
+  //     is set at the platform level).
   const autoMagicSuccess =
     autoMagicState?.autoMagic && autoMagicState.envWritten && autoMagicState.redeployTriggered;
   const autoMagicPartial =
     autoMagicState?.autoMagic && (!autoMagicState.envWritten || !autoMagicState.redeployTriggered);
+  const durableBackend = storageMode === "kv" || (storageMode === "file" && !storageEphemeral);
+  const persistenceReady = durableBackend || permanent;
 
   return (
     <section>
       <StepHeader
         title="Save your auth token"
-        subtitle="This token authenticates every request from your AI client. You'll see it once."
+        subtitle="You'll see this token once. Copy it to a password manager and confirm below."
       />
 
-      {token && (
-        <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">
-            Your permanent token
-          </p>
-          <div className="flex items-start gap-3">
-            <code className="flex-1 break-all text-sm text-blue-300 font-mono">{token}</code>
-            <button
-              type="button"
-              onClick={copyToken}
-              className="shrink-0 bg-blue-500 hover:bg-blue-400 text-white px-4 py-1.5 rounded text-xs font-semibold"
-            >
-              {copied ? "Copied ✓" : "Copy"}
-            </button>
-          </div>
-          <p className="mt-3 text-[11px] text-amber-300">
-            ⚠ Save it in a password manager now — we won&apos;t show it again.
-          </p>
-        </div>
-      )}
+      <TokenDisplayPanel
+        token={token}
+        copied={copied}
+        onCopy={copyToken}
+        onDownload={downloadToken}
+      />
 
-      {autoMagicSuccess ? (
-        <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 p-4">
-          <p className="text-sm font-semibold text-emerald-300 mb-2">
-            ✓ Token deployed automatically
+      <TokenSaveChecklist
+        tokenSaved={tokenSaved}
+        onChange={setTokenSaved}
+        durableBackend={durableBackend}
+      />
+
+      <TokenPersistencePanel
+        autoMagicSuccess={Boolean(autoMagicSuccess)}
+        autoMagicPartial={Boolean(autoMagicPartial)}
+        autoMagicError={autoMagicState?.redeployError}
+        durableBackend={durableBackend}
+        permanent={permanent}
+        vercelEnvUrl={vercelEnvUrl}
+        vercelDeployUrl={vercelDeployUrl}
+      />
+
+      <StepFooter
+        secondary={{ label: "← Storage", onClick: onBack }}
+        primary={{
+          label: !tokenSaved
+            ? "Confirm you saved the token"
+            : !persistenceReady
+              ? "Waiting for Vercel redeploy…"
+              : "Continue → Connect",
+          enabled: tokenSaved && persistenceReady,
+          onClick: onContinue,
+        }}
+      />
+    </section>
+  );
+}
+
+/** Pre-mint explainer: what the token is for, how it's persisted. */
+function TokenGenerateExplainer({
+  storageMode,
+  storageEphemeral,
+}: {
+  storageMode: StorageMode | null;
+  storageEphemeral: boolean;
+}) {
+  const durable = storageMode === "kv" || (storageMode === "file" && !storageEphemeral);
+  return (
+    <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-5 space-y-3">
+      <p className="text-sm font-semibold text-white">What happens when you click Generate</p>
+      <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed">
+        <li>
+          We mint a 64-char random token and return it to your browser{" "}
+          <strong className="text-slate-300">once</strong>.
+        </li>
+        {durable ? (
+          <li>
+            Because your storage is durable ({storageMode === "kv" ? "Upstash" : "local disk"}), the
+            token is also written to your backend — it survives cold starts without any manual step.
+          </li>
+        ) : (
+          <li>
+            Because you&apos;re on ephemeral storage, the token lives in the serverless{" "}
+            <code className="font-mono">/tmp</code> only. You&apos;ll need to paste it into your
+            Vercel env vars to keep the instance alive across restarts.
+          </li>
+        )}
+        <li>Next screen shows the token — you MUST copy it to a password manager.</li>
+      </ul>
+    </div>
+  );
+}
+
+/** Token display: big monospace + copy + download. */
+function TokenDisplayPanel({
+  token,
+  copied,
+  onCopy,
+  onDownload,
+}: {
+  token: string;
+  copied: boolean;
+  onCopy: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="mb-6 rounded-lg border border-blue-800/70 bg-blue-950/20 p-5 space-y-4">
+      <p className="text-[11px] uppercase tracking-wider text-blue-300 font-semibold">
+        Your permanent token · shown once
+      </p>
+      <code className="block break-all text-sm text-blue-200 font-mono bg-slate-950/50 border border-slate-800 rounded-md px-3 py-2.5 leading-relaxed">
+        {token}
+      </code>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-4 py-1.5 rounded-md text-xs font-semibold"
+        >
+          {copied ? "Copied ✓" : "Copy to clipboard"}
+        </button>
+        <button
+          type="button"
+          onClick={onDownload}
+          className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-md text-xs font-semibold border border-slate-700"
+        >
+          Download .env fragment
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Forced "I saved it" acknowledgment before the Continue button unlocks. */
+function TokenSaveChecklist({
+  tokenSaved,
+  onChange,
+  durableBackend,
+}: {
+  tokenSaved: boolean;
+  onChange: (v: boolean) => void;
+  durableBackend: boolean;
+}) {
+  return (
+    <div
+      className={`mb-6 rounded-lg border p-4 ${
+        tokenSaved ? "border-emerald-800 bg-emerald-950/20" : "border-amber-800 bg-amber-950/20"
+      }`}
+    >
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={tokenSaved}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 h-4 w-4 cursor-pointer accent-emerald-500"
+        />
+        <div className="text-xs leading-relaxed">
+          <p className={`font-semibold ${tokenSaved ? "text-emerald-200" : "text-amber-200"}`}>
+            I saved this token in a password manager
           </p>
-          <ul className="text-xs text-emerald-200/90 space-y-1">
-            <li>✓ Generated and saved</li>
-            <li>✓ Written to your Vercel env vars</li>
-            <li>
-              {permanent
-                ? "✓ Redeploy complete — instance is live"
-                : "⏳ Vercel is redeploying (~60s)…"}
-            </li>
-          </ul>
+          <p className="text-slate-400 mt-1">
+            {durableBackend
+              ? "Good options: 1Password, Bitwarden, Apple Keychain, KeePass. The instance keeps a copy, but your MCP clients still need one."
+              : "Good options: 1Password, Bitwarden, Apple Keychain, KeePass. This is your ONLY copy — the instance forgets it on restart unless you paste it into Vercel env vars below."}
+          </p>
         </div>
-      ) : (
-        <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-          {autoMagicPartial && (
-            <div className="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
-              Auto-deploy partially failed
-              {autoMagicState?.redeployError ? ` (${autoMagicState.redeployError})` : ""}. Use the
-              manual steps below.
-            </div>
-          )}
-          <p className="text-sm font-semibold text-white">Manual deploy steps</p>
-          <ol className="space-y-2 text-xs text-slate-300 list-decimal list-inside">
+      </label>
+    </div>
+  );
+}
+
+/** Persistence status panel: auto-magic outcome + manual fallback steps. */
+function TokenPersistencePanel({
+  autoMagicSuccess,
+  autoMagicPartial,
+  autoMagicError,
+  durableBackend,
+  permanent,
+  vercelEnvUrl,
+  vercelDeployUrl,
+}: {
+  autoMagicSuccess: boolean;
+  autoMagicPartial: boolean;
+  autoMagicError?: string;
+  durableBackend: boolean;
+  permanent: boolean;
+  vercelEnvUrl: string;
+  vercelDeployUrl: string;
+}) {
+  if (autoMagicSuccess) {
+    return (
+      <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 p-4">
+        <p className="text-sm font-semibold text-emerald-300 mb-2">
+          ✓ Token deployed automatically
+        </p>
+        <ul className="text-xs text-emerald-200/90 space-y-1">
+          <li>✓ Generated and saved</li>
+          <li>✓ Written to your Vercel env vars</li>
+          <li>
+            {permanent
+              ? "✓ Redeploy complete — instance is live"
+              : "⏳ Vercel is redeploying (~60s)…"}
+          </li>
+        </ul>
+      </div>
+    );
+  }
+
+  if (durableBackend) {
+    return (
+      <details className="mb-6 rounded-lg border border-slate-800 bg-slate-900/20 group">
+        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between">
+          <span>
+            Also paste into Vercel env vars <span className="text-slate-600">· optional</span>
+          </span>
+          <span className="text-[10px] text-slate-600 group-open:hidden">expand</span>
+        </summary>
+        <div className="border-t border-slate-800 px-4 py-4 text-xs text-slate-400 space-y-2 leading-relaxed">
+          <p>
+            Because your storage is durable, the token survives cold starts automatically — no
+            manual step required. Pasting it into Vercel env vars adds a second layer (useful if you
+            ever clear the KV store). Entirely optional.
+          </p>
+          <ol className="space-y-1 list-decimal list-inside">
             <li>
-              Add this token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
+              Add <code className="font-mono text-slate-300">MCP_AUTH_TOKEN</code> →{" "}
               <a
                 href={vercelEnvUrl}
                 target="_blank"
@@ -781,7 +1027,7 @@ function renderStepToken(props: {
               </a>
             </li>
             <li>
-              Trigger a redeploy from the Deployments tab →{" "}
+              Redeploy →{" "}
               <a
                 href={vercelDeployUrl}
                 target="_blank"
@@ -791,23 +1037,59 @@ function renderStepToken(props: {
                 Open Vercel
               </a>
             </li>
-            <li>
-              {permanent
-                ? "✓ Redeploy detected — your instance is now live"
-                : "Wait ~60s. We'll detect when it's live."}
-            </li>
           </ol>
         </div>
-      )}
+      </details>
+    );
+  }
 
-      <StepFooter
-        primary={{
-          label: permanent ? "Continue → Storage" : "Waiting for Vercel redeploy…",
-          enabled: permanent,
-          onClick: onContinue,
-        }}
-      />
-    </section>
+  // Ephemeral / static — the user MUST paste into Vercel env vars or the
+  // instance will become inaccessible on the next cold start.
+  return (
+    <div className="mb-6 rounded-lg border border-amber-800 bg-amber-950/20 p-4 space-y-3">
+      {autoMagicPartial && (
+        <div className="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+          Auto-deploy partially failed{autoMagicError ? ` (${autoMagicError})` : ""}. Use the manual
+          steps below.
+        </div>
+      )}
+      <p className="text-sm font-semibold text-amber-200">
+        ⚠ Paste this token into Vercel env vars
+      </p>
+      <p className="text-xs text-amber-100/80 leading-relaxed">
+        Your storage is ephemeral — the token lives in <code className="font-mono">/tmp</code> and
+        will vanish on the next cold start unless you persist it as an env var.
+      </p>
+      <ol className="space-y-1.5 text-xs text-slate-300 list-decimal list-inside">
+        <li>
+          Add this token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
+          <a
+            href={vercelEnvUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            Open Vercel
+          </a>
+        </li>
+        <li>
+          Trigger a redeploy from the Deployments tab →{" "}
+          <a
+            href={vercelDeployUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            Open Vercel
+          </a>
+        </li>
+        <li>
+          {permanent
+            ? "✓ Redeploy detected — your instance is now live"
+            : "Wait ~60s. We'll detect when it's live."}
+        </li>
+      </ol>
+    </div>
   );
 }
 
@@ -829,7 +1111,6 @@ function renderStepStorage(props: {
   stopUpstashCheck: () => void;
   loadStorageStatus: (force: boolean) => Promise<void>;
   acknowledge: (value: "static" | "ephemeral") => void;
-  onBack: () => void;
   onContinue: () => void;
   storageReady: boolean;
 }) {
@@ -847,7 +1128,6 @@ function renderStepStorage(props: {
     stopUpstashCheck,
     loadStorageStatus,
     acknowledge,
-    onBack,
     onContinue,
     storageReady,
   } = props;
@@ -966,9 +1246,8 @@ function renderStepStorage(props: {
       )}
 
       <StepFooter
-        secondary={{ label: "← Token", onClick: onBack }}
         primary={{
-          label: storageReady ? "Continue → Connect" : "Pick or acknowledge a storage option",
+          label: storageReady ? "Continue → Auth token" : "Pick or acknowledge a storage option",
           enabled: storageReady,
           onClick: onContinue,
         }}
@@ -1025,7 +1304,7 @@ function renderStepConnect(props: {
       {token && <StarterSkillsPanel />}
 
       <StepFooter
-        secondary={{ label: "← Storage", onClick: onBack }}
+        secondary={{ label: "← Auth token", onClick: onBack }}
         primary={{
           label: canContinue ? "Open dashboard →" : "Test your MCP connection first",
           enabled: canContinue,
@@ -1048,20 +1327,20 @@ function renderStepConnect(props: {
 
 function WizardStepper({
   current,
-  permanent,
   storageReady,
+  tokenSavedConfirmed,
   testOk,
   onGoTo,
 }: {
   current: WizardStep;
-  permanent: boolean;
   storageReady: boolean;
+  tokenSavedConfirmed: boolean;
   testOk: boolean;
   onGoTo: (step: WizardStep) => void;
 }) {
   const steps: { n: WizardStep; label: string; done: boolean }[] = [
-    { n: 1, label: "Auth token", done: permanent },
-    { n: 2, label: "Storage", done: storageReady },
+    { n: 1, label: "Storage", done: storageReady },
+    { n: 2, label: "Auth token", done: tokenSavedConfirmed },
     { n: 3, label: "Connect", done: testOk },
   ];
   return (
@@ -1070,8 +1349,8 @@ function WizardStepper({
         const isCurrent = current === s.n;
         const reachable =
           s.n === 1 ||
-          (s.n === 2 && permanent) ||
-          (s.n === 3 && permanent && storageReady) ||
+          (s.n === 2 && storageReady) ||
+          (s.n === 3 && storageReady && tokenSavedConfirmed) ||
           s.n < current; // backward always allowed
         return (
           <li key={s.n} className="flex items-center gap-2 sm:gap-3">
