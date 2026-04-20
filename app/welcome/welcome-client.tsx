@@ -580,20 +580,7 @@ export default function WelcomeClient({
   }
 
   if (claim === "already-initialized") {
-    return (
-      <Shell>
-        <h1 className="text-2xl font-bold text-white mb-2">Already initialized</h1>
-        <p className="text-slate-400 mb-6">
-          This instance has a permanent token. Head to the dashboard.
-        </p>
-        <a
-          href="/config"
-          className="inline-block bg-blue-500 hover:bg-blue-400 text-white px-5 py-2.5 rounded-lg font-semibold text-sm"
-        >
-          Open dashboard →
-        </a>
-      </Shell>
-    );
+    return <AlreadyInitializedPanel />;
   }
 
   if (claim === "claimed-by-other") {
@@ -2073,6 +2060,70 @@ function MultiClientNote() {
         to revoke one client without breaking the others.
       </p>
     </div>
+  );
+}
+
+/**
+ * Shown when the caller lands on /welcome but claim returns
+ * "already-initialized" (the server sees a durable token). We can't
+ * forward to /config automatically because middleware admin-gates it
+ * and we don't have the cookie yet — but we can accept the user's
+ * saved token and hand off via `?token=`, which the middleware turns
+ * into a `mymcp_admin_token` cookie + clean redirect.
+ *
+ * Without this form, the link back to /config produces a bare 401 at
+ * the very end of an otherwise-smooth flow.
+ */
+function AlreadyInitializedPanel() {
+  const [tokenInput, setTokenInput] = useState("");
+  const trimmed = tokenInput.trim();
+  const href = trimmed ? `/config?token=${encodeURIComponent(trimmed)}` : undefined;
+  return (
+    <Shell>
+      <h1 className="text-2xl font-bold text-white mb-2">Already initialized</h1>
+      <p className="text-slate-400 mb-6 leading-relaxed">
+        This instance has a durable token — setup is done. Paste your saved token below to unlock
+        the dashboard. We&apos;ll set the cookie and strip the token from the URL on the next hop so
+        nothing leaks into your browser history.
+      </p>
+      <label className="block mb-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+        Your auth token
+      </label>
+      <input
+        type="password"
+        value={tokenInput}
+        onChange={(e) => setTokenInput(e.target.value)}
+        placeholder="64-character hex string"
+        autoComplete="off"
+        spellCheck={false}
+        className="w-full font-mono text-sm bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-blue-200 focus:outline-none focus:border-blue-600 mb-4"
+      />
+      <a
+        href={href}
+        aria-disabled={!href}
+        onClick={(e) => {
+          if (!href) e.preventDefault();
+        }}
+        className={`inline-block px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+          href
+            ? "bg-blue-500 hover:bg-blue-400 text-white"
+            : "bg-slate-800 text-slate-500 cursor-not-allowed"
+        }`}
+      >
+        Open dashboard →
+      </a>
+      <details className="mt-8 text-xs text-slate-500">
+        <summary className="cursor-pointer hover:text-slate-300">Lost your token?</summary>
+        <p className="mt-2 leading-relaxed">
+          Check the password manager where you saved it during /welcome, or look for{" "}
+          <code className="font-mono">MCP_AUTH_TOKEN</code> in your Vercel project env vars if
+          auto-magic wrote it. If it&apos;s truly gone, use the Recover-access flow below to wipe
+          state and mint a new one — just remember any MCP clients still using the old token will
+          need to be updated.
+        </p>
+      </details>
+      <RecoveryFooter />
+    </Shell>
   );
 }
 
