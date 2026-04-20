@@ -32,8 +32,18 @@ const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
  */
 export async function ensureBootstrapRehydratedFromUpstash(): Promise<void> {
   if (process.env.MCP_AUTH_TOKEN) return;
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  // Support both env var schemes: the legacy "Upstash for Vercel"
+  // integration injects UPSTASH_REDIS_REST_URL/TOKEN, while the newer
+  // Vercel Marketplace Upstash KV product injects KV_REST_API_URL/TOKEN.
+  // Without this fallback, deploys via the marketplace flow silently
+  // skip rehydrate even though Upstash IS configured — middleware then
+  // sees no MCP_AUTH_TOKEN and redirects /config to /welcome.
+  const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "").trim();
+  const token = (
+    process.env.UPSTASH_REDIS_REST_TOKEN ||
+    process.env.KV_REST_API_TOKEN ||
+    ""
+  ).trim();
   if (!url || !token) return;
   try {
     const endpoint = `${url.replace(/\/$/, "")}/get/${KV_BOOTSTRAP_KEY}`;
