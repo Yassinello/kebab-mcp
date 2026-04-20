@@ -1,5 +1,6 @@
 import { checkAdminAuth } from "@/core/auth";
-import { getKVStore, kvScanAll } from "@/core/kv-store";
+import { kvScanAll } from "@/core/kv-store";
+import { getContextKVStore } from "@/core/request-context";
 
 /**
  * GET /api/admin/health-history — admin-gated.
@@ -10,6 +11,9 @@ import { getKVStore, kvScanAll } from "@/core/kv-store";
  *
  * MEDIUM-2: Reads directly from KV with prefix scan instead of loading
  * all LogStore entries and filtering. Much more efficient.
+ *
+ * SEC-01b (v0.10): tenant-scoped via getContextKVStore. An admin sees
+ * only their own tenant's samples — cross-tenant leak closed.
  *
  * Query params:
  * - `days` — retention window (default: MYMCP_HEALTH_SAMPLE_RETENTION_DAYS or 7)
@@ -26,7 +30,7 @@ export async function GET(request: Request) {
   );
   const cutoff = Date.now() - days * 86_400_000;
 
-  const kv = getKVStore();
+  const kv = getContextKVStore();
   const keys = await kvScanAll(kv, "health:sample:*");
 
   // Batch-read values via mget when available, else parallel gets
@@ -61,6 +65,8 @@ export async function GET(request: Request) {
   samples.sort((a, b) => a.ts - b.ts);
 
   // Clean up old samples beyond retention (fire-and-forget)
+  // With TTL on the write path, this is now defense in depth. Pre-v0.10
+  // samples had no TTL and may linger until explicit cleanup.
   const staleKeys = keys.filter((k) => {
     const ts = parseInt(k.replace("health:sample:", ""), 10);
     return Number.isFinite(ts) && ts < cutoff;

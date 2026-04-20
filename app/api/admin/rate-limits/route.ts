@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
+import { getTenantId } from "@/core/tenant";
 
 interface RateLimitScope {
   scope: string;
@@ -17,10 +18,25 @@ interface RateLimitScope {
  * Auth-gated via admin token.
  *
  * KV key format: `ratelimit:{tenantId}:{scope}:{idHash}:{minuteBucket}`
+ *
+ * SEC-01b: filters scan results by the admin's tenant. Rate-limit
+ * keys themselves embed the tenant in the key structure (written via
+ * the allowlisted `getKVStore()` in rate-limit.ts), so the scan is
+ * global but the returned rows are filtered to the admin's tenant.
+ * An explicit `admin:global` future header could opt into the old
+ * cross-tenant view; not exposed in v0.10.
  */
 export async function GET(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
+
+  let requesterTenant: string | null;
+  try {
+    requesterTenant = getTenantId(request);
+  } catch {
+    return NextResponse.json({ error: "Invalid tenant header" }, { status: 400 });
+  }
+  const tenantFilter = requesterTenant ?? "default";
 
   const defaultLimit = Math.max(1, parseInt(process.env.MYMCP_RATE_LIMIT_RPM ?? "60", 10) || 60);
 
@@ -40,7 +56,7 @@ export async function GET(request: Request) {
     // Filter to current-bucket keys only, then batch-read values
     const groups = new Map<string, { scope: string; tenantId: string; current: number }>();
 
-    // Pre-filter keys to current bucket
+    // Pre-filter keys to current bucket AND to the requesting tenant.
     const activeKeys: { key: string; tenantId: string; scope: string }[] = [];
     for (const key of keys) {
       const parts = key.split(":");
@@ -48,7 +64,10 @@ export async function GET(request: Request) {
       const bucketStr = parts[parts.length - 1];
       const bucket = parseInt(bucketStr, 10);
       if (!Number.isFinite(bucket) || bucket !== currentBucket) continue;
-      activeKeys.push({ key, tenantId: parts[1], scope: parts[2] });
+      const keyTenant = parts[1];
+      // SEC-01b: only the current admin's tenant gets surfaced.
+      if (keyTenant !== tenantFilter) continue;
+      activeKeys.push({ key, tenantId: keyTenant, scope: parts[2] });
     }
 
     // Batch-read all active key values via mget

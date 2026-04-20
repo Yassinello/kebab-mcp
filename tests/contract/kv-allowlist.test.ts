@@ -30,11 +30,19 @@ const ALLOWLIST = new Set<string>([
   "src/core/rate-limit.ts",
   "src/core/tool-toggles.ts",
   "src/core/config.ts",
+  // Migration scanner — intentionally global to inventory legacy keys
+  "src/core/migrations/v0.10-tenant-prefix.ts",
   // Storage/diagnostic/admin-migration — operator surfaces
   "app/api/storage/status/route.ts",
   "app/api/storage/migrate/route.ts",
   "app/api/storage/import/route.ts",
   "app/api/config/context/route.ts",
+  // rate-limit keys embed `tenantId` in the key structure and are
+  // written via the allowlisted rate-limit.ts path. The admin view
+  // does a global scan and filters by the requesting admin's tenant
+  // in application code (SEC-01b). Tenant-scoping the KV itself is
+  // v0.11 work — see FOLLOW-UP.md.
+  "app/api/admin/rate-limits/route.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",
 ]);
@@ -80,12 +88,13 @@ function toPosix(p: string): string {
 }
 
 /**
- * Flip this to `true` in Task 7 (SEC-01b) once every non-allowlisted
- * `getKVStore()` callsite has been migrated to `getContextKVStore()` or
- * `getTenantKVStore(explicitId)`. Until then, the test records the
- * expected allowlist without failing.
+ * Enforcement mode is ON as of SEC-01b (v0.10). New `getKVStore()`
+ * callsites outside the allowlist fail the build. If you have a
+ * legitimately global-KV need, add the file to ALLOWLIST above + document
+ * the rationale in `.planning/phases/37b-security-hotfix/INVENTORY.md`
+ * (or the equivalent v0.11 inventory after that phase lands).
  */
-const ENFORCE = false;
+const ENFORCE = true;
 
 describe("kv-allowlist contract", () => {
   it("getKVStore() is only called from allowlisted files", () => {

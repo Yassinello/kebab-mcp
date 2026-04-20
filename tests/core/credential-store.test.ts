@@ -52,17 +52,24 @@ function makeStubKv() {
 describe("credential-store SEC-02", () => {
   let stubKv: ReturnType<typeof makeStubKv>;
   let kvSpy: ReturnType<typeof vi.spyOn>;
+  let tenantKvSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     stubKv = makeStubKv();
     kvSpy = vi
       .spyOn(kvStore, "getKVStore")
       .mockReturnValue(stubKv as unknown as ReturnType<typeof kvStore.getKVStore>);
+    // credential-store now uses getContextKVStore → getTenantKVStore(null).
+    // Stub getTenantKVStore to return our stub too.
+    tenantKvSpy = vi
+      .spyOn(kvStore, "getTenantKVStore")
+      .mockReturnValue(stubKv as unknown as ReturnType<typeof kvStore.getTenantKVStore>);
     resetHydrationFlag();
   });
 
   afterEach(() => {
     kvSpy.mockRestore();
+    tenantKvSpy.mockRestore();
     resetHydrationFlag();
   });
 

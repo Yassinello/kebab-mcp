@@ -2,7 +2,7 @@ import { VERSION } from "@/core/version";
 import { resolveRegistry } from "@/core/registry";
 import { checkAdminAuth } from "@/core/auth";
 import { withTimeout } from "@/core/timeout";
-import { getKVStore } from "@/core/kv-store";
+import { getContextKVStore } from "@/core/request-context";
 
 /**
  * Public health endpoint.
@@ -81,16 +81,21 @@ export async function GET(request: Request) {
   // MEDIUM-2: Write health sample directly to KV with a dedicated key pattern.
   // This bypasses the LogStore entirely — avoids loading all logs then filtering.
   // Key format: `health:sample:<timestamp>` for efficient prefix-based listing.
+  //
+  // SEC-01b (v0.10): tenant-scoped via getContextKVStore + 7-day TTL to
+  // stop unbounded key growth. Pre-v0.10, samples lived globally under
+  // `health:sample:<ts>` with no TTL.
   const connectorMap: Record<string, { ok: boolean; latencyMs: number }> = {};
   for (const c of checks) {
     connectorMap[c.connector] = { ok: c.ok, latencyMs: c.durationMs };
   }
   const sampleTs = Date.now();
   const sample = { ts: sampleTs, overall, connectors: connectorMap };
-  const kv = getKVStore();
-  kv.set(`health:sample:${sampleTs}`, JSON.stringify(sample)).catch((err: Error) =>
-    console.error("[Kebab MCP] Health sample write failed:", err.message)
-  );
+  const HEALTH_SAMPLE_TTL_SECONDS = 7 * 24 * 3600;
+  const kv = getContextKVStore();
+  void kv
+    .set(`health:sample:${sampleTs}`, JSON.stringify(sample), HEALTH_SAMPLE_TTL_SECONDS)
+    .catch((err: Error) => console.error("[Kebab MCP] Health sample write failed:", err.message));
 
   return Response.json({
     ok: degraded.length === 0,

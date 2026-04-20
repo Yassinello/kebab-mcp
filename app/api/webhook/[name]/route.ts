@@ -1,5 +1,5 @@
 import { createHmac, createHash, timingSafeEqual } from "crypto";
-import { getKVStore } from "@/core/kv-store";
+import { getContextKVStore } from "@/core/request-context";
 
 /** Maximum webhook payload size: 1 MB. */
 const MAX_PAYLOAD_BYTES = 1_048_576;
@@ -126,8 +126,15 @@ export async function POST(
     contentType,
   };
 
-  // Store in KV — both `last` pointer and history ring buffer
-  const kv = getKVStore();
+  // Store in KV — both `last` pointer and history ring buffer.
+  // SEC-01b: getContextKVStore() scopes writes to the current tenant
+  // (null = untenanted, same as before for default-tenant callers).
+  // Webhook endpoints currently don't parse a tenant header; the
+  // multi-tenant webhook routing story is v0.11 work. For now, all
+  // webhook writes land under the null-tenant namespace, but the
+  // getContextKVStore() wiring is in place so a future tenant-aware
+  // middleware just works.
+  const kv = getContextKVStore();
   const entryJson = JSON.stringify(entry);
   await kv.set(`webhook:last:${normalizedName}`, entryJson);
 

@@ -23,7 +23,14 @@ import { withTenantPrefix } from "./tenant";
 export interface KVStore {
   kind: "filesystem" | "upstash";
   get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
+  /**
+   * Set a key/value pair. Optional `ttlSeconds` is honored on Upstash
+   * (via `SET key value EX ttl`) and best-effort ignored on the
+   * filesystem backend (dev-only; explicit TTL eviction is a v0.11
+   * concern there). Callers should feature-check or treat TTL as a
+   * hint.
+   */
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
   delete(key: string): Promise<void>;
   list(prefix?: string): Promise<string[]>;
   /**
@@ -146,7 +153,9 @@ class FilesystemKV implements KVStore {
     return map[key] ?? null;
   }
 
-  async set(key: string, value: string): Promise<void> {
+  async set(key: string, value: string, _ttlSeconds?: number): Promise<void> {
+    // Filesystem backend ignores TTL — dev-only path. TTL-based
+    // eviction is v0.11 work; documented in the KVStore interface.
     // Synchronously invalidate the cache so any concurrent reader that
     // *hasn't yet entered the write queue* forces a fresh read instead
     // of serving pre-write cached data.
@@ -306,8 +315,13 @@ class UpstashKV implements KVStore {
     return typeof result === "string" ? result : result == null ? null : String(result);
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.call(["SET", key, value]);
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    if (ttlSeconds && ttlSeconds > 0) {
+      // SET key value EX ttl
+      await this.call(["SET", key, value, "EX", Math.ceil(ttlSeconds)]);
+    } else {
+      await this.call(["SET", key, value]);
+    }
   }
 
   async delete(key: string): Promise<void> {
@@ -569,8 +583,8 @@ class TenantKVStore implements KVStore {
     return this.inner.get(this.pk(key));
   }
 
-  set(key: string, value: string) {
-    return this.inner.set(this.pk(key), value);
+  set(key: string, value: string, ttlSeconds?: number) {
+    return this.inner.set(this.pk(key), value, ttlSeconds);
   }
 
   delete(key: string) {

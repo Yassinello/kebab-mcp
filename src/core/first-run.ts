@@ -34,6 +34,7 @@ import {
   rotateSigningSecret,
   SigningSecretUnavailableError,
 } from "./signing-secret";
+import { runV010TenantPrefixMigration } from "./migrations/v0.10-tenant-prefix";
 
 const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
 
@@ -410,8 +411,16 @@ export function clearBootstrap(): void {
  *
  * Handlers should call this at entry to pick up bootstrap state minted on
  * a different cold-start instance. Cheap when KV is unconfigured (no-op).
+ *
+ * SEC-01b side effect: also runs the v0.10 tenant-prefix migration
+ * (idempotent, one-shot per process). Tracked via an in-process
+ * `migrationStarted` flag + a KV-persisted `mymcp:migrations:*` marker.
  */
 export async function rehydrateBootstrapAsync(): Promise<void> {
+  // Run the migration in the background on first call; never block
+  // boot on migration completion.
+  void runV010TenantPrefixMigration().catch(() => {});
+
   rehydrateBootstrapFromTmp();
   if (activeBootstrap) return;
   if (!isExternalKvAvailable()) return;

@@ -17,7 +17,8 @@
  * `runWithCredentials(creds, ...)` at the request entry instead.
  */
 
-import { getKVStore, kvScanAll } from "./kv-store";
+import { kvScanAll } from "./kv-store";
+import { getContextKVStore } from "./request-context";
 
 export const CRED_PREFIX = "cred:";
 
@@ -82,7 +83,7 @@ export function getHydratedCredentialSnapshot(): Record<string, string> {
  * they just saved).
  */
 export async function saveCredentialsToKV(vars: Record<string, string>): Promise<void> {
-  const kv = getKVStore();
+  const kv = getContextKVStore();
   const writes: Promise<void>[] = [];
   for (const [key, value] of Object.entries(vars)) {
     if (value) {
@@ -119,7 +120,7 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
   if (hydrated) return;
   hydrated = true;
 
-  const kv = getKVStore();
+  const kv = getContextKVStore();
   // Only hydrate if we have real KV (Upstash) — ephemeral /tmp KV
   // on Vercel without Upstash doesn't survive cold starts anyway.
   if (kv.kind !== "upstash") return;
@@ -170,7 +171,7 @@ export function resetCredentialHydration(): void {
  * Used by the .env export endpoint.
  */
 export async function readAllCredentialsFromKV(): Promise<Record<string, string>> {
-  const kv = getKVStore();
+  const kv = getContextKVStore();
   // On Vercel without Upstash the KV is an ephemeral /tmp filesystem —
   // reading from it is useless (data doesn't survive cold starts).
   if (process.env.VERCEL === "1" && kv.kind !== "upstash") return {};

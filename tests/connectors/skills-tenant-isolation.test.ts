@@ -65,7 +65,7 @@ vi.mock("@/core/kv-store", () => {
     getKVStore: () => inner,
     getTenantKVStore: (tenantId: string | null) => makeTenantKv(tenantId),
     kvScanAll: async (
-      kv: { scan?: (c: string, o?: unknown) => Promise<{ keys: string[] }> },
+      kv: { scan?: (c: string, o?: unknown) => Promise<{ cursor: string; keys: string[] }> },
       match?: string
     ) => {
       if (typeof kv.scan !== "function") return [];
