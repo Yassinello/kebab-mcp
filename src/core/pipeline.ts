@@ -40,6 +40,29 @@
 import { requestContext } from "./request-context";
 import type { PipelineContext, Step, PipelineHandler } from "./pipeline/types";
 
+// Barrel re-exports — callers import every pipeline primitive from
+// `@/core/pipeline` without reaching into subpath modules. The file
+// `src/core/pipeline.ts` wins over `src/core/pipeline/index.ts` under
+// Next's bundler resolution, so the canonical public surface lives here.
+export type {
+  PipelineContext,
+  Step,
+  StepNext,
+  PipelineHandler,
+  StepResult,
+} from "./pipeline/types";
+export { rehydrateStep, __resetRehydrateStepForTests } from "./pipeline/rehydrate-step";
+export { firstRunGateStep } from "./pipeline/first-run-gate-step";
+export { authStep, type AuthKind } from "./pipeline/auth-step";
+export {
+  rateLimitStep,
+  type RateLimitKeyFrom,
+  type RateLimitStepOptions,
+} from "./pipeline/rate-limit-step";
+export { hydrateCredentialsStep } from "./pipeline/credentials-step";
+export { bodyParseStep, type BodyParseOptions } from "./pipeline/body-parse-step";
+export { csrfStep } from "./pipeline/csrf-step";
+
 /**
  * Marker string recognized by `tests/contract/pipeline-coverage.test.ts`.
  * A route file that legitimately cannot join the pipeline (e.g. public

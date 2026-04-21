@@ -1,16 +1,25 @@
 /**
  * Contract test: every auth-gated API route under app/api (route.ts files)
- * must either wrap its exported handlers in `withBootstrapRehydrate(...)`
- * OR carry a `// BOOTSTRAP_EXEMPT: <reason>` marker at the top of the file.
+ * must either
+ *   (a) wrap its exported handlers in `withBootstrapRehydrate(...)`, OR
+ *   (b) compose the rehydrate-aware pipeline via `composeRequestPipeline(`
+ *       or the `withAdminAuth(` HOC (both internally delegate to
+ *       `rehydrateBootstrapAsync()` via `rehydrateStep` — PIPE-07), OR
+ *   (c) carry a `// BOOTSTRAP_EXEMPT: <reason>` marker at the top of
+ *       the file.
  *
  * Closes DUR-03 from .planning/milestones/v0.10-durability-ROADMAP.md.
+ *
+ * v0.11 Phase 41 extended this contract to accept pipeline-based
+ * rehydrate (pipelineStep wraps the same `rehydrateBootstrapAsync` call
+ * as the HOC) so route migrations don't regress DUR-03.
  *
  * Rationale: the 2026-04-20 debugging session shipped multiple bugs where
  * auth-gated handlers read `MCP_AUTH_TOKEN` (or other bootstrap state)
  * before `rehydrateBootstrapAsync()` had a chance to pull it from durable
- * KV. Wrapping every handler in the HOC guarantees rehydrate happens at
- * entry; this test fails the build if a new route is added without the
- * wrapper or a documented exemption.
+ * KV. Wrapping every handler in the HOC (or pipeline) guarantees rehydrate
+ * happens at entry; this test fails the build if a new route is added
+ * without the wrapper or a documented exemption.
  *
  * To add a new exempt route:
  *   1. Add `// BOOTSTRAP_EXEMPT: <reason ≥20 chars>` as the first comment
@@ -23,6 +32,8 @@ import { join, relative, sep } from "node:path";
 
 const MARKER = "BOOTSTRAP_EXEMPT:";
 const HOC_NAME = "withBootstrapRehydrate";
+const PIPELINE_FN = "composeRequestPipeline";
+const ADMIN_HOC = "withAdminAuth";
 const MIN_EXEMPT_REASON_LEN = 20;
 
 // Scan only API route handlers (middleware + server components are not
@@ -70,12 +81,22 @@ function hasExemptMarker(source: string): boolean {
 }
 
 function hasHocWrap(source: string): boolean {
-  // Match either:
-  //   export const GET = withBootstrapRehydrate(getHandler)
-  //   export const GET = withBootstrapRehydrate<...>(getHandler)
-  //   const wrapped = withBootstrapRehydrate(handler); export { wrapped as GET };
-  // i.e. HOC appears at least once AND at least one exported verb reference exists.
-  if (!source.includes(`${HOC_NAME}(`) && !source.includes(`${HOC_NAME}<`)) return false;
+  // Accept any of three shapes, all of which inject rehydrate at the
+  // route boundary:
+  //   (1) legacy v0.10 HOC:
+  //         export const GET = withBootstrapRehydrate(handler)
+  //   (2) v0.11 pipeline:
+  //         export const POST = composeRequestPipeline([rehydrateStep, …], handler)
+  //       (rehydrateStep awaits rehydrateBootstrapAsync exactly like the HOC)
+  //   (3) v0.11 admin HOC:
+  //         export const POST = withAdminAuth(handler)
+  //       (withAdminAuth is itself a composeRequestPipeline that starts with rehydrateStep)
+  const hasRehydrateSite =
+    source.includes(`${HOC_NAME}(`) ||
+    source.includes(`${HOC_NAME}<`) ||
+    source.includes(`${PIPELINE_FN}(`) ||
+    source.includes(`${ADMIN_HOC}(`);
+  if (!hasRehydrateSite) return false;
   const verbRe = /export\s+(?:const|let|\{)[^;]*\b(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\b/;
   return verbRe.test(source);
 }

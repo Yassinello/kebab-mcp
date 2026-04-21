@@ -43,19 +43,23 @@ describe("TEST-03 batch B.2 — bootstrap-rehydrate regressions", () => {
     expect(awaitIdx).toBeLessThan(setupIdx);
   });
 
-  // ── BUG-11 — transport route wraps handler in withBootstrapRehydrate (100e0b9) ─
-  it("regression: BUG-11 transport route wraps handler in withBootstrapRehydrate", () => {
+  // ── BUG-11 — transport route triggers rehydrate on entry (100e0b9) ─
+  it("regression: BUG-11 transport route rehydrates on entry (HOC / inline / pipeline)", () => {
     // 100e0b9 originally added `await rehydrateBootstrapAsync()` at
-    // the top of the handler. Phase 37 then replaced the manual call
-    // with the withBootstrapRehydrate HOC (DUR-01 sweep). Either
-    // shape closes the underlying bug — we accept both.
+    // the top of the handler. Phase 37 replaced the manual call
+    // with the `withBootstrapRehydrate` HOC (DUR-01 sweep). Phase 41
+    // replaced the HOC with `composeRequestPipeline([rehydrateStep, …])`
+    // (PIPE-02/PIPE-07). All three shapes close the underlying bug —
+    // we accept any of them.
     const transport = readFileSync(resolve(process.cwd(), "app/api/[transport]/route.ts"), "utf-8");
 
     const hasHoc = /withBootstrapRehydrate\s*\(/.test(transport);
     const hasInlineRehydrate = /await\s+rehydrateBootstrapAsync/.test(transport);
-    expect(hasHoc || hasInlineRehydrate).toBe(true);
+    const hasPipelineRehydrate =
+      /composeRequestPipeline\s*\(/.test(transport) && /\brehydrateStep\b/.test(transport);
+    expect(hasHoc || hasInlineRehydrate || hasPipelineRehydrate).toBe(true);
 
-    // The rehydrate import must be present either way.
-    expect(transport).toMatch(/withBootstrapRehydrate|rehydrateBootstrapAsync/);
+    // The rehydrate entry point must be present either way.
+    expect(transport).toMatch(/withBootstrapRehydrate|rehydrateBootstrapAsync|rehydrateStep/);
   });
 });
