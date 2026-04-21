@@ -143,6 +143,88 @@ No breaking changes. Operators see identical behavior; connector
 authors see no API surface shifts. Phase 37 ships mergeable independent
 of Phases 38-40 (safety/observability, multi-host, tests/docs).
 
+### Safety & observability (Phase 38, non-breaking)
+
+Visibility + foot-gun prevention pass. Every surface added in Phase 38
+is additive — existing payload fields remain; operators see identical
+behavior unless a destructive env var is actively wiping state (in
+which case they now see the warning).
+
+- **SAFE-01 / SAFE-04** — Destructive env-var registry
+  (`src/core/env-safety.ts`). Typed constant `DESTRUCTIVE_ENV_VARS`
+  enumerates every env var with a destructive side-effect (initial
+  set: `MYMCP_RECOVERY_RESET`, `MYMCP_ALLOW_EPHEMERAL_SECRET`,
+  `MYMCP_DEBUG_LOG_SECRETS`, `MYMCP_RATE_LIMIT_INMEMORY`,
+  `MYMCP_SKIP_TOOL_TOGGLE_CHECK`). Startup validation runs on the
+  first `getInstanceConfig()` call: warn-severity vars log to
+  `console.warn`; reject-severity vars + `NODE_ENV=production`
+  refuse to boot (`process.exit(1)`). The registry is extensible
+  via a PR adding a row — no plugin API.
+- **SAFE-02 / SAFE-03** — Destructive vars surface as a public
+  warning. `/api/health` returns a `warnings[]` array when a
+  destructive var is active in a non-allowed `NODE_ENV`. `/config`
+  renders a red dashboard-wide banner with the var name + operator-
+  facing effect description. Happy path stays clean: both surfaces
+  omit the warning when no destructive var is set.
+- **OBS-01** — `/api/health` enriched with `bootstrap.state`,
+  `kv.reachable` (1s-capped ping), `kv.lastRehydrateAt` (ISO string
+  or `null`). Handler has a hard 1.5s overall budget via
+  `Promise.race`. Zero secret / env-value leak verified by test.
+- **OBS-02** — `/api/admin/status` gains a `firstRun` section:
+  `rehydrateCount` (total + last-24h sliding window, KV-persisted at
+  `mymcp:firstrun:rehydrate-count`), `kvLatencySamples` (in-process
+  ring buffer, size 20, populated by `pingKV` and future per-op
+  hooks), `envPresent` (boolean-only map for every `WATCHED_ENV_KEYS`
+  entry — union of destructive vars, core infra, runtime hints).
+- **OBS-03** — Structured logger facade `getLogger(tag)` in
+  `src/core/logging.ts`. New tags: `[FIRST-RUN]`, `[KV]`, `[WELCOME]`,
+  `[CONNECTOR:skills]`, `[LOG-STORE]`, `[API:<route>]`, `[TOOL:<name>]`.
+  Every try/catch in `src/core/first-run*.ts`, `src/core/kv-store.ts`,
+  and `app/api/welcome/**/route.ts` either logs, rethrows, returns, or
+  carries a `// silent-swallow-ok: <reason>` annotation. Enforced by
+  `tests/contract/no-silent-swallows.test.ts` — regex-based, same
+  pattern as the DUR-04/05 fire-and-forget contract.
+- **OBS-04** — OTel spans on the three hot paths:
+  `mymcp.bootstrap.rehydrate`, `mymcp.kv.write`, `mymcp.auth.check`.
+  KV span attributes capture only the first 2 colon segments of the
+  key (e.g. `tenant:alpha` from `tenant:alpha:skills:foo`) — no
+  full-key leak in traces. Zero overhead when `OTEL_EXPORTER_OTLP_ENDPOINT`
+  is unset. New helpers: `startInternalSpan`, `withSpan`, `withSpanSync`.
+- **OBS-05** — `/config` gains a Health tab (`app/config/tabs/health.tsx`)
+  rendering the combined live state from `/api/health` +
+  `/api/admin/status`: bootstrap badge, KV block, rehydrate counter,
+  KV latency samples table, env presence checklist, warnings list.
+  Auto-refreshes every 15s. Gracefully shows "admin auth required"
+  when /api/admin/status returns 401 (welcome-first-user path).
+
+Fold-ins from the milestone's "Deferred findings" section:
+
+### Fixed (Phase 38 fold-ins)
+
+- **P0** — `UpstashLogStore` circuit-breaker (`src/core/log-store.ts`)
+  no longer trips on any error message containing the digit "5".
+  New `extractHttpStatus(err)` helper parses an actual 3-digit HTTP
+  status code from the error message; the breaker opens only on
+  `500 ≤ status < 600`. Regression test:
+  `tests/core/log-store-retry.test.ts`.
+- **P1** — `listSkillsSync()` (`src/connectors/skills/store.ts`) no
+  longer silently returns `[]` on filesystem errors. Now logs via
+  `[CONNECTOR:skills]` before returning the empty fallback. Hides no
+  bugs; breaks no existing code paths.
+- **P1** — `/api/config/env` (GET + PUT 500 paths) and
+  `/api/config/update` (POST 500 path) no longer leak `err.message`
+  to the client. New canonical response shape
+  `{ error: "internal_error", errorId, hint }` via
+  `src/core/error-response.ts`. Server-side log retains the full
+  sanitized error + `errorId` under the `[API:<route>]` tag for
+  operator correlation.
+- **T10** — `MYMCP_TOOL_TIMEOUT` is now enforced at the transport.
+  `getToolTimeout()` was defined but never called pre-v0.10 —
+  hanging tools ran until Vercel's 60s lambda reap, returning an
+  opaque 504. Now wired into `withLogging` via `Promise.race`; a
+  slow handler returns an `MCP tool error` with
+  `errorCode: "TOOL_TIMEOUT"` and logs under `[TOOL:<name>]`.
+
 ## [0.1.0] - 2026-04-18 — Stabilization release
 
 This is the consolidated v0.1.0 release: the project was internally
