@@ -2,14 +2,61 @@
 
 All notable changes to Kebab MCP.
 
-## [0.10.0] — Unreleased — Security hotfix (SEC-01..06)
+## [0.10.0] — Unreleased — Durability audit hardening
+
+The v0.10 milestone is the preventive hardening pass triggered by the
+2026-04-20 durability debugging session (17 production bugs shipped in
+a single day across the welcome / bootstrap / cold-start flow on
+Vercel) and the 2026-04-21 deep risk audit (4 exploitable findings
+filed as GHSA candidates). Five phases:
+
+- Phase 37b — Security critical fixes (SEC-01..06)
+- Phase 37 — Durability primitives (DUR-01..07)
+- Phase 38 — Safety & observability (SAFE-01..04, OBS-01..05)
+- Phase 39 — Multi-host compatibility (HOST-01..06)
+- Phase 40 — Test coverage & documentation (TEST-01..05, DOC-01..05)
+
+The subsections below map 1:1 to those phases. No breaking changes
+for operators. Connector authors should read **Fork-maintainer
+notes** below — the `process.env` read semantics tightened.
+
+### Fork-maintainer notes
+
+The architectural changes forks should be aware of before pulling v0.10:
+
+- **`proxy.ts` is now async.** If your fork wraps or composes
+  middleware, re-check that your wrapper handles the `Promise<NextResponse>`
+  return type. Pre-v0.10 proxy was effectively sync.
+- **`process.env.X` reads inside handlers see the boot-time snapshot
+  only.** Request-scoped credential overrides (dashboard saves,
+  per-tenant creds) must migrate to `getCredential("X")` from
+  `@/core/request-context`. An ESLint rule blocks
+  `process.env[...] = ...` assignments outside the allowlisted boot
+  path. Back-compat preserved for v0.10.x; v0.11 adds migration
+  enforcement for connector handlers.
+- **Both Upstash env var variants are recognized.**
+  `UPSTASH_REDIS_REST_*` AND `KV_REST_API_*`. `getUpstashCreds()` is
+  the only legitimate reader — a contract test blocks direct reads.
+- **Welcome refuses to mint claims without durable KV.** Set Upstash
+  env vars OR `MYMCP_ALLOW_EPHEMERAL_SECRET=1` for local dev. Public
+  Vercel deploys without either now return 503 with an actionable
+  operator error instead of silently minting a forgeable-tomorrow
+  token.
+- **Signing secret is KV-persisted.** Forks must either configure
+  Upstash or opt into ephemeral secrets explicitly. The pre-v0.10
+  `VERCEL_GIT_COMMIT_SHA`-derived secret is gone (SEC-04 fix).
+- **`proxy.ts` matcher ordering.** Showcase mode (`INSTANCE_MODE=showcase`)
+  short-circuits BEFORE the first-run check, so public template
+  deploys no longer redirect through `/welcome` on cold lambdas.
+
+### Phase 37b — Security critical fixes (SEC-01..06)
 
 Expedited security release closing four findings from the 2026-04-20
 deep risk audit (`.planning/research/RISKS-AUDIT.md`). See
 `docs/SECURITY-ADVISORIES.md` for the full advisory index and
 disclosure timeline.
 
-### Security
+#### Security
 
 - **SEC-04 (GHSA pending)** — First-run claim-cookie HMAC signing
   secret was previously derived from `VERCEL_GIT_COMMIT_SHA`, a public
@@ -45,7 +92,7 @@ disclosure timeline.
 - **SEC-06** — This CHANGELOG, `docs/SECURITY-ADVISORIES.md`, and
   the GHSA draft document the disclosure timeline.
 
-### Breaking (connector authors)
+#### Breaking (connector authors)
 
 - `process.env.X` reads from within tool handlers now see the
   **boot-time snapshot** only. Request-scoped credential overrides
@@ -58,7 +105,7 @@ disclosure timeline.
   path (`src/core/env-store.ts`, `scripts/`, `tests/`). Use
   `runWithCredentials()` instead.
 
-### Added
+#### Added
 
 - `src/core/signing-secret.ts` — KV-backed signing secret with
   `getSigningSecret()`, `rotateSigningSecret()`,
@@ -76,7 +123,7 @@ disclosure timeline.
   namespace (see `src/core/migrations/v0.10-tenant-prefix.ts`),
   preserving existing single-tenant deploys.
 
-### Deferred to v0.11+
+#### Deferred to v0.11+
 
 Documented in `.planning/phases/37b-security-hotfix/FOLLOW-UP.md`:
 
@@ -89,7 +136,7 @@ Documented in `.planning/phases/37b-security-hotfix/FOLLOW-UP.md`:
   added now; broader observability work in Phase 38)
 - `log-store.ts:319` 5xx retry heuristic (Phase 38)
 
-### Durability hardening (Phase 37, non-breaking)
+### Phase 37 — Durability primitives (DUR-01..07)
 
 Preventive pass closing the class of bugs shipped by the 2026-04-20
 debugging session (see `.planning/milestones/v0.10-durability-ROADMAP.md`
@@ -143,7 +190,7 @@ No breaking changes. Operators see identical behavior; connector
 authors see no API surface shifts. Phase 37 ships mergeable independent
 of Phases 38-40 (safety/observability, multi-host, tests/docs).
 
-### Safety & observability (Phase 38, non-breaking)
+### Phase 38 — Safety & observability (SAFE-01..04, OBS-01..05)
 
 Visibility + foot-gun prevention pass. Every surface added in Phase 38
 is additive — existing payload fields remain; operators see identical
@@ -199,7 +246,7 @@ which case they now see the warning).
 
 Fold-ins from the milestone's "Deferred findings" section:
 
-### Fixed (Phase 38 fold-ins)
+#### Fixed (Phase 38 fold-ins)
 
 - **P0** — `UpstashLogStore` circuit-breaker (`src/core/log-store.ts`)
   no longer trips on any error message containing the digit "5".
@@ -224,6 +271,126 @@ Fold-ins from the milestone's "Deferred findings" section:
   opaque 504. Now wired into `withLogging` via `Promise.race`; a
   slow handler returns an `MCP tool error` with
   `errorCode: "TOOL_TIMEOUT"` and logs under `[TOOL:<name>]`.
+
+### Phase 39 — Multi-host compatibility (HOST-01..06)
+
+Validation pass to make sure the serverless-aware fixes from Phases
+37b/37/38 do not silently break persistent-process deployments.
+
+- **HOST-01** — `docs/HOSTING.md` host matrix covering Vercel,
+  Docker (1 replica and N replicas), Fly.io, Render, Cloud Run, and
+  bare-metal. Columns: persistence default, scaling model, required
+  env vars, healthcheck path, SIGTERM handling, volume mount,
+  migration checklist from Vercel.
+- **HOST-02** — `Dockerfile` hardens the multi-stage dev-deps split,
+  adds a graceful 5s SIGTERM drain, and ships a `.dockerignore`
+  pruning `.next/dev/` + test artifacts from the build context.
+  Healthcheck wired to `/api/health`.
+- **HOST-03** — `docs/examples/` ships two working compose files:
+  single-replica + filesystem KV (dev loop), N-replica + Upstash KV
+  (production). Both exercise the `./data` volume mount pattern.
+- **HOST-04** — `tests/integration/multi-host.test.ts` simulates
+  three host scenarios in pure vitest (zero Docker dependency):
+  cross-process state via shared KV, RECOVERY_RESET refusal on a
+  persistent process, N-replica rate-limit convergence through a
+  shared atomic-incr path.
+- **HOST-05** — Rate-limit storage is KV-backed by default. The
+  in-memory fast path is gated behind `MYMCP_RATE_LIMIT_INMEMORY=1`
+  (explicit opt-in), so N-replica deploys don't silently diverge.
+- **HOST-06** — `MYMCP_DURABLE_LOGS=1` documented as the default
+  for Docker-N / Fly / Render / Cloud Run rows in `docs/HOSTING.md`.
+  Single-replica dev loop keeps logs in-memory by default.
+
+### Phase 40 — Test coverage & documentation (TEST-01..05, DOC-01..05)
+
+Closes the gap between "436 unit tests pass" and "17 production bugs
+shipped this session." Every session bug gets a regression test; the
+welcome flow gains integration + E2E coverage; fork maintainers get
+the documentation they need to run Kebab MCP without tailing Vercel
+logs.
+
+- **TEST-01** — `tests/integration/welcome-durability.test.ts`
+  simulates cross-lambda rehydrate (lambda A mints + flushes, lambda
+  B rehydrates from shared KV), cold-start after Vercel reap,
+  HMAC-signed claim cookie trusted across cold lambdas (BUG-15), and
+  SEC-05 refusal on no-durable-KV production deploys. Uses
+  `vi.resetModules()` + `/tmp` clearing to model lambda boundaries.
+- **TEST-02** — `tests/e2e/welcome.spec.ts` Playwright spec covering
+  `/config?token=` handoff (BUG-03), `/welcome` render on both
+  first-run and already-initialized branches, paste-token form
+  visibility, and fresh-context cookie handoff. Cold-start mid-flow
+  is not implemented as Playwright (would require dev-server
+  restart); covered by TEST-01 instead. Rationale documented in
+  `tests/e2e/README.md`.
+- **TEST-03** — Five themed regression files under
+  `tests/regression/` covering all 17 session bugs:
+  `welcome-flow.test.ts` (6), `storage-ux.test.ts` (3),
+  `kv-durability.test.ts` (4), `bootstrap-rehydrate.test.ts` (2),
+  `env-handling.test.ts` (2). One `it()` per bug; assertion names
+  start with the BUG-NN ID; test file headers list the commit SHAs
+  they pin.
+- **TEST-04** — `tests/core/proxy-async-rehydrate.test.ts` —
+  additive unit test proving `proxy()` awaits
+  `ensureBootstrapRehydratedFromUpstash()` at middleware entry. Not
+  a duplicate of `csp-middleware.test.ts` or `request-id.test.ts` —
+  this file targets the async rehydrate seam specifically (BUG-09,
+  BUG-10).
+- **TEST-05** — `npm run test:e2e` now targets Playwright; the
+  legacy tools/list smoke is preserved as `test:e2e:legacy`. New
+  `.github/workflows/test-e2e.yml` runs the Playwright suite against
+  a spun-up dev server on PR touching welcome / middleware /
+  bootstrap surfaces. Non-blocking for forks without GH secrets —
+  durability scenarios skip gracefully when `UPSTASH_REDIS_REST_*`
+  is unset.
+- **DOC-01** — `CLAUDE.md` gains a new `## Durable bootstrap
+  pattern` section covering the rehydrate contract
+  (`withBootstrapRehydrate` HOC / inline `rehydrateBootstrapAsync()`
+  / `BOOTSTRAP_EXEMPT:` tag), the middleware seam
+  (`ensureBootstrapRehydratedFromUpstash` in `first-run-edge.ts`),
+  the fire-and-forget ban (contract-test enforced), and the Upstash
+  env-variant unification (`getUpstashCreds()`).
+- **DOC-02** — `README.md` Quick Start → Vercel section gains a
+  FAQ block covering `MYMCP_RECOVERY_RESET`, KV-not-set symptoms,
+  Upstash naming variants (both are recognized), and the
+  loop-back-to-`/welcome` three-cause checklist.
+- **DOC-03** — This CHANGELOG entry reorganized into per-phase
+  subsections (37b / 37 / 38 / 39 / 40) with a Fork-maintainer-notes
+  callout at the top. The 17-bug list below catalogs the session
+  bugs at summary level, each linked to its TROUBLESHOOTING case
+  study.
+- **DOC-04** — `docs/TROUBLESHOOTING.md` — new symptom-first index.
+  17 BUG case studies + 4 SEC findings + 5 FAQ entries, each
+  linking to the fix commit and the regression test.
+- **DOC-05** — `README.md` nav gains Troubleshooting + Hosting
+  entries; a new `## Documentation` section near the bottom lists
+  all top-level docs (TROUBLESHOOTING, HOSTING, CONNECTORS,
+  SECURITY-ADVISORIES, CLAUDE.md, CHANGELOG, CONTRIBUTING,
+  SECURITY).
+
+### The 17 session bugs (high level)
+
+Authoritative count walked from `git log cdd3979..4e6fa0c` (16
+session commits, one bundled 2 bugs = 17 total). Per-bug detail in
+[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) and
+`.planning/phases/40-test-coverage-docs/BUG-INVENTORY.md`.
+
+- BUG-01 (`4e6fa0c`) — Paste-token form rejected full MCP URL.
+- BUG-02 (`bc31b69`) — "Already initialized" screen had no paste-token form.
+- BUG-03 (`83b5a8e`) — Welcome handoff landed users on 401.
+- BUG-04 (`f818e01`) — Step-3 Test MCP stuck on durable-no-auto-magic deploys.
+- BUG-05 (`5273add`) — `MYMCP_RECOVERY_RESET=1` silently wiped tokens on every cold lambda.
+- BUG-06 (`1460841`) — Init silently succeeded while KV persist failed.
+- BUG-07 (`95f0df7`) — Fire-and-forget KV SET lost to Vercel reap.
+- BUG-08 (`95f0df7`) — Edge rehydrate spoke wrong REST dialect.
+- BUG-09 (`7f6ec80`) — Middleware didn't read `KV_REST_API_URL` alias.
+- BUG-10 (`7325aa8`) — Middleware blind to KV bootstrap on cold lambdas.
+- BUG-11 (`100e0b9`) — MCP transport handler never rehydrated.
+- BUG-12 (`ccdaa3d`) — Token minted BEFORE storage configured.
+- BUG-13 (`c339fc7`) — Storage step gave three equal-weight options.
+- BUG-14 (`ab47f8d`) — `/api/storage/status` 401'd during bootstrap.
+- BUG-15 (`748161d`) — `isClaimer` required in-memory match across cold lambdas.
+- BUG-16 (`0b5c737`) — Welcome step 2 stuck on "Detecting your storage…".
+- BUG-17 (`d747a1f`) — Showcase mode locked behind first-run gate.
 
 ## [0.1.0] - 2026-04-18 — Stabilization release
 
