@@ -454,3 +454,102 @@ describe("CORR-02 — FilesystemKV serialized-race (single-process only)", () =>
     expect(loser).not.toHaveProperty("token");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// CORR-03a — no-external-KV mode (race window is documented behavior)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// v0.12-welcome-hardening-ROADMAP.md Phase 46 Success Criterion 3:
+// when no external KV is configured, the handler still mints but
+// `flushBootstrapToKvIfAbsent()` returns {ok:true} without hitting
+// a KV backend — race arbitration is NOT available and the window
+// is accepted as dev-mode behavior.
+//
+// Two tests in this block:
+//   1. single POST — mints 200 normally without KV arbitration.
+//   2. concurrent POST — race window is documented acceptable; both
+//      may return 200 and the test asserts neither is 500.
+
+describe("CORR-03a — no-KV mode", () => {
+  beforeEach(() => {
+    saveEnv();
+    resetTestFilesystem();
+    // Force no-external-KV mode: delete ALL KV-related env + VERCEL.
+    // When isExternalKvAvailable() returns false, flushBootstrapToKvIfAbsent
+    // short-circuits at first-run.ts:388 and returns {ok:true} without
+    // ever touching getKVStore().
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    delete process.env.MYMCP_KV_PATH;
+    // Force VERCEL=1 so `isExternalKvAvailable()` returns false
+    // (src/core/first-run.ts:110-112: VERCEL=1 without Upstash = no
+    // external KV). That's the no-KV dev-mode path.
+    process.env.VERCEL = "1";
+    delete process.env.MYMCP_RECOVERY_RESET;
+    delete process.env.MCP_AUTH_TOKEN;
+    delete process.env.VERCEL_TOKEN;
+    delete process.env.VERCEL_PROJECT_ID;
+    process.env.MYMCP_TRUST_URL_HOST = "1";
+    process.env.MYMCP_ALLOW_EPHEMERAL_SECRET = "1";
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    restoreEnv();
+  });
+
+  it("single POST in no-KV mode mints and returns 200 without KV arbitration", async () => {
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "a".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { ok?: boolean; token?: string; autoMagic?: boolean };
+    expect(body.ok).toBe(true);
+    expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+    // autoMagic:false because VERCEL_TOKEN/VERCEL_PROJECT_ID are unset.
+    expect(body.autoMagic).toBe(false);
+  });
+
+  it("no-KV mode — concurrent-race protection window is documented dev-mode behavior", async () => {
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claimA = "a".repeat(64);
+    bootstrapToken(claimA);
+    const cookieA = await signClaimCookie(claimA);
+
+    const claimB = "b".repeat(64);
+    const cookieB = await signClaimCookie(claimB);
+
+    const [r1, r2] = await Promise.all([
+      POST(await buildInitRequest(cookieA)),
+      POST(await buildInitRequest(cookieB)),
+    ]);
+
+    // No-KV mode = no external arbiter. Both callers may return 200
+    // with DIFFERENT tokens — this is NOT a regression. It's the
+    // documented dev-mode tradeoff: single-process local dev runs on
+    // no-KV + in-memory activeBootstrap, and the mint-race window is
+    // accepted because the alternative (hard-require Upstash for
+    // local dev) would lock out the common case.
+    //
+    // Assertion shape: at least one 200 with a token; neither is 500.
+    // [200, 200] is the expected outcome for same-process concurrent
+    // minting under no-KV — both handlers observe the same in-memory
+    // activeBootstrap claimId after the first bootstrapToken() call
+    // and both get the idempotent-retry {ok:true} path.
+    expect(r1.status).not.toBe(500);
+    expect(r2.status).not.toBe(500);
+    const at200 = [r1.status, r2.status].filter((s) => s === 200).length;
+    expect(at200).toBeGreaterThanOrEqual(1);
+  });
+});
