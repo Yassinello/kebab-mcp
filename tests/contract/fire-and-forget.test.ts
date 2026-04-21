@@ -35,10 +35,13 @@ const FILE_ALLOWLIST = new Set<string>([
 ]);
 
 const MARKER = "fire-and-forget OK:";
-// Matches `void <identifier>(...` at the start of a line (with optional
-// leading whitespace). Requires the `(` to exclude `void nonce;` idiom.
-// Multi-line-block-start OK: only the first line of the call matters.
-const VOID_CALL_RE = /^\s*void\s+[a-zA-Z_$][\w$]*\s*\(/;
+// Matches `void <expr>(...` at the start of a line (with optional
+// leading whitespace). The <expr> may be a bare identifier
+// (`void foo(...)`) or a member access chain (`void obj.foo(...)`,
+// `void Promise.resolve(...)`). Requires the `(` to exclude the
+// TypeScript `void identifier;` "mark-used" idiom. Multi-line block
+// starts OK: only the first line of the call matters for this check.
+const VOID_CALL_RE = /^\s*void\s+[a-zA-Z_$][\w$.]*\s*\(/;
 
 function walk(dir: string, out: string[]): void {
   let entries: string[];
