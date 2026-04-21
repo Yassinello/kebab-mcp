@@ -17,11 +17,22 @@ const config: KnipConfig = {
     // Testing libs used in test files (excluded from entry points by knip's defaults)
     "@testing-library/jest-dom",
     "@testing-library/user-event",
+    // lint-staged is invoked by .husky/pre-commit — knip can't see shell-invoked binaries.
+    // Category B (false-positive): legitimate dev-dep used by Husky hooks.
+    "lint-staged",
   ],
   ignoreBinaries: [
     // tsx is invoked via npx in package.json scripts
     "tsx",
+    // wait-on is used in the Playwright e2e CI workflow (waits for the
+    // dev server to come up). Not in package.json scripts, invoked via npx.
+    "wait-on",
   ],
+  // Knip scans `.husky/pre-commit` as a plugin entry and can't trace the
+  // `npx lint-staged` shell invocation. Disable the husky plugin so the
+  // hook file is ignored entirely. `lint-staged` is kept in
+  // ignoreDependencies above so it isn't flagged as an unused dev-dep.
+  husky: false,
 };
 
 export default config;
