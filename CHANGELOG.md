@@ -2,6 +2,42 @@
 
 All notable changes to Kebab MCP.
 
+## [Unreleased] — v0.12 — Welcome hardening + v1.0 readiness
+
+### Phase 46 — Welcome correctness hardening (2026-04-21)
+
+Closes the HTTP-level concurrent mint-race coverage gap GPT review
+flagged on the initial v0.12 proposal. Five atomic test + docs
+commits, no behavioral changes to the 409 response shape.
+
+- **CORR-01**: Real concurrent HTTP race test — two `POST /api/welcome/init`
+  calls with the same claim cookie now assert exactly one `200+token` and
+  one `409 { error: "already_minted" }` (no token echo). Closes the
+  coverage gap the prior sequential-helper-only test left open
+  (`tests/integration/welcome-mint-race.test.ts` ran flushes SEQUENTIALLY
+  with DIFFERENT claim IDs; the new
+  `tests/integration/welcome-init-concurrency.test.ts` fires them through
+  `Promise.all` against a module-mocked Upstash backend enforcing atomic
+  NX semantics, plus a 5-iteration loop to catch scheduler artifacts).
+- **CORR-02**: Same race covered against `FilesystemKV` (single-process
+  serialization documented as the contract — cross-process arbitration
+  requires Upstash, flagged inline + in `docs/HOSTING.md`).
+- **CORR-03**: Mode matrix tests — no-external-KV dev mode (race window
+  documented as dev-only behavior), auto-magic Vercel env-write path
+  (Vercel REST client stubbed at the `@/core/env-store` module boundary
+  with 3 it() blocks covering happy / write-fail / redeploy-fail),
+  `MYMCP_RECOVERY_RESET=1` refusal (409 + no KV write on the bootstrap
+  key; `=0` baseline proves the strict `=== 1` equality gate).
+- **CORR-04**: JSDoc degraded-mode contract on `flushBootstrapToKvIfAbsent()`
+  (per-backend race-arbitration guarantees + `@see` anchor) + 6-line
+  inline comment in `app/api/welcome/init/route.ts` above the flush call.
+- **CORR-05**: `docs/HOSTING.md` — new `## Degraded-mode contract` section
+  with 5-row host × backend race-protection matrix (Vercel+Upstash,
+  Vercel+no-KV, Docker+FilesystemKV single/multi-process, Node+MemoryKV).
+- Test count: 801 → 811 (+10 new integration tests across 5 describe
+  blocks); `npm run test:integration` includes the new file,
+  `npm test` explicitly excludes it via `vitest.config.ts`.
+
 ## [Unreleased] — v0.11 — Multi-tenant real
 
 ### Phase 45 — Welcome refactor + QA polish (UX-01..04 + QA-01..02)
