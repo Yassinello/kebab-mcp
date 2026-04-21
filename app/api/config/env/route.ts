@@ -10,6 +10,7 @@ import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
 import type { PipelineContext } from "@/core/pipeline";
+import { getCurrentTenantId } from "@/core/request-context";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -32,14 +33,24 @@ function splitVars(vars: Record<string, string>): {
   return { kvVars, envVars };
 }
 
-async function persistKvSettings(kvVars: Record<string, string>): Promise<void> {
+async function persistKvSettings(
+  kvVars: Record<string, string>,
+  tenantId?: string | null
+): Promise<void> {
   if (Object.keys(kvVars).length === 0) return;
-  await saveInstanceConfig({
-    displayName: kvVars.MYMCP_DISPLAY_NAME,
-    timezone: kvVars.MYMCP_TIMEZONE,
-    locale: kvVars.MYMCP_LOCALE,
-    contextPath: kvVars.MYMCP_CONTEXT_PATH,
-  });
+  // Phase 48 / FACADE-04: per-tenant settings write-path.
+  // When the admin is tenant-scoped (x-mymcp-tenant header present),
+  // writes land in the tenant-scoped KV namespace. Root-scope writes
+  // go to global (backwards compat).
+  await saveInstanceConfig(
+    {
+      displayName: kvVars.MYMCP_DISPLAY_NAME,
+      timezone: kvVars.MYMCP_TIMEZONE,
+      locale: kvVars.MYMCP_LOCALE,
+      contextPath: kvVars.MYMCP_CONTEXT_PATH,
+    },
+    tenantId
+  );
 }
 
 /**
@@ -60,7 +71,7 @@ async function getHandler(ctx: PipelineContext) {
     // Overlay KV-backed settings so the dashboard always sees the
     // authoritative value regardless of whether env was the last writer.
     const { getInstanceConfigAsync } = await import("@/core/config");
-    const cfg = await getInstanceConfigAsync();
+    const cfg = await getInstanceConfigAsync(getCurrentTenantId());
     out.MYMCP_DISPLAY_NAME = cfg.displayName;
     out.MYMCP_TIMEZONE = cfg.timezone;
     out.MYMCP_LOCALE = cfg.locale;
@@ -124,7 +135,7 @@ async function putHandler(ctx: PipelineContext) {
         { status: 503 }
       );
     }
-    await persistKvSettings(kvVars);
+    await persistKvSettings(kvVars, getCurrentTenantId());
 
     const kvWritten = Object.keys(kvVars).length;
     let result: { written: number; note?: string } = { written: 0 };

@@ -41,11 +41,20 @@ export function SettingsTab({
   vaultEnabled,
   baseUrl,
   hasAuthToken,
+  scopeBadge,
 }: {
   config: InstanceConfig;
   vaultEnabled: boolean;
   baseUrl: string;
   hasAuthToken: boolean;
+  /**
+   * Phase 48 / FACADE-04: identifies whether the operator is viewing
+   * global settings (`null`) or a specific tenant's override.
+   * Shown as a small read-only badge above the user-field list so the
+   * operator understands where writes will land. No UX beyond the badge
+   * — the write-direction itself is server-side (x-mymcp-tenant header).
+   */
+  scopeBadge?: { mode: "global" | "tenant"; tenantId?: string } | null;
 }) {
   // Subtab state is reflected in the URL (?tab=settings&sub=user|mcp) so
   // deep-linking and back/forward navigation work. Default to "user".
@@ -129,6 +138,20 @@ export function SettingsTab({
 
       {tab === "user" && (
         <>
+          {scopeBadge && (
+            <div className="mb-3 flex items-center gap-2 text-xs">
+              <span className="text-text-dim">Scope:</span>
+              {scopeBadge.mode === "global" ? (
+                <span className="font-mono bg-bg-muted border border-border rounded px-2 py-0.5">
+                  Global (root)
+                </span>
+              ) : (
+                <span className="font-mono bg-bg-muted border border-border rounded px-2 py-0.5">
+                  Tenant {scopeBadge.tenantId ?? "?"} (override)
+                </span>
+              )}
+            </div>
+          )}
           <div className="border border-border rounded-lg p-5 space-y-5">
             {USER_FIELDS.map((f) => (
               <div key={f.key}>

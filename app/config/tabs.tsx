@@ -157,12 +157,15 @@ export function ConfigTabs({
       break;
     case "settings":
       section = "Settings";
+      // Phase 48 / FACADE-04: scope badge — tenant-scoped admins see
+      // their override namespace, root admins see the global config.
       tab = (
         <SettingsTab
           config={config}
           vaultEnabled={vaultEnabled}
           baseUrl={baseUrl}
           hasAuthToken={hasAuthToken}
+          scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
         />
       );
       break;

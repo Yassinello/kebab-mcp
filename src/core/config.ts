@@ -168,11 +168,19 @@ export async function getInstanceConfigAsync(tenantId?: string | null): Promise<
 }
 
 /**
- * Persist one or more settings to KVStore. Clears the sync cache so the
- * next read picks up the new value.
+ * Persist one or more settings to KVStore.
+ *
+ * Phase 48 / FACADE-04: when `tenantId` is provided, writes go to the
+ * tenant-scoped KV namespace (`tenant:<id>:settings:*`). Otherwise —
+ * global KV (backwards compatible with pre-Phase-48 callers). This is
+ * the write-side counterpart to the read-side per-tenant path in
+ * `getInstanceConfigAsync(tenantId)` (already Phase 42).
  */
-export async function saveInstanceConfig(patch: Partial<InstanceConfig>): Promise<void> {
-  const kv = getKVStore();
+export async function saveInstanceConfig(
+  patch: Partial<InstanceConfig>,
+  tenantId?: string | null
+): Promise<void> {
+  const kv = tenantId ? getTenantKVStore(tenantId) : getKVStore();
   const writes: Array<Promise<void>> = [];
   if (patch.displayName !== undefined) writes.push(kv.set(KV_KEYS.displayName, patch.displayName));
   if (patch.timezone !== undefined) writes.push(kv.set(KV_KEYS.timezone, patch.timezone));
