@@ -9,7 +9,7 @@ import type { PipelineContext } from "@/core/pipeline";
 const logsRouteLog = getLogger("API:config/logs");
 
 /**
- * GET /api/config/logs?count=100&filter=all|errors|success
+ * GET /api/config/logs?count=100&filter=all|errors|success&scope=all&tenant=<id>
  *
  * Returns recent tool logs. When `MYMCP_DURABLE_LOGS=true` the payload
  * is sourced from the pluggable LogStore (O1) — Upstash list in prod,
@@ -17,16 +17,21 @@ const logsRouteLog = getLogger("API:config/logs");
  * Upstash. Otherwise falls back to the in-process ring buffer.
  *
  * **Phase 42 (TEN-02) — tenant-scoped durable logs:**
- * `getLogStore()` now returns a per-tenant instance; Upstash reads
- * land on `tenant:<id>:mymcp:logs`. The pre-v0.11 application-code
- * tokenId filter in the durable branch is REMOVED — namespace
- * isolation handles it at the storage layer.
+ * `getLogStore()` returns a per-tenant instance; Upstash reads
+ * land on `tenant:<id>:mymcp:logs`. Namespace isolation at the
+ * storage layer — no application-code filter.
  *
- * **Carry-over:** the in-memory ring buffer branch (logging.ts
- * `recentLogs`) is NOT yet per-tenant (short-lived; survives within
- * a single warm lambda only). The tokenId application-code filter is
- * retained in that branch until logging.ts is refactored. Tracked in
- * Phase 42 FOLLOW-UP.
+ * **Phase 48 (ISO-01 / ISO-02) — tenant-scoped in-memory buffer:**
+ * The pre-Phase-48 ring buffer was a single operator-wide array; the
+ * route compensated with a `tokenId` application-code filter. That
+ * filter is REMOVED — the buffer is now `Map<tenantId, ToolLog[]>`
+ * (see src/core/logging.ts). Query semantics:
+ *   - Default: reads the caller's tenant bucket via
+ *     getRecentLogs(n, {tenantId}) — privacy by default.
+ *   - `?scope=all` under a ROOT admin (no tenant header) returns the
+ *     union across all tenants. Silently downgraded for tenant-scoped
+ *     callers (privacy guard).
+ *   - `?tenant=<id>` under a ROOT admin: explicit bucket select.
  *
  * TECH-07: unified with mcp-logs tool — both now call the same
  * `getDurableLogs()` helper which reads from `getLogStore().recent()`
@@ -38,8 +43,8 @@ async function getHandler(ctx: PipelineContext) {
   const request = ctx.request;
 
   // Validate the x-mymcp-tenant header (400 on malformed). Value is
-  // used for the in-memory ring buffer fallback filter; the durable
-  // branch relies on namespace isolation via getLogStore() → per-tenant.
+  // used for the in-memory ring buffer; the durable branch relies on
+  // namespace isolation via getLogStore() → per-tenant.
   let tenantId: string | null = null;
   try {
     tenantId = getTenantId(request);
@@ -53,6 +58,15 @@ async function getHandler(ctx: PipelineContext) {
   const count = parseInt(url.searchParams.get("count") || "100", 10);
   const n = Number.isFinite(count) ? count : 100;
   const filter = (url.searchParams.get("filter") as "all" | "errors" | "success") || "all";
+
+  // ISO-02: scope/tenant query args. Privacy guard — a tenant-scoped
+  // caller cannot elevate to scope=all or inspect another tenant's
+  // bucket via ?tenant=<id>.
+  const scopeQuery = url.searchParams.get("scope");
+  const tenantQuery = url.searchParams.get("tenant");
+  const isRootCaller = tenantId === null;
+  const scope: "all" | undefined = scopeQuery === "all" && isRootCaller ? "all" : undefined;
+  const explicitTenant = isRootCaller && tenantQuery ? tenantQuery : null;
 
   if (process.env.MYMCP_DURABLE_LOGS === "true") {
     try {
@@ -70,17 +84,15 @@ async function getHandler(ctx: PipelineContext) {
     }
   }
 
-  // NOTE: in-process ring buffer (getRecentLogs) is not yet per-tenant —
-  // see Phase 42 FOLLOW-UP. Retain the application-code tokenId filter
-  // in this branch until the ring buffer is refactored.
-  let logs = getRecentLogs(n);
+  // Phase 48 / ISO-02: in-memory branch reads from the per-tenant
+  // ring buffer directly — no application-code tokenId filter needed.
+  let logs = scope
+    ? getRecentLogs(n, { scope: "all" })
+    : getRecentLogs(n, { tenantId: explicitTenant ?? tenantId });
   if (filter === "errors") {
     logs = logs.filter((l) => l.status === "error");
   } else if (filter === "success") {
     logs = logs.filter((l) => l.status === "success");
-  }
-  if (tenantId) {
-    logs = logs.filter((l) => l.tokenId === tenantId);
   }
   return NextResponse.json({ ok: true, logs, source: "memory" });
 }

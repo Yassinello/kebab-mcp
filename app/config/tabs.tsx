@@ -146,7 +146,10 @@ export function ConfigTabs({
       break;
     case "logs":
       section = "Logs";
-      tab = <LogsTab initialLogs={logs} />;
+      // Phase 48 / ISO-02: tenant selector surfaces only when the admin
+      // has no tenant header (root scope). A scoped admin sees only
+      // their own buffer — privacy guard at the route layer, too.
+      tab = <LogsTab initialLogs={logs} initialIsRootScope={!tenantId} />;
       break;
     case "documentation":
       section = "Documentation";

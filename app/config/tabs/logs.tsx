@@ -3,25 +3,59 @@
 import { useState, useEffect } from "react";
 import type { ToolLog } from "@/core/logging";
 
-export function LogsTab({ initialLogs }: { initialLogs: ToolLog[] }) {
+type Scope = "current" | "all";
+
+/**
+ * Phase 48 (ISO-02) — tenant selector.
+ *
+ * When the current admin has root scope (no `x-mymcp-tenant` cookie/header),
+ * the dropdown surfaces "Current tenant" + "All tenants (root)" so the
+ * operator can switch between the per-tenant buffer and the flattened union.
+ *
+ * For tenant-scoped admins, no selector renders — privacy guard at the
+ * route layer (app/api/config/logs/route.ts) already downgrades any
+ * `?scope=all` query from a scoped caller.
+ *
+ * `initialIsRootScope` is passed from the server component that renders
+ * the tab (reads cookies / header on the server side).
+ */
+export function LogsTab({
+  initialLogs,
+  initialIsRootScope = false,
+}: {
+  initialLogs: ToolLog[];
+  initialIsRootScope?: boolean;
+}) {
   const [logs, setLogs] = useState<ToolLog[]>(initialLogs);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [scope, setScope] = useState<Scope>("current");
 
-  // Poll for fresh logs every 5s
+  const showSelector = initialIsRootScope;
+
+  // Poll for fresh logs every 5s; re-fetch on scope change.
   useEffect(() => {
-    const id = setInterval(async () => {
+    const qs = scope === "all" ? "?scope=all" : "";
+    const url = `/api/config/logs${qs}`;
+    let cancelled = false;
+    async function fetchLogs() {
       try {
-        const res = await fetch("/api/config/logs", { credentials: "include" });
+        const res = await fetch(url, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
-          if (data.logs) setLogs(data.logs);
+          if (!cancelled && data.logs) setLogs(data.logs);
         }
       } catch {
         /* ignore */
       }
-    }, 5000);
-    return () => clearInterval(id);
-  }, []);
+    }
+    // Immediate refresh on scope switch
+    fetchLogs();
+    const id = setInterval(fetchLogs, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [scope]);
 
   const reversed = [...logs].reverse();
 
@@ -31,7 +65,23 @@ export function LogsTab({ initialLogs }: { initialLogs: ToolLog[] }) {
         <p className="text-sm text-text-dim">
           Last {logs.length} tool invocations (in-memory, ephemeral).
         </p>
-        <p className="text-[11px] text-text-muted">Auto-refresh every 5s</p>
+        <div className="flex items-center gap-3">
+          {showSelector && (
+            <label className="flex items-center gap-1 text-xs text-text-muted">
+              <span>Scope:</span>
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as Scope)}
+                className="bg-bg-muted border border-border rounded px-2 py-0.5 text-xs font-mono"
+                aria-label="Log scope"
+              >
+                <option value="current">Current tenant</option>
+                <option value="all">All tenants (root)</option>
+              </select>
+            </label>
+          )}
+          <p className="text-[11px] text-text-muted">Auto-refresh every 5s</p>
+        </div>
       </div>
       <div className="border border-border rounded-lg divide-y divide-border">
         {reversed.length === 0 && (
