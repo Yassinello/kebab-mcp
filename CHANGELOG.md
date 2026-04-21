@@ -4,6 +4,141 @@ All notable changes to Kebab MCP.
 
 ## [Unreleased] — v0.12 — Welcome hardening + v1.0 readiness
 
+### Phase 48 — In-memory tenant isolation + config facade (2026-04-22)
+
+**Goal:** close the last two tenant-isolation + global-state gaps carried from
+Phases 42 and v0.11 — the `src/core/logging.ts` in-memory ring buffer (still
+operator-wide post-TEN-02) and 166 direct `process.env.X` reads scattered across
+`src/` + `app/` that defeat the v0.10 request-context credential seam.
+
+**Requirements closed:** ISO-01, ISO-02, ISO-03, FACADE-01, FACADE-02,
+FACADE-03, FACADE-04. Closes Phase 42 FOLLOW-UP §1 (in-process ring buffer
+tenant scoping) + POST-V0.11-AUDIT §A.3 NIT (redundant tokenId filter).
+
+**Commits (10, atomic, each green on main):**
+
+- `3c3cd39` chore(48): evidence — process.env read classification + logging ringbuffer callsites
+- `a2a25a1` refactor(logging): ring buffer Map<tenantId, ToolLog[]> with LRU (ISO-01, ISO-03)
+- `2e629fd` feat(config-logs): tenant selector + scoped query (ISO-02)
+- `38ab1fd` feat(config-facade): getConfig<T> + bootEnv freeze (FACADE-01)
+- `c1663ef` refactor(48): migrate src/core process.env reads to facade (FACADE-02a)
+- `988650a` refactor(48): migrate connector libs process.env reads (FACADE-02b)
+- `848e136` refactor(48): migrate route handlers process.env reads (FACADE-02c)
+- `<ci eslint>` ci(eslint): kebab/no-direct-process-env custom rule + allowlist contract (FACADE-03)
+- `71578a0` feat(config-facade): per-tenant setting overrides (FACADE-04)
+- `docs(48)` — this entry
+
+**ISO-01 — per-tenant ring buffer** (`src/core/logging.ts`):
+
+- Replaced single `const recentLogs: ToolLog[] = []` (operator-wide, cap 100)
+  with `Map<tenantId | "__root__", ToolLog[]>`. Each bucket LRU-trims
+  independently so one noisy tenant cannot evict another's entries.
+- Cap default: 100 per-tenant. Override via `KEBAB_LOG_BUFFER_PER_TENANT` (new
+  env var; `MYMCP_*` alias is Phase 50 rebrand work).
+- `getRecentLogs(n, { tenantId?, scope? })` — optional second arg. Legacy
+  single-arg callers unchanged (read current-tenant bucket or `__root__`).
+  `scope: 'all'` returns chronological union (root-operator path).
+- `getToolStats()` aggregates across the union — admin-metrics tab stays
+  operator-wide (byToken field preserved).
+
+**ISO-02 — /config → Logs tenant selector** (`app/api/config/logs/route.ts`,
+`app/config/tabs/logs.tsx`):
+
+- Route drops the obsolete application-code `tokenId` filter in the
+  in-memory branch (redundant post-ISO-01). Adds `?scope=all` and
+  `?tenant=<id>` query args (privacy guard: tenant-scoped callers cannot
+  elevate to scope=all). Durable branch already tenant-scoped via Phase 42.
+- LogsTab surfaces a "Current tenant / All tenants (root)" selector only
+  when the admin has root scope (no x-mymcp-tenant header).
+
+**ISO-03 — test coverage** (`tests/core/logging-tenant-isolation.test.ts`):
+
+- 7 tests (alpha/beta isolation, root union via scope=all, per-tenant LRU at
+  the cap, `__root__` sentinel, env override, aggregate stats,
+  `__resetRingBufferForTests`).
+
+**FACADE-01 — single resolution point** (`src/core/config-facade.ts`):
+
+- New ~230 LOC module with `getConfig(key)`, `getRequiredConfig(key)`,
+  `getConfigInt(key, fallback)`, `getConfigBool(key, fallback)`,
+  `getConfigList(key, fallback)`, `getTenantSetting(envKey, kvKey, tenantId?)`.
+- Resolution order: request-context (when active) → RUNTIME_READ_THROUGH
+  (VERCEL_*, NODE_ENV) → live process.env. SEC-02 tenant isolation is
+  carried by step 1 (`runWithCredentials`), not by the bootEnv snapshot
+  — which is retained as advisory (`__getBootEnvSnapshotForTests`).
+- `McpConfigError` added to `src/core/errors.ts` for missing-required throws.
+- 8 unit tests in `tests/core/config-facade.test.ts`.
+
+**FACADE-02 — migration** (3 atomic commits, ~170 process.env reads → facade):
+
+- Commit A (src/core/**): ~30 reads in auth.ts, config.ts, logging.ts,
+  rate-limit.ts, pipeline/auth-step.ts, pipeline/rate-limit-step.ts,
+  request-utils.ts, env-safety.ts, credential-store.ts, log-store.ts.
+- Commit B (src/connectors/**): ~35 reads across all 13 connector libs +
+  manifests + tools (vault/lib/github.ts carried a local `getConfig` name
+  collision — resolved via `import { getConfig as readConfig }`).
+- Commit C (app/api/** + app/**/*.tsx): ~35 reads across route handlers +
+  RSC server components.
+- Residual allowlist (`ALLOWED_DIRECT_ENV_READS`) = 10 entries (all boot-path,
+  all with ≥20-char reasons): config-facade.ts (owns bootEnv), env-store.ts,
+  first-run.ts, first-run-edge.ts, kv-store.ts, log-store.ts,
+  request-context.ts, signing-secret.ts, storage-mode.ts, tracing.ts,
+  upstash-env.ts (DUR-06 single-reader).
+
+**FACADE-03 — lint + contract** (`.eslint/rules/no-direct-process-env.mjs`,
+`tests/contract/allowed-direct-env-reads.test.ts`,
+`tests/eslint/no-direct-process-env.test.mjs`):
+
+- Custom flat-config ESLint rule `kebab/no-direct-process-env` at error
+  severity. Matches both `process.env.X` and computed `process.env[key]`;
+  excludes AssignmentExpression LHS (SEC-02 owns assignments).
+- `eslint.config.mjs` override block mirrors ALLOWED_DIRECT_ENV_READS.
+- Contract test walks src/ + app/ with a regex fallback (catches IDE-silenced
+  rule violations). 5 assertions: file-allowlist match, sorted, ≥20-char
+  reasons, no duplicates, non-empty vars.
+- RuleTester test (run via `node --test`): 3 valid + 3 invalid cases.
+
+**FACADE-04 — per-tenant settings** (`src/core/config.ts`,
+`app/api/config/env/route.ts`, `app/config/tabs/settings.tsx`):
+
+- `saveInstanceConfig(patch, tenantId?)` — new second arg routes writes to
+  tenant-scoped KV via `getTenantKVStore(tenantId)`. Null-tenant writes stay
+  global (backwards compatible).
+- `app/api/config/env` PUT handler threads `getCurrentTenantId()` into the
+  save path. GET handler reads via `getInstanceConfigAsync(tenantId)` so the
+  dashboard surfaces the per-tenant override.
+- Settings tab renders a scope badge: `Scope: Global (root)` or
+  `Scope: Tenant alpha (override)`.
+- 5 tests in `tests/core/config-facade-per-tenant.test.ts` covering
+  `getTenantSetting` resolution, read-side `getInstanceConfigAsync(tenantId)`
+  isolation, and write-side `saveInstanceConfig(patch, tenantId)` routing.
+
+**Operator notes:**
+
+- `KEBAB_LOG_BUFFER_PER_TENANT` (new env var; default 100). No `MYMCP_*`
+  predecessor — Phase 50 adds the `KEBAB_*` ↔ `MYMCP_*` alias resolution.
+- Per-tenant KV settings: existing `MYMCP_TIMEZONE` / `MYMCP_LOCALE` /
+  `MYMCP_DISPLAY_NAME` / `MYMCP_CONTEXT_PATH` env vars unchanged; adding a
+  `tenant:alpha:settings:timezone` KV entry under `x-mymcp-tenant: alpha`
+  now takes precedence for that tenant. Global env/KV values remain the
+  fallback for any tenant without an override.
+- Ring buffer cap semantics changed: pre-Phase-48 the buffer was operator-wide
+  (100 total). Post-Phase-48 it is per-tenant (100 per bucket, no global cap).
+  On warm lambdas serving many tenants, memory usage scales with tenant count
+  — tune `KEBAB_LOG_BUFFER_PER_TENANT` downward if this is a concern.
+
+**Fork-maintainer notes:**
+
+- The new `kebab/no-direct-process-env` rule will flag any direct
+  `process.env.X` read introduced post-v0.11. Migration: swap to
+  `getConfig('X')` from `@/core/config-facade`. Boot-path reads that
+  genuinely cannot migrate (module-load ordering, circular dep) go on
+  `ALLOWED_DIRECT_ENV_READS` with a ≥20-char reason + an override block
+  entry in `eslint.config.mjs`.
+- Test fixtures that `vi.mock('@/core/request-context')` must now also export
+  `getCredential` + `runWithCredentials` + `requestContext` (the facade
+  imports these). Example pass-through: `getCredential: (k) => process.env[k]`.
+
 ### Phase 47 — WelcomeShell runtime wiring (2026-04-22)
 
 **Goal:** wire the 923 LOC of dormant step components + hooks + reducer
