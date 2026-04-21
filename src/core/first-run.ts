@@ -19,9 +19,18 @@
  *    process.env.MCP_AUTH_TOKEN is set "for real" and the bootstrap state is
  *    cleared.
  *
- * This module is the single source of truth for first-run state. It is safe
- * to import from anywhere — it is side-effect free at module-load apart from
- * the rehydrate attempt, which silently swallows errors.
+ * This module is the single source of truth for first-run state.
+ *
+ * v0.11 Phase 41 (T20 fold-in): rehydrate is no longer triggered at
+ * module load. The previous `rehydrateBootstrapFromTmp();` line at the
+ * bottom of this file made test order depend on a disk-I/O side effect
+ * (ARCH-AUDIT §3 / POST-V0.10-AUDIT §B.7). The composable request
+ * pipeline's `rehydrateStep` (src/core/pipeline/rehydrate-step.ts) is
+ * now the single deterministic entry point — every request-handling
+ * path rehydrates exactly once at the pipeline boundary via
+ * `rehydrateBootstrapAsync()`, and `withBootstrapRehydrate` remains a
+ * valid backwards-compat wrapper for routes that haven't migrated.
+ * This module is therefore SIDE-EFFECT FREE at module load.
  */
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -605,5 +614,8 @@ export const __internals = {
 // Re-export for tests that need to assert the 503 path.
 export { SigningSecretUnavailableError };
 
-// Side effect: try to hydrate on first import (cold-start safe).
-rehydrateBootstrapFromTmp();
+// v0.11 Phase 41 T20 fold-in: the module-load `rehydrateBootstrapFromTmp();`
+// side effect was removed. The composable request pipeline's
+// `rehydrateStep` (src/core/pipeline/rehydrate-step.ts) is the single
+// deterministic entry point. Tests that need rehydrate must call it
+// explicitly (e.g., via `rehydrateBootstrapAsync()` in setup).
