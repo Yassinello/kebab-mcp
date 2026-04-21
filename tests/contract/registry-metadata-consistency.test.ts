@@ -32,13 +32,17 @@
 import { describe, it, expect } from "vitest";
 import { ALL_CONNECTOR_LOADERS } from "@/core/registry";
 
+// This suite intentionally awaits every connector's `loader()` — the only
+// test we have that loads all 14 manifests in one pass. On a cold vitest
+// worker that means ~13s of tsx transform + module init. The 15s default
+// testTimeout can flake under parallel load; 45s gives headroom.
 describe("registry loader metadata vs loaded manifest consistency", () => {
   it("every loader entry's id matches the loaded manifest.id", async () => {
     for (const entry of ALL_CONNECTOR_LOADERS) {
       const manifest = await entry.loader();
       expect(manifest.id, `loader entry "${entry.id}"`).toBe(entry.id);
     }
-  });
+  }, 45_000);
 
   it("every loader entry's requiredEnvVars matches the loaded manifest.requiredEnvVars", async () => {
     for (const entry of ALL_CONNECTOR_LOADERS) {
@@ -48,7 +52,7 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
         `requiredEnvVars mismatch for "${entry.id}"`
       ).toEqual(entry.requiredEnvVars.slice().sort());
     }
-  });
+  }, 45_000);
 
   it("every loader entry's toolCount matches the loaded manifest.tools.length", async () => {
     // Skills is user-defined: the sync tool-list reads from disk/KV and
@@ -65,7 +69,7 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
         `toolCount mismatch for "${entry.id}" — static says ${entry.toolCount}, manifest reports ${manifest.tools.length}`
       ).toBe(entry.toolCount);
     }
-  });
+  }, 45_000);
 
   it("loader entries' labels are non-empty + stable across loads (cache honored)", async () => {
     for (const entry of ALL_CONNECTOR_LOADERS) {
@@ -77,5 +81,5 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
       // Worst case (re-import under bundler): semantic equality still holds.
       expect(m1.tools.length).toBe(m2.tools.length);
     }
-  });
+  }, 45_000);
 });
