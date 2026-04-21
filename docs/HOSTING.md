@@ -161,6 +161,52 @@ a horizontally scaled one:
 
 ---
 
+## Degraded-mode contract
+
+This matrix documents which deployment combinations protect the
+concurrent first-run claim race (two browsers hitting
+`POST /api/welcome/init` with the same claim cookie) and which
+accept a race window as documented dev-mode behavior.
+
+| Host     | KV backend             | Race-protection guarantee                             | Status                        |
+|----------|------------------------|-------------------------------------------------------|-------------------------------|
+| Vercel   | Upstash                | Atomic `SET key value NX EX` — cross-lambda safe      | Fully protected (production)  |
+| Vercel   | no external KV         | Unprotected — each lambda has its own memory cache    | Not recommended for prod      |
+| Docker   | FilesystemKV (1 proc)  | Write-queue serialization inside a single process     | Protected in-process only     |
+| Docker   | FilesystemKV (N procs) | Cross-process race possible — FilesystemKV not atomic | Not protected — use Upstash   |
+| Node dev | MemoryKV               | Map.has guard inside one process                      | Dev only — single-process     |
+
+### What "protected" means
+
+The winner minting call returns `200 { ok: true, token }`.
+The loser returns `409 { error: "already_minted" }` with no token
+in the body. The loser re-enters via the already-initialized
+paste-token flow.
+
+### What "unprotected" means
+
+Both concurrent callers may return `200` with different tokens.
+The last write wins; one browser holds a token that is NOT the
+one persisted. Acceptable for single-user local dev; NOT
+acceptable for multi-user or production.
+
+### How to upgrade
+
+- Vercel + Upstash: set `UPSTASH_REDIS_REST_URL` +
+  `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL` +
+  `KV_REST_API_TOKEN`) in Vercel env vars.
+- Docker multi-process: point the container at an external Upstash
+  (or Redis with a compatible REST gateway) via the same env vars.
+  FilesystemKV is for single-process deployments only.
+
+### Related code paths
+
+- Helper: `src/core/first-run.ts` → `flushBootstrapToKvIfAbsent()`
+- Route: `app/api/welcome/init/route.ts` 409 "already_minted" branch
+- Tests: `tests/integration/welcome-init-concurrency.test.ts`
+
+---
+
 *See also:*
 *- `docs/examples/docker-compose.single.yml` — 1-replica filesystem starter.*
 *- `docs/examples/docker-compose.multi.yml` — N-replica Upstash + LB.*
