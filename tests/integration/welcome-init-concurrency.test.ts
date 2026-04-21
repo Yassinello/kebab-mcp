@@ -370,3 +370,87 @@ describe("CORR-01 — two concurrent POST /api/welcome/init (Upstash-atomic)", (
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// CORR-02 — FilesystemKV serialized-race (single-process only)
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("CORR-02 — FilesystemKV serialized-race (single-process only)", () => {
+  // FilesystemKV serializes writes via an internal queue within a SINGLE
+  // Node process. This covers the in-process concurrent-request ordering
+  // guarantee (two handlers on the same lambda / node worker). It does
+  // NOT cover cross-PROCESS races — for those, production MUST use
+  // Upstash (see docs/HOSTING.md#degraded-mode-contract).
+  //
+  // No @/core/kv-store mock here — the real FilesystemKV backend is the
+  // subject under test. MYMCP_KV_PATH points at an isolated tmpdir so
+  // each run starts with an empty JSON map.
+
+  beforeEach(async () => {
+    saveEnv();
+    resetTestFilesystem();
+    // Force FilesystemKV selection: delete all Upstash creds, keep
+    // MYMCP_KV_PATH. Off-Vercel FilesystemKV treats
+    // isExternalKvAvailable() === true because VERCEL !== "1".
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    delete process.env.VERCEL;
+    delete process.env.MYMCP_RECOVERY_RESET;
+    delete process.env.MCP_AUTH_TOKEN;
+    delete process.env.VERCEL_TOKEN;
+    delete process.env.VERCEL_PROJECT_ID;
+    process.env.MYMCP_KV_PATH = _TEST_KV_PATH;
+    process.env.MYMCP_TRUST_URL_HOST = "1";
+    process.env.MYMCP_ALLOW_EPHEMERAL_SECRET = "1";
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    restoreEnv();
+  });
+
+  it("two concurrent POSTs under FilesystemKV — exactly one 200 + one 409 (in-process serialization)", async () => {
+    await resetRouteState();
+
+    // Seed the FilesystemKV with a ghost bootstrap — same rationale as
+    // CORR-01. The in-process write queue serializes the concurrent
+    // setIfNotExists calls; both will observe the ghost's existence
+    // on read, and the route's idempotent-retry / genuine-race
+    // split determines which handler returns 200 vs 409.
+    const { getKVStore } = await import("@/core/kv-store");
+    const kv = getKVStore();
+    const ghost = JSON.stringify({
+      claimId: "9".repeat(64),
+      token: "f".repeat(64),
+      createdAt: Date.now() - 1000,
+    });
+    await kv.set("mymcp:firstrun:bootstrap", ghost);
+
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claimA = "a".repeat(64);
+    bootstrapToken(claimA);
+    const cookieA = await signClaimCookie(claimA);
+
+    const claimB = "b".repeat(64);
+    const cookieB = await signClaimCookie(claimB);
+
+    const [r1, r2] = await Promise.all([
+      POST(await buildInitRequest(cookieA)),
+      POST(await buildInitRequest(cookieB)),
+    ]);
+    const statuses = [r1.status, r2.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const [b1, b2] = await Promise.all([r1.json(), r2.json()]);
+    const winner = r1.status === 200 ? b1 : b2;
+    const loser = r1.status === 409 ? b1 : b2;
+    expect(winner.ok).toBe(true);
+    expect(winner.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(loser).toEqual({ error: "already_minted" });
+    expect(loser).not.toHaveProperty("token");
+  });
+});
