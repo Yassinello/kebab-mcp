@@ -66,7 +66,7 @@ function toPosix(p: string): string {
   return p.split(sep).join("/");
 }
 
-describe.skip("upstash-env-single-reader contract (DUR-06)", () => {
+describe("upstash-env-single-reader contract (DUR-06)", () => {
   it("only src/core/upstash-env.ts reads UPSTASH_REDIS_REST_* / KV_REST_API_* from process.env", () => {
     const projectRoot = join(__dirname, "..", "..");
     const files: string[] = [];

@@ -34,6 +34,7 @@ import {
   rotateSigningSecret,
   SigningSecretUnavailableError,
 } from "./signing-secret";
+import { hasUpstashCreds } from "./upstash-env";
 // Note: the v0.10 tenant-prefix migration trigger lives in
 // `src/core/with-bootstrap-rehydrate.ts` (DUR-02). See the docstring on
 // `rehydrateBootstrapAsync` below for the rationale.
@@ -86,7 +87,7 @@ export function getBootstrapAuthToken(): string | null {
  * Off-Vercel we mirror to ./data/kv.json (genuinely durable + shared).
  */
 function isExternalKvAvailable(): boolean {
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) return true;
+  if (hasUpstashCreds()) return true;
   if (process.env.VERCEL !== "1") return true;
   return false;
 }

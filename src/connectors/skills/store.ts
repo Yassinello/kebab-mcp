@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { kvScanAll } from "@/core/kv-store";
 import { getContextKVStore } from "@/core/request-context";
+import { hasUpstashCreds } from "@/core/upstash-env";
 
 /**
  * Skills store — persists user-authored skills.
@@ -178,8 +179,7 @@ export async function listSkills(): Promise<Skill[]> {
 export function listSkillsSync(): Skill[] {
   const legacy = getLegacySkillsPath();
   const filePath =
-    legacy ??
-    (process.env.UPSTASH_REDIS_REST_URL ? null : path.resolve(process.cwd(), "data", "kv.json"));
+    legacy ?? (hasUpstashCreds() ? null : path.resolve(process.cwd(), "data", "kv.json"));
   if (!filePath) return [];
   try {
     if (!existsSync(filePath)) return [];

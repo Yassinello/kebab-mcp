@@ -24,6 +24,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getKVStore } from "./kv-store";
+import { hasUpstashCreds } from "./upstash-env";
 
 export const SIGNING_SECRET_KV_KEY = "mymcp:firstrun:signing-secret";
 const TMP_SEED_PATH = join(tmpdir(), "mymcp-signing-seed");
@@ -50,15 +51,12 @@ export class SigningSecretUnavailableError extends Error {
 
 let cache: string | null = null;
 
-/** True when Upstash REST credentials (either naming variant) are set. */
+/**
+ * True when Upstash REST credentials (either naming variant) are set.
+ * Thin delegate to the single-reader helper — see DUR-06.
+ */
 function isExternalKvAvailable(): boolean {
-  const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "").trim();
-  const token = (
-    process.env.UPSTASH_REDIS_REST_TOKEN ||
-    process.env.KV_REST_API_TOKEN ||
-    ""
-  ).trim();
-  return Boolean(url && token);
+  return hasUpstashCreds();
 }
 
 async function readFromKv(): Promise<string | null> {

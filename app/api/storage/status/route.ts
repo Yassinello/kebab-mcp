@@ -6,6 +6,7 @@ import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { CRED_PREFIX } from "@/core/credential-store";
 import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { hasUpstashCreds } from "@/core/upstash-env";
 
 /**
  * GET /api/storage/status
@@ -81,9 +82,7 @@ async function getHandler(request: Request) {
             : report.mode === "static"
               ? "none"
               : "kv-degraded",
-      upstashConfigured: Boolean(
-        process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
-      ),
+      upstashConfigured: hasUpstashCreds(),
       isVercel: process.env.VERCEL === "1",
     },
   });

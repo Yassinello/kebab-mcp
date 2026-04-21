@@ -19,14 +19,13 @@
 
 import { kvScanAll } from "./kv-store";
 import { getContextKVStore } from "./request-context";
+import { hasUpstashCreds } from "./upstash-env";
 
 export const CRED_PREFIX = "cred:";
 
 /** Whether Upstash is configured (real KV persistence). */
 export function isUpstashConfigured(): boolean {
-  return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
-  );
+  return hasUpstashCreds();
 }
 
 /** Whether Vercel API is configured (env var write via API). */

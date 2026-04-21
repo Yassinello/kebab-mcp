@@ -21,8 +21,11 @@
  *
  * Keep this file import-clean: only Web-standard APIs (`fetch`, `JSON`),
  * no Node built-ins, no `@/core/*` imports that might pull fs in
- * transitively.
+ * transitively. `upstash-env.ts` is the only allowed sibling import
+ * (pure process.env reads, no I/O — DUR-06).
  */
+
+import { getUpstashCreds } from "./upstash-env";
 
 const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
 
@@ -51,19 +54,14 @@ export function getEdgeBootstrapAuthToken(): string | null {
 export async function ensureBootstrapRehydratedFromUpstash(): Promise<void> {
   if (process.env.MCP_AUTH_TOKEN) return;
   if (edgeBootstrapAuthTokenCache) return;
-  // Support both env var schemes: the legacy "Upstash for Vercel"
+  // DUR-06: supports both env var schemes — the legacy "Upstash for Vercel"
   // integration injects UPSTASH_REDIS_REST_URL/TOKEN, while the newer
   // Vercel Marketplace Upstash KV product injects KV_REST_API_URL/TOKEN.
-  // Without this fallback, deploys via the marketplace flow silently
-  // skip rehydrate even though Upstash IS configured — middleware then
-  // sees no MCP_AUTH_TOKEN and redirects /config to /welcome.
-  const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "").trim();
-  const token = (
-    process.env.UPSTASH_REDIS_REST_TOKEN ||
-    process.env.KV_REST_API_TOKEN ||
-    ""
-  ).trim();
-  if (!url || !token) return;
+  // `getUpstashCreds()` in upstash-env.ts resolves both and prefers
+  // UPSTASH_* when both are set.
+  const creds = getUpstashCreds();
+  if (!creds) return;
+  const { url, token } = creds;
   try {
     // Use the POST-with-command-array form rather than the GET-style
     // path endpoint. The key (`mymcp:firstrun:bootstrap`) contains

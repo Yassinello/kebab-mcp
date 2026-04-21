@@ -3,7 +3,8 @@
  *
  * Decides what kind of persistent storage is *actually available* right now,
  * based on:
- *   - presence of UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN env vars
+ *   - presence of Upstash credentials (DUR-06: either UPSTASH_REDIS_REST_*
+ *     or KV_REST_API_*, resolved via `getUpstashCreds()`)
  *   - reachability of the Upstash REST endpoint (PING)
  *   - filesystem write capability of the data dir (sentinel write probe)
  *
@@ -32,6 +33,7 @@ import { promises as fs } from "node:fs";
 import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { getUpstashCreds } from "./upstash-env";
 
 export type StorageMode = "kv" | "file" | "static" | "kv-degraded";
 
@@ -178,8 +180,9 @@ export async function detectStorageMode(opts?: { force?: boolean }): Promise<Sto
     return cached.report;
   }
 
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const creds = getUpstashCreds();
+  const upstashUrl = creds?.url;
+  const upstashToken = creds?.token;
   const detectedAt = new Date().toISOString();
 
   // Branch 1: Upstash configured → reachable or degraded

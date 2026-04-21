@@ -19,6 +19,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getKVStore } from "./kv-store";
+import { hasUpstashCreds } from "./upstash-env";
 
 export interface LogEntry {
   ts: number;
@@ -391,16 +392,15 @@ let cached: LogStore | null = null;
 export function getLogStore(): LogStore {
   if (cached) return cached;
 
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (upstashUrl && upstashToken) {
+  if (hasUpstashCreds()) {
     cached = new UpstashLogStore();
     return cached;
   }
 
   if (process.env.VERCEL === "1") {
     console.warn(
-      "[Kebab MCP] LogStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
+      "[Kebab MCP] LogStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN " +
+        "(or KV_REST_API_URL/TOKEN for Vercel Marketplace setups) — " +
         "using MemoryLogStore (ephemeral, lost on cold start)."
     );
     cached = new MemoryLogStore();

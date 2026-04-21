@@ -6,7 +6,9 @@
  *   when Upstash is not configured). Atomic write via tmp + rename. All keys
  *   live in a single JSON map for simplicity.
  * - UpstashKV: optional production backend using Upstash Redis REST API.
- *   Activates only if UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are set.
+ *   Activates when Upstash credentials are available via `getUpstashCreds()`
+ *   (DUR-06). Supports both UPSTASH_REDIS_REST_* (manual setup) and
+ *   KV_REST_API_* (Vercel Marketplace) naming variants.
  *   Uses raw fetch() — no @upstash/redis dep (keeps bundle small).
  *
  * Selection rules:
@@ -19,6 +21,7 @@ import { promises as fs } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { withTenantPrefix } from "./tenant";
+import { getUpstashCreds } from "./upstash-env";
 
 export interface KVStore {
   kind: "filesystem" | "upstash";
@@ -447,17 +450,17 @@ let cached: KVStore | null = null;
 export function getKVStore(): KVStore {
   if (cached) return cached;
 
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (upstashUrl && upstashToken) {
-    cached = new UpstashKV(upstashUrl, upstashToken);
+  const creds = getUpstashCreds();
+  if (creds) {
+    cached = new UpstashKV(creds.url, creds.token);
     return cached;
   }
 
   // Vercel detected, but no Upstash: fall back to /tmp with a warning.
   if (process.env.VERCEL === "1") {
     console.warn(
-      "[Kebab MCP] KVStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
+      "[Kebab MCP] KVStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN " +
+        "(or KV_REST_API_URL/TOKEN for Vercel Marketplace setups) — " +
         "using /tmp filesystem (ephemeral, data lost on cold start). " +
         "Set Upstash env vars for persistence."
     );
