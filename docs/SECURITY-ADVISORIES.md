@@ -9,10 +9,9 @@ Format: most recent first. Advisory IDs follow the GHSA pattern
 
 ---
 
-## GHSA-XXXX-XXXX-XXXX (SEC-04) — v0.10.0
+## [GHSA-pv2m-p7q3-v45c](https://github.com/Yassinello/kebab-mcp/security/advisories/GHSA-pv2m-p7q3-v45c) (SEC-04) — v0.1.10 / internal v0.10.0
 
-**Reserved; ID to be filled in on publication of the private GHSA
-draft currently under review.**
+**Draft filed 2026-04-21. Publish from the GitHub Security tab once the operator confirms the CVSS vector and ecosystem version range.**
 
 **Title:** Claim-cookie HMAC signing secret derived from public commit SHA
 

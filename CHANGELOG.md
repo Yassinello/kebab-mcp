@@ -403,7 +403,7 @@ disclosure timeline.
 
 #### Security
 
-- **SEC-04 (GHSA pending)** — First-run claim-cookie HMAC signing
+- **SEC-04 ([GHSA-pv2m-p7q3-v45c](https://github.com/Yassinello/kebab-mcp/security/advisories/GHSA-pv2m-p7q3-v45c))** — First-run claim-cookie HMAC signing
   secret was previously derived from `VERCEL_GIT_COMMIT_SHA`, a public
   value. An attacker who could read the commit SHA (trivial on public
   GitHub repos and Vercel preview URLs) could forge a valid claim
@@ -411,8 +411,8 @@ disclosure timeline.
   deploy that had not yet completed welcome bootstrap. The signing
   secret is now `randomBytes(32)`, KV-persisted at
   `mymcp:firstrun:signing-secret`, and rotated on
-  `MYMCP_RECOVERY_RESET=1`. A private GHSA advisory has been filed;
-  advisory ID will be added here on publication.
+  `MYMCP_RECOVERY_RESET=1`. Advisory draft filed 2026-04-21 (publish
+  from the GitHub Security tab when ready).
 - **SEC-05** — On public Vercel deploys with no durable KV configured
   and `MYMCP_ALLOW_EPHEMERAL_SECRET` unset, the welcome routes now
   refuse to mint claims and return HTTP 503 with an actionable operator
