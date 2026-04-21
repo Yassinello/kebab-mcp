@@ -143,6 +143,27 @@ integration test lives at
 2. Add a `ConnectorLoaderEntry` (id + label + description + requiredEnvVars + `toolCount` + `loader: () => import(...)`) to `src/core/registry.ts` `ALL_CONNECTOR_LOADERS` table — v0.11 Phase 43 replaced the static `ALL_CONNECTORS` array with lazy loaders (PERF-01). Keep `toolCount` in sync with `manifest.tools.length`; a contract test enforces this
 3. Document required env vars in `.env.example`
 
+## Bundle-size gate
+
+PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
+
+- Budgets live in `.size-limit.json` (route + byte limit)
+- Enforced by `scripts/check-bundle-size.ts` reading
+  `.next/diagnostics/route-bundle-stats.json`
+- CI runs `npm run size:check` after `npm run build`
+- Default headroom: 10% over the Phase-43 final measurements
+
+**When CI fails on `size:check`:**
+
+- If your change legitimately added weight (new connector, new major
+  dep): bump the budget in `.size-limit.json` by the minimum needed and
+  include a 1-line rationale in the commit body. Don't add more
+  headroom than required — the budget is a ratchet, not a target.
+- If the regression is unexpected: run `npm run build` locally, inspect
+  `.next/diagnostics/route-bundle-stats.json`, compare `firstLoadChunkPaths`
+  against the prior build to find the added chunk. Fix before bumping
+  the budget.
+
 ## Framework vs Instance
 
 **Framework-level** (code, shared by all users):

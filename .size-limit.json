@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Dashboard (/config)",
+    "route": "/config",
+    "limit": "600 KB"
+  },
+  {
+    "name": "Welcome (/welcome)",
+    "route": "/welcome",
+    "limit": "610 KB"
+  },
+  {
+    "name": "Landing (/)",
+    "route": "/",
+    "limit": "560 KB"
+  }
+]
