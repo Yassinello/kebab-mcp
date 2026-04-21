@@ -1,0 +1,53 @@
+# docs/examples/docker-compose.multi.yml — N replicas + Upstash KV.
+#
+# JC-1: this is the upgrade path for HA / horizontal scaling (Docker
+# Swarm, Kubernetes-lite, Fly multi-machine). Requires Upstash
+# credentials in .env.
+#
+# Boot:
+#   cd docs/examples
+#   cp ../../.env.example .env    # fill in MCP_AUTH_TOKEN + UPSTASH_*
+#   docker compose -f docker-compose.multi.yml up -d --scale kebab-mcp=3
+#
+# The LB service below (Caddy) fronts the replicas. On Docker Swarm,
+# skip the LB — the swarm routing mesh handles it. On plain compose,
+# substitute any LB (Traefik, nginx) if Caddy is not desired.
+services:
+  kebab-mcp:
+    build: ..
+    environment:
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN}"
+      # Upstash REQUIRED — filesystem KV is NOT safe across replicas.
+      UPSTASH_REDIS_REST_URL: "${UPSTASH_REDIS_REST_URL}"
+      UPSTASH_REDIS_REST_TOKEN: "${UPSTASH_REDIS_REST_TOKEN}"
+      # MANDATORY for N-replica: per-replica in-memory log rings
+      # diverge unless logs go to KV. See docs/HOSTING.md
+      # §"Durable logs mandatory for N-replica".
+      MYMCP_DURABLE_LOGS: "1"
+      MYMCP_TIMEZONE: "${MYMCP_TIMEZONE:-UTC}"
+      MYMCP_LOCALE: "${MYMCP_LOCALE:-en-US}"
+      MYMCP_DISPLAY_NAME: "${MYMCP_DISPLAY_NAME:-User}"
+    # No ./data mount — state lives in Upstash.
+    restart: unless-stopped
+    stop_grace_period: 10s
+    deploy:
+      replicas: 3
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # Minimal LB via Caddy. Routes :3000 → kebab-mcp:3000 across replicas.
+  # Docker's internal DNS round-robins to every container with the
+  # `kebab-mcp` service name, so Caddy's reverse-proxy picks up all
+  # replicas without extra config.
+  lb:
+    image: caddy:2-alpine
+    ports:
+      - "3000:80"
+    command: caddy reverse-proxy --from :80 --to kebab-mcp:3000
+    depends_on:
+      - kebab-mcp
+    restart: unless-stopped

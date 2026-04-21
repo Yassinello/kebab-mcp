@@ -1,0 +1,38 @@
+# docs/examples/docker-compose.single.yml — 1 replica + filesystem KV.
+#
+# JC-1: this is the recommended starter for personal / single-user
+# deployments. No external services required beyond MCP_AUTH_TOKEN.
+# Runs on any host with a persistent disk (Docker, Fly single-machine,
+# bare-metal).
+#
+# Boot:
+#   cd docs/examples
+#   cp ../../.env.example .env        # fill in MCP_AUTH_TOKEN
+#   docker compose -f docker-compose.single.yml up -d
+#
+# Verify:
+#   curl -sf http://localhost:3000/api/health
+services:
+  kebab-mcp:
+    build: ..
+    ports:
+      - "3000:3000"
+    environment:
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN}"
+      MYMCP_TIMEZONE: "${MYMCP_TIMEZONE:-UTC}"
+      MYMCP_LOCALE: "${MYMCP_LOCALE:-en-US}"
+      MYMCP_DISPLAY_NAME: "${MYMCP_DISPLAY_NAME:-User}"
+      # Filesystem KV lives in /app/data/kv.json (mounted below).
+      # Durable logs optional for single-replica: one ring buffer per
+      # process, no divergence concern.
+      MYMCP_DURABLE_LOGS: "${MYMCP_DURABLE_LOGS:-false}"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
