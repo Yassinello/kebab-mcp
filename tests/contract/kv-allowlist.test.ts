@@ -5,8 +5,25 @@
  * and risks cross-tenant data leakage (SEC-01). This test greps the source
  * tree and fails if a new caller is introduced outside the allowlist.
  *
+ * Phase 42 (TEN-06) — ALLOWLIST shrunk from 19 → 15 entries.
+ *
+ * Removals (migrated to `getContextKVStore`, TEN-01..05):
+ *   - src/core/rate-limit.ts        (TEN-01)
+ *   - src/core/log-store.ts         (TEN-02)
+ *   - src/core/tool-toggles.ts      (TEN-03)
+ *   - app/api/config/context/route.ts (TEN-05)
+ *
+ * Additions (new migration scanner — global by design):
+ *   - src/core/migrations/v0.11-tenant-scope.ts
+ *
+ * Retained with rationale:
+ *   - src/core/backup.ts — conditional `getKVStore()` behind
+ *     `scope === "all"` (root-operator cross-tenant restore path).
+ *   - app/api/admin/rate-limits/route.ts — `?scope=all` query param
+ *     is the root-operator cross-tenant view escape hatch.
+ *
  * To add a new legitimate global-KV callsite, update `ALLOWLIST` below AND
- * document the rationale in `.planning/phases/37b-security-hotfix/INVENTORY.md`.
+ * document the rationale in `.planning/phases/42-tenant-scoping/INVENTORY.md`.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -40,12 +57,11 @@ const ALLOWLIST = new Set<string>([
   "app/api/storage/status/route.ts",
   "app/api/storage/migrate/route.ts",
   "app/api/storage/import/route.ts",
-  "app/api/config/context/route.ts",
-  // rate-limit keys embed `tenantId` in the key structure and are
-  // written via the allowlisted rate-limit.ts path. The admin view
-  // does a global scan and filters by the requesting admin's tenant
-  // in application code (SEC-01b). Tenant-scoping the KV itself is
-  // v0.11 work — see FOLLOW-UP.md.
+  // app/api/config/context/route.ts migrated to getContextKVStore (Phase 42 / TEN-05)
+  // admin/rate-limits default path uses getContextKVStore. Retained
+  // here because the `?scope=all` query-param opt-in exposes a
+  // root-operator cross-tenant view via raw getKVStore(). See Phase 42
+  // INVENTORY.md §3.
   "app/api/admin/rate-limits/route.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",

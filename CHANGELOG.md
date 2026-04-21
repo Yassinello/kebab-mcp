@@ -4,6 +4,70 @@ All notable changes to Kebab MCP.
 
 ## [Unreleased] — v0.11 — Multi-tenant real
 
+### Phase 42 — Tenant scoping completion (TEN-01..06)
+
+Closes the "multi-tenant real" narrative opened by Phase 37b. Five files
+that were still writing tenant-relevant data through the untenanted
+`getKVStore()` path migrate to `getContextKVStore()`. A dual-read shim
+(`src/core/migrations/v0.11-tenant-scope.ts`) keeps pre-v0.11 deploys
+reading their legacy keys transparently during a 2-release transition
+window; writes always land on the new (tenant-wrapped) keys.
+
+- **TEN-01** `src/core/rate-limit.ts` — `checkRateLimit` routes through
+  `getContextKVStore()`. Key body sheds its embedded tenantId:
+  `ratelimit:<tenantId>:<scope>:<hash>:<bucket>` →
+  `ratelimit:<scope>:<hash>:<bucket>` (TenantKVStore wraps to
+  `tenant:<id>:ratelimit:...`). Atomic-path leniency during transition
+  documented; 60-second bucket TTL bounds staleness.
+  `app/api/admin/rate-limits/route.ts` default path is tenant-scoped;
+  `?scope=all` restored as root-operator cross-tenant view.
+- **TEN-02** `src/core/log-store.ts` — `getLogStore()` is now a
+  per-tenant factory (`Map<tenantId, LogStore>`). Upstash list key
+  `mymcp:logs` auto-wraps to `tenant:<id>:mymcp:logs`. Filesystem path
+  becomes `data/logs.<tenantId>.jsonl` under a tenant context.
+  `MYMCP_LOG_MAX_ENTRIES` applies per-tenant-per-list. The durable-log
+  branch of `app/api/config/logs/route.ts` drops its application-code
+  tokenId filter — namespace isolation handles it.
+- **TEN-03** `src/core/tool-toggles.ts` — per-tenant disable flags.
+  Cache keyed per-tenant (`Map<tenantId, {at, value}>`). Legacy
+  un-wrapped flags dual-read via the shim. `env.changed` clears every
+  tenant's cache.
+- **TEN-04** `src/core/backup.ts` — default scope = current tenant.
+  `opts.scope === "all"` restores the pre-v0.11 full-scan for root
+  operators. BACKUP_VERSION bumps from 1 → 2 (adds top-level `scope`
+  field). v1 backups still importable via compat branch. Cross-tenant
+  contamination guard: importing a `scope: "all"` backup into a tenant
+  namespace WITHOUT explicit `opts.scope='all'` is rejected.
+  `scripts/backup.ts` CLI gains `--scope=all`.
+- **TEN-05** `app/api/config/context/route.ts` — per-tenant Claude
+  persona. `mymcp:context:inline` + `mymcp:context:mode` bare keys
+  auto-wrap to `tenant:<id>:mymcp:context:*`. GET path dual-reads so
+  pre-v0.11 operator deploys keep their inline context on first
+  post-upgrade load.
+- **TEN-06** `tests/contract/kv-allowlist.test.ts` ALLOWLIST shrinks
+  from 19 → 15 entries. Removed: rate-limit.ts, log-store.ts,
+  tool-toggles.ts, config/context/route.ts. Added:
+  migrations/v0.11-tenant-scope.ts (new scanner — global by design).
+  Retained with rationale: backup.ts (conditional scope=all path),
+  admin/rate-limits/route.ts (?scope=all escape hatch).
+
+**New migration shim** — `src/core/migrations/v0.11-tenant-scope.ts`:
+
+- `dualReadKV(kv, newKey, legacyKey)` pure read-through helper
+- `runV011TenantScopeMigration()` per-tenant first-boot inventory
+  (marker key `tenant:<id>:migrations:v0.11-tenant-scope`)
+- Legacy-key DELETE deferred to v0.13 (2-release transition window)
+
+**Operator note:** no action required on upgrade. Pre-v0.11 data is
+read through the shim for 2 releases; a per-tenant marker tracks
+completion. After v0.13, legacy un-wrapped keys can be removed via a
+forthcoming CLI (FOLLOW-UP).
+
+**Testing:** 635 → 674 unit tests (+39 net). New:
+`tests/integration/tenant-isolation-v0.11.test.ts` stitch test
+exercises all 5 migrated surfaces under two concurrent tenants
+(Promise.all + AsyncLocalStorage validation).
+
 ### Phase 41 — Composable request pipeline
 
 The hand-rolled preamble that accumulated across the 6 entry-point

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getKVStore } from "@/core/kv-store";
+import { getContextKVStore } from "@/core/request-context";
+import { dualReadKV } from "@/core/migrations/v0.11-tenant-scope";
 import { getInstanceConfigAsync, saveInstanceConfig } from "@/core/config";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
@@ -15,6 +16,23 @@ import type { PipelineContext } from "@/core/pipeline";
  *           vault connector at runtime)
  *
  * The `mode` flag itself is stored under `mymcp:context:mode`.
+ *
+ * **Phase 42 (TEN-05) — per-tenant Claude persona:**
+ *
+ * Reads + writes flow through `getContextKVStore()`. The bare keys
+ * `mymcp:context:inline` and `mymcp:context:mode` auto-wrap to
+ * `tenant:<id>:mymcp:context:*` under a tenant context. Each tenant
+ * gets its own inline context / persona.
+ *
+ * Legacy un-wrapped keys (`mymcp:context:inline`, `mymcp:context:mode`)
+ * are read transparently via `dualReadKV` during the 2-release
+ * transition window — pre-v0.11 operator deploys keep seeing their
+ * inline context on the first post-upgrade load.
+ *
+ * `saveInstanceConfig({ contextPath })` stays operator-wide per Phase
+ * 42 scope decision; `src/core/config.ts` `settings:*` keys are
+ * intentionally global. A future phase can layer a tenant-aware
+ * wrapper without reworking this callsite.
  */
 
 const KV_INLINE = "mymcp:context:inline";
@@ -27,10 +45,13 @@ interface ContextState {
 }
 
 async function getHandler() {
-  const kv = getKVStore();
+  const kv = getContextKVStore();
+  // Phase 42 / TEN-05: dual-read both context keys so pre-v0.11
+  // operators still see their inline context on the first post-upgrade
+  // load. Writes (PUT) go only to the new (tenant-wrapped) keys.
   const [storedMode, storedInline, cfg] = await Promise.all([
-    kv.get(KV_MODE),
-    kv.get(KV_INLINE),
+    dualReadKV(kv, KV_MODE, KV_MODE),
+    dualReadKV(kv, KV_INLINE, KV_INLINE),
     getInstanceConfigAsync(),
   ]);
 
@@ -71,13 +92,16 @@ async function putHandler(ctx: PipelineContext) {
     );
   }
 
-  const kv = getKVStore();
+  const kv = getContextKVStore();
   await kv.set(KV_MODE, mode);
 
   if (mode === "inline") {
     // Active mode: inline. Persist the content. Reset the KV-backed
     // contextPath to the default so stale vault paths don't pile up.
     await kv.set(KV_INLINE, inline);
+    // instance config stays operator-wide per Phase 42 scope decision;
+    // per-tenant contextPath can be layered later via a tenant-aware
+    // wrapper without reworking this call.
     await saveInstanceConfig({ contextPath: "System/context.md" });
   } else {
     // Active mode: vault. Mirror the path into the KV-backed setting so

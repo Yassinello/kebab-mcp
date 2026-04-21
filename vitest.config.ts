@@ -5,7 +5,16 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    exclude: ["tests/integration/**"],
+    // Integration tests run a real Next.js server (see
+    // `vitest.integration.config.ts`) and must stay out of the unit run.
+    // The Phase 42 tenant-isolation stitch test is an exception — it
+    // exercises multiple modules in-process with no server startup,
+    // so it belongs in the main run.
+    exclude: [
+      "tests/integration/multi-host.test.ts",
+      "tests/integration/server-startup.test.ts",
+      "tests/integration/welcome-durability.test.ts",
+    ],
     // first-run tests share OS /tmp paths; run files sequentially to avoid
     // cross-worker races on BOOTSTRAP_PATH.
     fileParallelism: false,
