@@ -32,6 +32,11 @@ const IGNORE_DIRS = new Set(["node_modules", ".next", "dist", "coverage"]);
 const FILE_ALLOWLIST = new Set<string>([
   "app/welcome/welcome-client.tsx",
   "app/config/tabs/storage.tsx",
+  // OBS-05: Health tab uses `void refresh()` inside a setInterval
+  // callback — standard React idiom for ignoring a useCallback
+  // Promise. Allowlist the file (matches the precedent for other
+  // client-component tabs).
+  "app/config/tabs/health.tsx",
 ]);
 
 const MARKER = "fire-and-forget OK:";

@@ -22,6 +22,10 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
   documentation: { title: "Documentation", subtitle: "Guides and reference for Kebab MCP." },
   storage: { title: "Storage", subtitle: "Where your credentials and skills live." },
+  health: {
+    title: "Health",
+    subtitle: "Live instance diagnostics — bootstrap state, KV, rehydrate counters.",
+  },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };
 

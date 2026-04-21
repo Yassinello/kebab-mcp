@@ -12,6 +12,7 @@ import { SettingsTab } from "./tabs/settings";
 import { StorageTab } from "./tabs/storage";
 import { DocumentationTab, type DocEntry } from "./tabs/documentation";
 import { PlaygroundTab } from "./tabs/playground";
+import { HealthTab } from "./tabs/health";
 
 export interface ConnectorSummary {
   id: string;
@@ -100,6 +101,10 @@ export function ConfigTabs({
     case "storage":
       section = "Storage";
       tab = <StorageTab />;
+      break;
+    case "health":
+      section = "Health";
+      tab = <HealthTab />;
       break;
     case "overview":
     default:
