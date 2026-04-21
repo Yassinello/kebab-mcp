@@ -1,6 +1,12 @@
-// BOOTSTRAP_EXEMPT: inbound webhook receiver authenticated via per-webhook HMAC secrets; tenant-aware rehydrate tracked for v0.11 (37b-FOLLOW-UP.md). Reads only MYMCP_WEBHOOKS + MYMCP_WEBHOOK_SECRET_*, never MCP_AUTH_TOKEN.
 import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { getContextKVStore } from "@/core/request-context";
+import {
+  composeRequestPipeline,
+  rehydrateStep,
+  rateLimitStep,
+  bodyParseStep,
+  type PipelineContext,
+} from "@/core/pipeline";
 
 /** Maximum webhook payload size: 1 MB. */
 const MAX_PAYLOAD_BYTES = 1_048_576;
@@ -13,6 +19,14 @@ const MAX_PAYLOAD_BYTES = 1_048_576;
  * Validates `name` against MYMCP_WEBHOOKS allowlist (comma-separated).
  * Optional HMAC-SHA256 signature verification via MYMCP_WEBHOOK_SECRET_<NAME>.
  * Stores payload in KV at `webhook:last:<name>`.
+ *
+ * v0.11 Phase 41: pipeline provides rehydrate + IP-keyed rate-limit +
+ * body-parse. HMAC signature check stays inline (route-specific). The
+ * legacy `BOOTSTRAP_EXEMPT:` marker was removed — rehydrate now runs
+ * via the pipeline's `rehydrateStep`.
+ *
+ * PIPE-04 rate-limit scope: 30/min/IP (opt-in via MYMCP_RATE_LIMIT_ENABLED).
+ * Anonymous caller surface — IP is the right key.
  */
 
 function getAllowedWebhooks(): Set<string> {
@@ -39,11 +53,10 @@ function verifySignature(body: string, name: string, signature: string): boolean
   return timingSafeEqual(expectedHash, providedHash);
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ name: string }> }
-): Promise<Response> {
-  const { name } = await params;
+async function webhookHandler(ctx: PipelineContext): Promise<Response> {
+  const request = ctx.request;
+  const routeCtx = ctx.routeParams as { params: Promise<{ name: string }> };
+  const { name } = await routeCtx.params;
   const normalizedName = name.trim().toLowerCase();
 
   // Validate against allowlist
@@ -55,49 +68,13 @@ export async function POST(
     });
   }
 
-  // Enforce payload size limit — check Content-Length header first for
-  // a fast reject, then read in bounded chunks as a defense against
-  // missing/lying Content-Length headers.
-  const contentLength = request.headers.get("content-length");
-  if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_BYTES) {
-    return new Response(JSON.stringify({ error: "Payload too large" }), {
-      status: 413,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // Read body with bounded approach
-  let body: string;
-  if (!request.body) {
-    body = "";
-  } else {
-    const reader = request.body.getReader();
-    const decoder = new TextDecoder();
-    const chunks: string[] = [];
-    let totalBytes = 0;
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        totalBytes += value.byteLength;
-        if (totalBytes > MAX_PAYLOAD_BYTES) {
-          reader.cancel();
-          return new Response(JSON.stringify({ error: "Payload too large" }), {
-            status: 413,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        chunks.push(decoder.decode(value, { stream: true }));
-      }
-      chunks.push(decoder.decode()); // flush
-    } catch {
-      return new Response(JSON.stringify({ error: "Failed to read body" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    body = chunks.join("");
-  }
+  // bodyParseStep already buffered the body, honored Content-Length + stream
+  // size limits, and parsed JSON best-effort. `ctx.parsedBody` is either a
+  // parsed object or the raw string (the webhook-fallback shape). For HMAC
+  // verification and KV storage we need the raw string, so re-serialize if
+  // we received an object.
+  const parsed = ctx.parsedBody;
+  const body: string = typeof parsed === "string" ? parsed : JSON.stringify(parsed ?? "");
 
   // Optional HMAC signature verification
   const secretEnvKey = `MYMCP_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")}`;
@@ -111,13 +88,9 @@ export async function POST(
     }
   }
 
-  // Parse payload (best-effort JSON, fall back to raw string)
-  let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    payload = body;
-  }
+  // Use the parsed object when JSON parse succeeded; fall back to the raw
+  // string for non-JSON payloads (form-encoded, raw text).
+  const payload = typeof parsed === "object" && parsed !== null ? parsed : body;
 
   const contentType = request.headers.get("content-type") || "application/octet-stream";
   const receivedAt = new Date().toISOString();
@@ -164,3 +137,12 @@ export async function POST(
     headers: { "Content-Type": "application/json" },
   });
 }
+
+export const POST = composeRequestPipeline(
+  [
+    rehydrateStep,
+    rateLimitStep({ scope: "webhook", keyFrom: "ip", limit: 30 }),
+    bodyParseStep({ maxBytes: MAX_PAYLOAD_BYTES }),
+  ],
+  webhookHandler
+);

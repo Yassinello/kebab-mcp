@@ -7,7 +7,12 @@ import {
   CLAIM_TTL_MS,
 } from "@/core/first-run";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import {
+  composeRequestPipeline,
+  rehydrateStep,
+  rateLimitStep,
+  type PipelineContext,
+} from "@/core/pipeline";
 
 /**
  * POST /api/welcome/claim
@@ -17,8 +22,15 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  *   { status: "claimer", isNew: false }
  *   { status: "new", isNew: true } (sets cookie)
  *   { status: "claimed-by-other" }
+ *
+ * v0.11 Phase 41: pipeline provides rehydrate + IP-keyed rate-limit.
+ * PIPE-04 rate-limit scope: 10/min/IP (opt-in via MYMCP_RATE_LIMIT_ENABLED).
+ * Anonymous caller surface — IP is the right key. Closes the claim-spam
+ * surface explicitly called out in POST-V0.10-AUDIT §B.2.
  */
-async function postHandler(request: Request) {
+async function welcomeClaimHandler(ctx: PipelineContext): Promise<Response> {
+  const request = ctx.request;
+
   if (!isFirstRunMode() && !isBootstrapActive()) {
     return NextResponse.json({ status: "already-initialized" });
   }
@@ -61,4 +73,7 @@ async function postHandler(request: Request) {
   return res;
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = composeRequestPipeline(
+  [rehydrateStep, rateLimitStep({ scope: "claim", keyFrom: "ip", limit: 10 })],
+  welcomeClaimHandler
+);

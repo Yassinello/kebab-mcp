@@ -1,0 +1,86 @@
+/**
+ * webhook rate-limit regression — Phase 41 Task 5 / PIPE-04.
+ *
+ * Closes the quota-exhaustion surface from RISKS-AUDIT §8 for the
+ * webhook path. Gate is OFF by default; enabled via MYMCP_RATE_LIMIT_ENABLED=true.
+ */
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { composeRequestPipeline, rateLimitStep, type PipelineContext } from "@/core/pipeline";
+import { __resetInMemoryRateLimitForTests } from "@/core/rate-limit";
+
+const ENV_KEYS = ["MYMCP_RATE_LIMIT_ENABLED", "MYMCP_RATE_LIMIT_INMEMORY", "VERCEL"];
+function snap(): Record<string, string | undefined> {
+  const o: Record<string, string | undefined> = {};
+  for (const k of ENV_KEYS) o[k] = process.env[k];
+  return o;
+}
+function restore(s: Record<string, string | undefined>): void {
+  for (const [k, v] of Object.entries(s)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+}
+
+describe("webhook rate-limit regression (PIPE-04)", () => {
+  let s: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    s = snap();
+    process.env.MYMCP_RATE_LIMIT_INMEMORY = "1";
+    __resetInMemoryRateLimitForTests();
+  });
+
+  afterEach(() => {
+    restore(s);
+    __resetInMemoryRateLimitForTests();
+  });
+
+  it("route.ts exports POST via composeRequestPipeline with rateLimitStep + ip key", () => {
+    const source = readFileSync(resolve(process.cwd(), "app/api/webhook/[name]/route.ts"), "utf-8");
+    expect(source).toMatch(/composeRequestPipeline\(/);
+    expect(source).toMatch(
+      /rateLimitStep\(\{[^}]*scope:\s*["']webhook["'][^}]*keyFrom:\s*["']ip["']/
+    );
+    // BOOTSTRAP_EXEMPT marker removed from the first-line position
+    // (pipeline now includes rehydrate). The string may still appear in
+    // a docstring explaining the removal — only the top-of-file marker
+    // position is rejected here.
+    const firstTenLines = source.split(/\r?\n/).slice(0, 10).join("\n");
+    expect(firstTenLines).not.toMatch(/^\/\/\s*BOOTSTRAP_EXEMPT:/m);
+  });
+
+  it("with rate-limit OFF (default), 100 requests all pass (never 429)", async () => {
+    delete process.env.MYMCP_RATE_LIMIT_ENABLED;
+    const step = rateLimitStep({ scope: "webhook", keyFrom: "ip", limit: 30 });
+    const pipeline = composeRequestPipeline(
+      [step],
+      async (_c: PipelineContext) => new Response("ok", { status: 200 })
+    );
+    for (let i = 0; i < 100; i++) {
+      const res = await pipeline(new Request("https://test.local/api/webhook/x"));
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("with rate-limit ON, 31st request from the same IP in one minute is 429", async () => {
+    process.env.MYMCP_RATE_LIMIT_ENABLED = "true";
+    process.env.VERCEL = "1"; // trust x-forwarded-for
+
+    const step = rateLimitStep({ scope: "webhook", keyFrom: "ip", limit: 30 });
+    const pipeline = composeRequestPipeline(
+      [step],
+      async () => new Response("ok", { status: 200 })
+    );
+    const headers = { "x-forwarded-for": "5.6.7.8" };
+
+    for (let i = 0; i < 30; i++) {
+      const res = await pipeline(new Request("https://test.local/api/webhook/x", { headers }));
+      expect(res.status).toBe(200);
+    }
+    const res31 = await pipeline(new Request("https://test.local/api/webhook/x", { headers }));
+    expect(res31.status).toBe(429);
+    expect(res31.headers.get("Retry-After")).toBeTruthy();
+  });
+});
