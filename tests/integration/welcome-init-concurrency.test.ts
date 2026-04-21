@@ -744,3 +744,112 @@ describe("CORR-03b — auto-magic Vercel env-write path", () => {
     expect(body.redeployError).toBe("rate_limit");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// CORR-03c — MYMCP_RECOVERY_RESET=1 refuses mint
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Route handler gate at app/api/welcome/init/route.ts:44 — when the
+// env var is EXACTLY "1", the handler short-circuits with a 409 before
+// touching the KV or the claim cookie. Any other value (empty, "0",
+// anything else) lets the handler proceed normally.
+
+describe("CORR-03c — MYMCP_RECOVERY_RESET refuses mint", () => {
+  beforeEach(() => {
+    saveEnv();
+    resetTestFilesystem();
+    // Upstash-mocked baseline so any KV call would be observable — but
+    // the recovery-reset branch runs BEFORE any KV activity.
+    process.env.UPSTASH_REDIS_REST_URL = "https://mock-upstash.test";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "mock-token";
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    delete process.env.VERCEL;
+    delete process.env.MCP_AUTH_TOKEN;
+    delete process.env.VERCEL_TOKEN;
+    delete process.env.VERCEL_PROJECT_ID;
+    process.env.MYMCP_TRUST_URL_HOST = "1";
+    process.env.MYMCP_ALLOW_EPHEMERAL_SECRET = "1";
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@/core/kv-store");
+    restoreEnv();
+  });
+
+  it("with MYMCP_RECOVERY_RESET=1, POST returns 409 and no KV write happens", async () => {
+    process.env.MYMCP_RECOVERY_RESET = "1";
+
+    const { kv, spy } = makeUpstashMock();
+    vi.doMock("@/core/kv-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/kv-store");
+      return {
+        ...actual,
+        getKVStore: () => kv,
+        resetKVStoreCache: () => {
+          /* no-op */
+        },
+        isExternalKvAvailable: () => true,
+      };
+    });
+
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "a".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(409);
+    const body = (await r.json()) as { error?: string; token?: string };
+    expect(body.error).toBeDefined();
+    expect(body.error).toContain("MYMCP_RECOVERY_RESET");
+    expect(body).not.toHaveProperty("token");
+
+    // BOOTSTRAP never written — recovery-reset branch short-circuits
+    // before any flushBootstrapToKvIfAbsent() invocation. Other KV
+    // writes may occur (the pipeline's rehydrateStep triggers
+    // signing-secret rotation under MYMCP_RECOVERY_RESET=1 → writes
+    // mymcp:firstrun:signing-secret); the guarantee we assert is that
+    // the mint-specific SETNX never fires and the bootstrap key is
+    // never persisted.
+    expect(spy.setIfNotExistsCalls.length).toBe(0);
+    expect(spy.store.get("mymcp:firstrun:bootstrap") ?? null).toBeNull();
+  });
+
+  it("with MYMCP_RECOVERY_RESET=0, POST proceeds to mint normally", async () => {
+    // Exact non-"1" value — confirms only the sentinel value gates
+    // refusal (matches route.ts:44 strict equality).
+    process.env.MYMCP_RECOVERY_RESET = "0";
+
+    const { kv } = makeUpstashMock();
+    vi.doMock("@/core/kv-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/kv-store");
+      return {
+        ...actual,
+        getKVStore: () => kv,
+        resetKVStoreCache: () => {
+          /* no-op */
+        },
+        isExternalKvAvailable: () => true,
+      };
+    });
+
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "b".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { ok?: boolean; token?: string };
+    expect(body.ok).toBe(true);
+    expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
