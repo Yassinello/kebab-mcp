@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   bootstrapToken,
-  flushBootstrapToKv,
+  flushBootstrapToKvIfAbsent,
   isClaimer,
   isFirstRunMode,
   isBootstrapActive,
@@ -85,25 +85,38 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
 
   const { token } = bootstrapToken(claimId);
 
-  // Block on the KV write before responding. Without this, Vercel
-  // terminates the lambda when `return NextResponse.json(...)` resolves
-  // — the in-flight Upstash SET is cancelled and the bootstrap key
-  // stays empty, so every cold lambda after that sees first-run mode
-  // and locks the user out of /config behind a /welcome redirect loop.
-  // We surface flush failures (auth error, rate limit, network) as a
-  // 500 so the UI shows a real error rather than a "success" that
-  // leaves the user with a doomed token.
+  // Phase 45 UX-04: SETNX-gated flush. If two browsers share a claim
+  // cookie and both issued POST /api/welcome/init concurrently, exactly
+  // one wins the atomic Upstash SET NX and persists. The loser gets a
+  // 409 — we DO NOT leak the winner's token in the body, only signal
+  // that minting already happened so the loser can re-enter via the
+  // already-initialized paste-token flow.
+  //
+  // On backends without setIfNotExists support (unexpected; all three
+  // built-in backends implement it post-UX-04), the helper falls back
+  // to the non-atomic set() — matches the pre-UX-04 contract so exotic
+  // deployments don't hard-fail.
+  //
+  // Flush errors (auth / rate limit / network) still surface as a 500
+  // via the existing contract: the caller retries rather than ships
+  // a doomed token.
+  let flushResult: Awaited<ReturnType<typeof flushBootstrapToKvIfAbsent>>;
   try {
-    await flushBootstrapToKv();
+    flushResult = await flushBootstrapToKvIfAbsent();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Kebab MCP first-run] flushBootstrapToKv failed: ${msg}`);
+    console.error(`[Kebab MCP first-run] flushBootstrapToKvIfAbsent failed: ${msg}`);
     return NextResponse.json(
       {
         error: "Token minted but persistence to KV failed — please retry. Details: " + msg,
       },
       { status: 500 }
     );
+  }
+  if (!flushResult.ok) {
+    // Loser branch — another browser already minted. Do NOT echo the
+    // winner's token in the response body.
+    return NextResponse.json({ error: "already_minted" }, { status: 409 });
   }
 
   const proto = request.headers.get("x-forwarded-proto") || "https";

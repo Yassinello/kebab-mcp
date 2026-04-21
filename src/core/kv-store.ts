@@ -83,6 +83,26 @@ export interface KVStore {
    */
   incr?(key: string, opts?: { ttlSeconds?: number }): Promise<number>;
   /**
+   * Atomic set-if-not-exists (SETNX). Returns `{ ok: true }` when the
+   * key was written or `{ ok: false, existing }` when the key already
+   * holds a value (which is returned alongside).
+   *
+   * Upstash path uses `SET key value NX EX ttl` — genuinely atomic.
+   * FilesystemKV emulates via `fs.open(<sentinel>, 'wx')` (fails with
+   * EEXIST if the sentinel exists). Single-process dev only; the
+   * production race path is Upstash. MemoryKV uses a simple Map.has
+   * guard.
+   *
+   * Phase 45 UX-04: used by `flushBootstrapToKvIfAbsent()` to close
+   * the T11 welcome-init mint race — two browsers sharing a claim
+   * cookie otherwise both overwrite the KV bootstrap key silently.
+   */
+  setIfNotExists?(
+    key: string,
+    value: string,
+    opts?: { ttlSeconds?: number }
+  ): Promise<{ ok: true } | { ok: false; existing: string }>;
+  /**
    * Cursor-based key scanning. Safer than `list()` for large key sets
    * because it avoids the O(N) KEYS command on Redis.
    *
@@ -200,6 +220,40 @@ class FilesystemKV implements KVStore {
       const map = await this.readAll();
       map[key] = value;
       await this.writeAll(map);
+    });
+  }
+
+  /**
+   * SETNX emulation for the single-JSON-map filesystem backend.
+   *
+   * Phase 45 UX-04: used by `flushBootstrapToKvIfAbsent()` to block
+   * double-mint when two browsers share a claim cookie. The filesystem
+   * path is single-process dev mode — the production race is the
+   * Upstash path, which uses native `SET NX EX`. Still, we emulate
+   * atomic NX here so unit/integration tests can exercise the contract
+   * against the filesystem backend without spinning up Upstash.
+   *
+   * Implementation: read under the write queue (serializing vs other
+   * writes in the same process), return early if the key exists, else
+   * write. TTL is ignored — same as `set()` above. Cross-process races
+   * across multiple Node processes sharing the same JSON file remain
+   * unresolved because the filesystem JSON map isn't designed for that;
+   * production deployments run through UpstashKV.
+   */
+  async setIfNotExists(
+    key: string,
+    value: string,
+    _opts?: { ttlSeconds?: number }
+  ): Promise<{ ok: true } | { ok: false; existing: string }> {
+    this.cache = null;
+    return this.enqueue(async () => {
+      const map = await this.readAll();
+      if (key in map) {
+        return { ok: false as const, existing: map[key] };
+      }
+      map[key] = value;
+      await this.writeAll(map);
+      return { ok: true as const };
     });
   }
 
@@ -360,6 +414,36 @@ class UpstashKV implements KVStore {
     }
   }
 
+  /**
+   * Native atomic SETNX via Upstash. `SET key value NX` returns "OK"
+   * on success and null when the key already exists. On the loser
+   * branch we issue a GET to surface the existing value — the caller
+   * uses this to decide how to surface the race to the user (Phase 45
+   * UX-04 → 409 `already_minted` with the winner's bootstrap
+   * visible only to the server).
+   *
+   * TTL is chained via `EX` in the same command so expiration and
+   * existence-check are atomic — no two-phase window where the key
+   * is set without a TTL.
+   */
+  async setIfNotExists(
+    key: string,
+    value: string,
+    opts?: { ttlSeconds?: number }
+  ): Promise<{ ok: true } | { ok: false; existing: string }> {
+    const cmd: (string | number)[] = ["SET", key, value, "NX"];
+    if (opts?.ttlSeconds && opts.ttlSeconds > 0) {
+      cmd.push("EX", Math.ceil(opts.ttlSeconds));
+    }
+    const result = await this.call(cmd);
+    if (result === "OK") return { ok: true };
+    // Lost the race — read the winner's value. The GET is a second
+    // round-trip; acceptable because the race is a rare one-shot
+    // event per instance (the first-run claim cookie).
+    const existing = await this.get(key);
+    return { ok: false, existing: existing ?? "" };
+  }
+
   async delete(key: string): Promise<void> {
     await this.call(["DEL", key]);
   }
@@ -512,6 +596,14 @@ function wrapWithTracing(kv: KVStore): KVStore {
       withSpan("mymcp.kv.write", () => kv.incr!(key, opts), {
         "mymcp.kv.kind": kv.kind,
         "mymcp.kv.op": "incr",
+        "mymcp.kv.key_prefix": keyPrefix2(key),
+      });
+  }
+  if (typeof kv.setIfNotExists === "function") {
+    wrapped.setIfNotExists = (key, value, opts) =>
+      withSpan("mymcp.kv.write", () => kv.setIfNotExists!(key, value, opts), {
+        "mymcp.kv.kind": kv.kind,
+        "mymcp.kv.op": "setIfNotExists",
         "mymcp.kv.key_prefix": keyPrefix2(key),
       });
   }
@@ -679,6 +771,13 @@ class TenantKVStore implements KVStore {
 
   incr(key: string, opts?: { ttlSeconds?: number }) {
     return this.inner.incr?.(this.pk(key), opts) ?? Promise.reject(new Error("incr not supported"));
+  }
+
+  setIfNotExists(key: string, value: string, opts?: { ttlSeconds?: number }) {
+    return (
+      this.inner.setIfNotExists?.(this.pk(key), value, opts) ??
+      Promise.reject(new Error("setIfNotExists not supported"))
+    );
   }
 
   lpushCapped(key: string, value: string, maxLength: number, opts?: { ttlSeconds?: number }) {

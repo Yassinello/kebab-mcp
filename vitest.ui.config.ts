@@ -29,17 +29,24 @@ import path from "node:path";
  * The default `vitest.config.ts` excludes `tests/components/**` and
  * `tests/ui/**` so render tests don't run twice.
  */
+// The `pool` + `poolOptions` options existed in vitest 3 and still
+// work in vitest 4's runtime (verified: `npm run test:ui` spins up
+// exactly 1 forked worker with files serialized), but vitest 4's
+// `InlineConfig` type has narrowed: `poolOptions` is gated behind a
+// pool-specific discriminator that flat config literals don't match.
+// The shape below is cast through `as Parameters<typeof defineConfig>[0]`
+// so TS accepts the known-good runtime shape. When vitest 4's types
+// catch up to the flat runtime, drop the cast.
 export default defineConfig({
   test: {
     name: "ui",
     environment: "jsdom",
     include: ["tests/components/**/*.test.tsx", "tests/ui/**/*.test.tsx", "tests/ui/**/*.test.ts"],
     pool: "forks",
-    // Vitest 4: poolOptions was flattened; forks options are now top-level.
-    // `singleFork: true` serializes test files within one forked worker,
-    // which is the core isolation behavior QA-01 needs.
-    forks: {
-      singleFork: true,
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
     },
     testTimeout: 10_000,
     fileParallelism: false,
@@ -52,4 +59,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
-});
+} as Parameters<typeof defineConfig>[0]);

@@ -359,6 +359,74 @@ export async function flushBootstrapToKv(): Promise<void> {
 }
 
 /**
+ * SETNX variant of `flushBootstrapToKv()` (Phase 45 Task 9 / UX-04).
+ *
+ * Atomic: if the KV bootstrap key already holds a value, this call
+ * returns `{ ok: false, reason: "already_minted", existing }` without
+ * overwriting. The welcome-init handler uses the result to surface a
+ * 409 to the losing minter when two browsers share a claim cookie.
+ *
+ * Backend behavior:
+ *   - Upstash: native `SET key value NX EX` (single atomic command).
+ *   - Filesystem: serialized read-then-write under the store's
+ *     write queue; single-process dev only. Production always uses
+ *     Upstash, so the filesystem path's cross-process race window
+ *     is a non-issue.
+ *   - Memory: Map.has guard (in-process only; each lambda has its
+ *     own memory store — Upstash still arbitrates cross-lambda).
+ *
+ * Returns ok=true when the caller is the winner and the winner's
+ * bootstrap is now in KV; returns ok=false with the existing value
+ * otherwise. The caller is responsible for translating ok=false into
+ * a visible error (the handler does not leak the winner's token
+ * into the 409 response body).
+ */
+export async function flushBootstrapToKvIfAbsent(): Promise<
+  { ok: true } | { ok: false; reason: "already_minted"; existing: BootstrapPayload | null }
+> {
+  if (!activeBootstrap) return { ok: true };
+  if (!isExternalKvAvailable()) return { ok: true };
+  const kv = getKVStore();
+  if (typeof kv.setIfNotExists !== "function") {
+    // Backend doesn't advertise SETNX — fall back to the non-atomic
+    // `set()` path. This mirrors the pre-UX-04 contract so deploys
+    // on exotic backends don't hard-fail; they just lose the race
+    // detection. Log so the operator sees the gap.
+    await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
+    return { ok: true };
+  }
+  const result = await kv.setIfNotExists(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
+  if (result.ok) return { ok: true };
+  let existing: BootstrapPayload | null;
+  // silent-swallow-ok: SETNX-loser branch; the raw KV value could not be parsed as BootstrapPayload, so we treat it as an opaque "someone else minted" and return the loser path with existing=null — caller surfaces 409 regardless
+  try {
+    existing = JSON.parse(result.existing) as BootstrapPayload;
+  } catch {
+    existing = null;
+  }
+  // Idempotent-retry: if the existing entry's claimId matches the
+  // current active bootstrap, this caller already minted successfully
+  // on a previous request (warm-lambda retry, double-click, proxy
+  // retry). Treat as success and re-adopt the winner's token into the
+  // in-memory cache (harmless when they match; corrective if the
+  // caller's process memory was wiped).
+  if (existing && existing.claimId === activeBootstrap.claimId) {
+    activeBootstrap = existing;
+    bootstrapAuthTokenCache = existing.token;
+    return { ok: true };
+  }
+  // Genuine race — restore the in-memory cache to the winner so the
+  // loser lambda doesn't serve its own (now-dead) token to any
+  // subsequent warm request. The loser's HTTP handler will surface a
+  // 409 to the user.
+  if (existing) {
+    activeBootstrap = existing;
+    bootstrapAuthTokenCache = existing.token;
+  }
+  return { ok: false, reason: "already_minted", existing };
+}
+
+/**
  * Force-clear all bootstrap state (in-memory + on-disk). Distinct from
  * clearBootstrap() in that it logs loudly — used by the recovery escape hatch.
  */

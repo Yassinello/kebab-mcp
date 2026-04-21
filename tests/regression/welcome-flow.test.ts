@@ -237,9 +237,12 @@ describe("TEST-03 batch A.1 — welcome-flow regressions", () => {
       "utf-8"
     );
 
-    // Must: try/catch around flushBootstrapToKv, status 500 on failure.
-    expect(initRoute).toMatch(/flushBootstrapToKv/);
-    expect(initRoute).toMatch(/try\s*{[\s\S]*flushBootstrapToKv[\s\S]*catch/m);
+    // Must: try/catch around flushBootstrapToKv(IfAbsent)?, status 500
+    // on failure. Phase 45 UX-04 switched the function name from
+    // `flushBootstrapToKv` to `flushBootstrapToKvIfAbsent` — both are
+    // matched by the regex below.
+    expect(initRoute).toMatch(/flushBootstrapToKv(IfAbsent)?/);
+    expect(initRoute).toMatch(/try\s*{[\s\S]*flushBootstrapToKv(IfAbsent)?[\s\S]*catch/m);
     expect(initRoute).toMatch(/status:\s*500/);
     // And the 500 body must include the inner error message — that's
     // what 1460841 added. If someone reverts to silent-log-only, this

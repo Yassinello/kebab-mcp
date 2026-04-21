@@ -36,9 +36,31 @@ describe("welcome/init pipeline regression (Phase 41 Task 4)", () => {
     expect(source).toMatch(/SigningSecretUnavailableError/);
   });
 
-  it("flushBootstrapToKv await + 500-on-failure branch preserved (DUR-04)", () => {
-    expect(source).toMatch(/await\s+flushBootstrapToKv\(/);
+  it("flushBootstrapToKv*(IfAbsent)? await + 500-on-failure branch preserved (DUR-04 + Phase 45 UX-04)", () => {
+    // Phase 45 UX-04: route switched from `await flushBootstrapToKv()`
+    // (non-atomic — last write wins when two browsers share a claim
+    // cookie) to `await flushBootstrapToKvIfAbsent()` (SETNX-gated,
+    // returns `{ ok: false, ... }` for the losing minter). Both
+    // shapes preserve DUR-04's "await before responding" contract —
+    // this regression accepts either.
+    expect(source).toMatch(/await\s+flushBootstrapToKv(IfAbsent)?\(/);
     expect(source).toMatch(/persistence\s+to\s+KV\s+failed/);
+  });
+
+  it("UX-04: losing SETNX path returns 409 already_minted", () => {
+    // Phase 45 UX-04 mint-race fix: when two concurrent POST
+    // /api/welcome/init calls share the same claim cookie, exactly
+    // one wins the SETNX and returns 200+token; the loser returns
+    // 409 `{ error: "already_minted" }`. The handler does NOT echo
+    // the winner's token in the 409 body.
+    expect(source).toMatch(/already_minted/);
+    expect(source).toMatch(/status:\s*409/);
+    // Negative: the loser branch must NOT include the token in the
+    // response body. We assert the shape by confirming the 409
+    // branch doesn't contain a `token:` field near it.
+    const loser = source.match(/flushResult\.ok[\s\S]{0,400}/)?.[0] ?? "";
+    expect(loser).toMatch(/already_minted/);
+    expect(loser).not.toMatch(/token:/);
   });
 
   it("legacy withBootstrapRehydrate HOC is gone (pipeline now owns rehydrate)", () => {
