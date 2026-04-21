@@ -16,6 +16,25 @@ export const ErrorCode = {
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
+/**
+ * Thrown by `getRequiredConfig()` (src/core/config-facade.ts) when a
+ * mandatory config key is missing / empty. Distinct from McpToolError
+ * — this is a wiring error, not a tool runtime error. Catchable at the
+ * pipeline layer to surface a 500 with a generic message while logging
+ * the env var name server-side.
+ *
+ * Phase 48 / FACADE-01.
+ */
+export class McpConfigError extends Error {
+  constructor(
+    message: string,
+    public readonly key?: string
+  ) {
+    super(message);
+    this.name = "McpConfigError";
+  }
+}
+
 export class McpToolError extends Error {
   readonly code: ErrorCodeType;
   readonly toolName: string;

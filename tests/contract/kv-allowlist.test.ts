@@ -50,6 +50,12 @@ const ALLOWLIST = new Set<string>([
   // rate-limit.ts migrated to getContextKVStore (Phase 42 / TEN-01)
   // tool-toggles.ts migrated to getContextKVStore (Phase 42 / TEN-03)
   "src/core/config.ts",
+  // config-facade.ts (Phase 48 / FACADE-04) — getTenantSetting() accepts
+  // an explicit tenantId and falls back to getKVStore() when tenantId is
+  // null/undefined (global-settings write path for root operators). The
+  // per-tenant path uses getTenantKVStore(tenantId) — that branch is
+  // covered by TenantKVStore. Callers provide tenantId explicitly.
+  "src/core/config-facade.ts",
   // Migration scanner — intentionally global to inventory legacy keys
   "src/core/migrations/v0.10-tenant-prefix.ts",
   "src/core/migrations/v0.11-tenant-scope.ts",
