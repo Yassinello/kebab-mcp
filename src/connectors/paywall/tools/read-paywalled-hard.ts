@@ -8,6 +8,7 @@ import {
   validatePublicUrl,
   sanitizeError,
 } from "@/connectors/browser/lib/browserbase";
+import { getConfig } from "@/core/config-facade";
 
 export const readPaywalledHardSchema = {
   url: z.string().url().describe("URL of the paywalled article (Medium, Substack)"),
@@ -40,7 +41,7 @@ export async function handleReadPaywalledHard(params: { url: string }): Promise<
     return errorResult(`No paywall source registered for this domain. Supported: ${supported}.`);
   }
 
-  const cookieValue = process.env[source.cookieEnvVar]?.trim();
+  const cookieValue = getConfig(source.cookieEnvVar)?.trim();
   if (!cookieValue) {
     return errorResult(
       `Cookie not configured for ${source.displayName}. Add ${source.cookieEnvVar} in /config → Packs → Paywall.`

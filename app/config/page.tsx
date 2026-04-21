@@ -46,7 +46,7 @@ export default async function ConfigPage({
   const cookieStore = await cookies();
   const rawTenantId = cookieStore.get("mymcp-tenant")?.value || params.tenant || null;
   const tenantId =
-    rawTenantId && process.env[`MCP_AUTH_TOKEN_${rawTenantId.toUpperCase()}`] ? rawTenantId : null;
+    rawTenantId && getConfig(`MCP_AUTH_TOKEN_${rawTenantId.toUpperCase()}`) ? rawTenantId : null;
 
   // PERF-01: lazy resolve. RSC frame is already async; cost-free to await.
   const registry = await resolveRegistryAsync();

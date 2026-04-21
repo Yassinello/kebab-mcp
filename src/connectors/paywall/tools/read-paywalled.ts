@@ -4,6 +4,7 @@ import { findSourceForUrl } from "../lib/source-lookup";
 import { fetchHtmlWithCookie } from "../lib/fetch-html";
 import { extractArticle, PaywallExtractError } from "../lib/extract";
 import { SOURCES } from "../sources";
+import { getConfig } from "@/core/config-facade";
 
 export const readPaywalledSchema = {
   url: z.string().url().describe("URL of the paywalled article (Medium, Substack)"),
@@ -31,7 +32,7 @@ export async function handleReadPaywalled(params: { url: string }): Promise<Tool
     return errorResult(`No paywall source registered for this domain. Supported: ${supported}.`);
   }
 
-  const cookieValue = process.env[source.cookieEnvVar]?.trim();
+  const cookieValue = getConfig(source.cookieEnvVar)?.trim();
   if (!cookieValue) {
     return errorResult(
       `Cookie not configured for ${source.displayName}. Add ${source.cookieEnvVar} in /config → Packs → Paywall.`

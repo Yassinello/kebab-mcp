@@ -43,7 +43,7 @@ function getAllowedWebhooks(): Set<string> {
 
 function verifySignature(body: string, name: string, signature: string): boolean {
   const envKey = `MYMCP_WEBHOOK_SECRET_${name.toUpperCase().replace(/-/g, "_")}`;
-  const secret = process.env[envKey];
+  const secret = getConfig(envKey);
   if (!secret) return false;
 
   const expected = createHmac("sha256", secret).update(body).digest("hex");
@@ -79,7 +79,7 @@ async function webhookHandler(ctx: PipelineContext): Promise<Response> {
 
   // Optional HMAC signature verification
   const secretEnvKey = `MYMCP_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")}`;
-  if (process.env[secretEnvKey]) {
+  if (getConfig(secretEnvKey)) {
     const signature = request.headers.get("x-webhook-signature");
     if (!signature || !verifySignature(body, normalizedName, signature)) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {

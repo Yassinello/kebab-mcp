@@ -2,6 +2,7 @@ import type { ConnectorManifest, ConnectorState, ToolDefinition } from "./types"
 import { getEnabledPacksOverride } from "./config";
 import { on } from "./events";
 import { hydrateCredentialsFromKV } from "./credential-store";
+import { getConfig } from "./config-facade";
 
 // ── PERF-01: lazy connector loaders ──────────────────────────────────
 //
@@ -385,7 +386,7 @@ export async function resolveRegistryAsync(): Promise<ConnectorState[]> {
           }
           // Else: custom-active flag was set but manifest has no predicate;
           // fall back to the default missing-env check.
-          const missing = entry.requiredEnvVars.filter((v) => !process.env[v]);
+          const missing = entry.requiredEnvVars.filter((v) => !getConfig(v));
           if (missing.length > 0) {
             results[i] = {
               manifest,

@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import kebabPlugin from "./.eslint/plugin-kebab.mjs";
 
 // Minimal Node globals — we don't depend on the `globals` package.
 const NODE_GLOBALS = {
@@ -28,6 +29,9 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
+    plugins: {
+      kebab: kebabPlugin,
+    },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "warn",
@@ -35,6 +39,11 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-empty-object-type": "off",
+      // Phase 48 / FACADE-03: forbid direct process.env reads outside
+      // the ALLOWED_DIRECT_ENV_READS allowlist. Orthogonal to SEC-02's
+      // `no-restricted-syntax` assignment guard (below) — assignments
+      // vs reads are different concerns.
+      "kebab/no-direct-process-env": "error",
       // SEC-02: forbid process.env mutation (concurrency-unsafe under
       // concurrent requests on warm lambdas). Use runWithCredentials()
       // + getCredential() from @/core/request-context instead.
@@ -123,6 +132,38 @@ export default tseslint.config(
     ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  // Phase 48 / FACADE-03 allowlist: boot-path files + scripts + tests are
+  // exempt from `kebab/no-direct-process-env`. The list mirrors
+  // ALLOWED_DIRECT_ENV_READS in src/core/config-facade.ts (code-review
+  // audibility — the lint exemption and the contract are adjacent).
+  // Scripts + tests are broadly allowed: one-shot CLI contexts + test
+  // isolation fixtures legitimately mutate/read process.env directly.
+  {
+    files: [
+      // Allowlist entries — see ALLOWED_DIRECT_ENV_READS with reasons.
+      "src/core/config-facade.ts",
+      "src/core/env-store.ts",
+      "src/core/first-run.ts",
+      "src/core/first-run-edge.ts",
+      "src/core/kv-store.ts",
+      "src/core/log-store.ts",
+      "src/core/request-context.ts",
+      "src/core/upstash-env.ts",
+      "src/core/signing-secret.ts",
+      "src/core/storage-mode.ts",
+      "src/core/tracing.ts",
+      // Infrastructure that needs direct access:
+      "scripts/**",
+      "tests/**",
+      "src/**/*.test.ts",
+      "src/**/*.e2e.test.ts",
+      "src/core/test-utils.ts",
+      "playwright.config.ts",
+    ],
+    rules: {
+      "kebab/no-direct-process-env": "off",
     },
   }
 );

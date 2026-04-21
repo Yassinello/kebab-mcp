@@ -135,7 +135,7 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
       const envKey = keys[i].slice(CRED_PREFIX.length);
       const value = values[i];
       // Don't overwrite existing env vars — boot env takes precedence.
-      if (value && !process.env[envKey]) {
+      if (value && !getConfig(envKey)) {
         hydratedSnapshot[envKey] = value;
       }
     }

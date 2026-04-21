@@ -280,6 +280,16 @@ export const ALLOWED_DIRECT_ENV_READS: ReadonlyArray<AllowedDirectEnvRead> = Obj
     vars: ["OTEL_SERVICE_NAME", "OTEL_EXPORTER_OTLP_ENDPOINT"],
     reason: "OTel SDK init runs at module load; facade import ordering would invert dep",
   },
+  {
+    file: "src/core/upstash-env.ts",
+    vars: [
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "KV_REST_API_URL",
+      "KV_REST_API_TOKEN",
+    ],
+    reason: "centralized Upstash credential reader (DUR-06) — owns the single reader contract",
+  },
 ]);
 
 /**
