@@ -1,3 +1,6 @@
+// Phase 44 SCM-01: V2/V3 dispatch gated on KEBAB_BROWSER_CONNECTOR_V2.
+// See .planning/phases/44-supply-chain/MIGRATION-NOTES.md.
+
 import { z } from "zod";
 import {
   createBrowserSession,
@@ -5,6 +8,7 @@ import {
   validateContextName,
   sanitizeError,
 } from "../lib/browserbase";
+import { getBrowserConnectorVersion } from "../flag";
 
 export const webBrowseSchema = {
   url: z.string().describe("URL to navigate to"),
@@ -20,11 +24,17 @@ export const webBrowseSchema = {
     ),
 };
 
-export async function handleWebBrowse(params: {
+type WebBrowseParams = {
   url: string;
   scroll_count?: number;
   context_name?: string;
-}) {
+};
+
+/**
+ * V2-compat path (default). Preserves the exact current handler behavior
+ * — frozen for safe rollback. Do not modify without a rollback plan.
+ */
+export async function handleWebBrowseV2(params: WebBrowseParams) {
   validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
@@ -76,4 +86,24 @@ export async function handleWebBrowse(params: {
   } finally {
     await stagehand.close();
   }
+}
+
+/**
+ * V3 path — reserved for future divergence once the project needs Stagehand
+ * v3 idiomatic calls (page.act / page.extract / page.observe). Today it
+ * delegates to V2 because the installed Stagehand 3.2.1 is back-compat with
+ * v2 call patterns. TODO: exercise page.goto's v3-native options when that
+ * becomes the idiom the project wants.
+ */
+export async function handleWebBrowseV3(params: WebBrowseParams) {
+  return handleWebBrowseV2(params);
+}
+
+/**
+ * Public dispatcher — used by the manifest. Reads the flag per-call so env
+ * flips at runtime are honored.
+ */
+export async function handleWebBrowse(params: WebBrowseParams) {
+  const version = getBrowserConnectorVersion();
+  return version === "v3" ? handleWebBrowseV3(params) : handleWebBrowseV2(params);
 }
