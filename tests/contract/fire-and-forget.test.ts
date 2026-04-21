@@ -75,7 +75,7 @@ function toPosix(p: string): string {
   return p.split(sep).join("/");
 }
 
-describe.skip("fire-and-forget contract (DUR-04 + DUR-05)", () => {
+describe("fire-and-forget contract (DUR-04 + DUR-05)", () => {
   it("every `void <promise>(...)` in src/ and app/ carries a `fire-and-forget OK:` annotation", () => {
     const projectRoot = join(__dirname, "..", "..");
     const files: string[] = [];

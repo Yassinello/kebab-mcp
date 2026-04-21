@@ -43,6 +43,9 @@ export default tseslint.config(
       //  - `process.env.FOO = ...`  (MemberExpression.MemberExpression)
       //  - `process.env[key] = ...` (also MemberExpression.MemberExpression
       //    but with computed=true — the same selector matches both)
+      // SEC-02 — forbid process.env mutation (concurrency-unsafe under
+      // concurrent requests on warm lambdas). Use runWithCredentials()
+      // + getCredential() from @/core/request-context instead.
       "no-restricted-syntax": [
         "error",
         {
@@ -60,6 +63,19 @@ export default tseslint.config(
       ],
     },
   },
+  // DUR-05 note — previously considered an ESLint advisory rule here.
+  // Dropped because ESLint flat-config does not permit two
+  // `no-restricted-syntax` entries at different severities without one
+  // overwriting the other, and the SEC-02 entry above MUST stay at
+  // `error`. The hard gate for DUR-04 is
+  // `tests/contract/fire-and-forget.test.ts` — the grep-based contract
+  // test catches un-annotated `void <promise>()` in CI and, unlike the
+  // AST rule, cannot be bypassed via `eslint-disable` comments.
+  //
+  // If IDE-time feedback becomes a real operator pain point later, the
+  // path forward is a tiny custom ESLint plugin (under
+  // `eslint-plugins/no-unannotated-void/`) that inspects preceding
+  // comments — out of scope for v0.10.
   // Node globals + CJS allowed for release scripts.
   {
     files: ["scripts/**/*.{js,ts}"],

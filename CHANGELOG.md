@@ -89,6 +89,60 @@ Documented in `.planning/phases/37b-security-hotfix/FOLLOW-UP.md`:
   added now; broader observability work in Phase 38)
 - `log-store.ts:319` 5xx retry heuristic (Phase 38)
 
+### Durability hardening (Phase 37, non-breaking)
+
+Preventive pass closing the class of bugs shipped by the 2026-04-20
+debugging session (see `.planning/milestones/v0.10-durability-ROADMAP.md`
+§Phase 37). Seven atomic commits, three contract tests, no breaking
+changes for connector authors or operators.
+
+- **DUR-01 / DUR-02 / DUR-03** — Every auth-gated API route now wraps
+  its exported HTTP-verb handlers in
+  `withBootstrapRehydrate(handler)` from
+  `src/core/with-bootstrap-rehydrate.ts` (new). The HOC awaits
+  `rehydrateBootstrapAsync()` at entry, so cold lambdas that respond
+  to MCP / dashboard / welcome traffic always see bootstrap state
+  rehydrated from /tmp or KV before reading `MCP_AUTH_TOKEN`. 35
+  routes wrapped; 4 routes (`/api/health`, `/api/cron/health`,
+  `/api/auth/google/callback`, `/api/webhook/[name]`) carry a
+  `// BOOTSTRAP_EXEMPT: <reason>` marker. The new contract test
+  `tests/contract/route-rehydrate-coverage.test.ts` fails the build
+  if a future route lands without the wrapper or exemption.
+- **DUR-04 / DUR-05** — Every `void <promise>()` callsite in `src/`
+  is either awaited, wrapped in an annotated janitor path, or
+  deleted. Most notably `src/core/first-run.ts:312`
+  `void persistBootstrapToKv(activeBootstrap)` — the original
+  session-bug root cause (Vercel's reaper killed the write before
+  Upstash SET landed) — is DELETED along with the now-unused
+  `persistBootstrapToKv()` helper. The authoritative persistence
+  path is `flushBootstrapToKv()`, awaited by the welcome routes.
+  Remaining janitor / cleanup calls carry
+  `// fire-and-forget OK: <reason>` annotations. Enforced by
+  `tests/contract/fire-and-forget.test.ts` (grep-based, cannot be
+  bypassed via `eslint-disable`).
+- **DUR-06 / DUR-07** — Upstash REST credential reads centralize
+  behind `getUpstashCreds()` / `hasUpstashCreds()` in
+  `src/core/upstash-env.ts` (new, pure config, no I/O). The helper
+  supports both `UPSTASH_REDIS_REST_*` (manual Upstash setup) and
+  `KV_REST_API_*` (Vercel Marketplace auto-inject) naming variants,
+  preferring UPSTASH_* when both are set. Nine previously-divergent
+  callsites are migrated (kv-store, log-store, storage-mode,
+  credential-store, first-run, first-run-edge, signing-secret,
+  skills/store, storage/status route). `.env.example` documents both
+  naming variants with an operator-facing comment block. Contract
+  test `tests/contract/upstash-env-single-reader.test.ts` enforces
+  the single-reader invariant going forward.
+- **ARCH-AUDIT fold-in** — The module-load disk-I/O side effect at
+  `first-run.ts:422` (ran the v0.10 tenant-prefix migration on every
+  `rehydrateBootstrapAsync()` call, making test order depend on
+  file-system state) is eliminated. The migration now fires once per
+  process from inside the `withBootstrapRehydrate` HOC, gated by an
+  in-process one-shot flag.
+
+No breaking changes. Operators see identical behavior; connector
+authors see no API surface shifts. Phase 37 ships mergeable independent
+of Phases 38-40 (safety/observability, multi-host, tests/docs).
+
 ## [0.1.0] - 2026-04-18 — Stabilization release
 
 This is the consolidated v0.1.0 release: the project was internally
