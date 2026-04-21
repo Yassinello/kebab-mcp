@@ -14,6 +14,15 @@ export default defineConfig({
       "tests/integration/multi-host.test.ts",
       "tests/integration/server-startup.test.ts",
       "tests/integration/welcome-durability.test.ts",
+      // QA-01 (Phase 45 Task 7): UI + component render tests run under
+      // the isolated forked pool via `vitest.ui.config.ts`. Excluding
+      // them here prevents double-execution when `npm test` chains both
+      // configs. Pure-module tests (wizard-steps.test.ts, hook renderHook
+      // tests) live under tests/ui/ too, but they get the isolated pool
+      // treatment anyway — cost is a few hundred ms, benefit is one
+      // command.
+      "tests/components/**/*.test.tsx",
+      "tests/ui/**/*.test.tsx",
     ],
     // first-run tests share OS /tmp paths; run files sequentially to avoid
     // cross-worker races on BOOTSTRAP_PATH.
