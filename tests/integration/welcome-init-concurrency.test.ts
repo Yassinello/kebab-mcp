@@ -553,3 +553,194 @@ describe("CORR-03a — no-KV mode", () => {
     expect(at200).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// CORR-03b — auto-magic Vercel env-write path (Vercel REST mocked)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// JC-3: we stub the env-store module boundary rather than intercepting
+// fetch() calls into Vercel's REST API. This keeps the test cheap and
+// isolated — the env-store module is already the seam the route
+// handler depends on (`isVercelAutoMagicAvailable` / `getEnvStore` /
+// `triggerVercelRedeploy`). Stubbing at this layer also makes the
+// assertion shape (vars object passed to write()) directly readable
+// without re-parsing HTTP request bodies.
+
+describe("CORR-03b — auto-magic Vercel env-write path", () => {
+  beforeEach(() => {
+    saveEnv();
+    resetTestFilesystem();
+    // Upstash-mocked so the flush succeeds before the auto-magic branch.
+    process.env.UPSTASH_REDIS_REST_URL = "https://mock-upstash.test";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "mock-token";
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+    delete process.env.VERCEL;
+    delete process.env.MYMCP_RECOVERY_RESET;
+    delete process.env.MCP_AUTH_TOKEN;
+    // Set auto-magic creds so isVercelAutoMagicAvailable() returns true
+    // even without our mock (belt and suspenders). The mock is the
+    // authoritative override.
+    process.env.VERCEL_TOKEN = "vercel-mock-token";
+    process.env.VERCEL_PROJECT_ID = "prj_mock";
+    process.env.MYMCP_TRUST_URL_HOST = "1";
+    process.env.MYMCP_ALLOW_EPHEMERAL_SECRET = "1";
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@/core/env-store");
+    vi.doUnmock("@/core/kv-store");
+    restoreEnv();
+  });
+
+  function installKvMock(): void {
+    const { kv } = makeUpstashMock();
+    vi.doMock("@/core/kv-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/kv-store");
+      return {
+        ...actual,
+        getKVStore: () => kv,
+        resetKVStoreCache: () => {
+          /* no-op */
+        },
+        isExternalKvAvailable: () => true,
+      };
+    });
+  }
+
+  it("happy path: 200 + token + envWritten:true + redeployTriggered:true; write() sees MCP_AUTH_TOKEN = body.token", async () => {
+    installKvMock();
+
+    const writeMock = vi.fn(async (_vars: Record<string, string>) => ({ written: 1 }));
+    const redeployMock = vi.fn(async () => ({ ok: true as const, deploymentId: "dep_test_123" }));
+
+    vi.doMock("@/core/env-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/env-store");
+      return {
+        ...actual,
+        isVercelAutoMagicAvailable: () => true,
+        getEnvStore: () => ({ write: writeMock, kind: "vercel" as const }),
+        triggerVercelRedeploy: redeployMock,
+      };
+    });
+
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "a".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
+      ok?: boolean;
+      token?: string;
+      autoMagic?: boolean;
+      envWritten?: boolean;
+      redeployTriggered?: boolean;
+      redeployError?: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.autoMagic).toBe(true);
+    expect(body.envWritten).toBe(true);
+    expect(body.redeployTriggered).toBe(true);
+    // redeployError is either undefined or null (the route doesn't
+    // populate it on success).
+    expect(body.redeployError ?? null).toBeNull();
+
+    // Value-equality: the vars object passed to write() must contain
+    // MCP_AUTH_TOKEN with the SAME value the response body echoed.
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(writeMock).toHaveBeenCalledWith({ MCP_AUTH_TOKEN: body.token });
+    expect(redeployMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("env-write failure: 200 with envWritten:false, token still present (best-effort catch)", async () => {
+    installKvMock();
+
+    const writeMock = vi.fn(async () => {
+      throw new Error("Vercel rate-limited");
+    });
+    const redeployMock = vi.fn(async () => ({ ok: true as const, deploymentId: "dep_ok" }));
+
+    vi.doMock("@/core/env-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/env-store");
+      return {
+        ...actual,
+        isVercelAutoMagicAvailable: () => true,
+        getEnvStore: () => ({ write: writeMock, kind: "vercel" as const }),
+        triggerVercelRedeploy: redeployMock,
+      };
+    });
+
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "c".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
+      ok?: boolean;
+      token?: string;
+      autoMagic?: boolean;
+      envWritten?: boolean;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.autoMagic).toBe(true);
+    expect(body.envWritten).toBe(false);
+    // The route's catch around the write() call swallows the throw
+    // (it logs but does not bubble) so the user still gets a working
+    // in-memory token.
+  });
+
+  it("redeploy failure: 200 with redeployTriggered:false, redeployError populated", async () => {
+    installKvMock();
+
+    const writeMock = vi.fn(async () => ({ written: 1 }));
+    const redeployMock = vi.fn(async () => ({ ok: false as const, error: "rate_limit" }));
+
+    vi.doMock("@/core/env-store", async (orig) => {
+      const actual = (await orig()) as typeof import("@/core/env-store");
+      return {
+        ...actual,
+        isVercelAutoMagicAvailable: () => true,
+        getEnvStore: () => ({ write: writeMock, kind: "vercel" as const }),
+        triggerVercelRedeploy: redeployMock,
+      };
+    });
+
+    await resetRouteState();
+    const { POST } = await import("../../app/api/welcome/init/route");
+    const { bootstrapToken } = await import("@/core/first-run");
+
+    const claim = "d".repeat(64);
+    bootstrapToken(claim);
+    const cookie = await signClaimCookie(claim);
+
+    const r = await POST(await buildInitRequest(cookie));
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
+      ok?: boolean;
+      token?: string;
+      autoMagic?: boolean;
+      envWritten?: boolean;
+      redeployTriggered?: boolean;
+      redeployError?: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.autoMagic).toBe(true);
+    expect(body.envWritten).toBe(true);
+    expect(body.redeployTriggered).toBe(false);
+    expect(body.redeployError).toBe("rate_limit");
+  });
+});
