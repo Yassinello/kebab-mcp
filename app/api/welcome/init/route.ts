@@ -100,6 +100,13 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
   // Flush errors (auth / rate limit / network) still surface as a 500
   // via the existing contract: the caller retries rather than ships
   // a doomed token.
+  //
+  // Degraded-mode contract — which backends arbitrate the
+  // concurrent-claim race:
+  //   · Upstash (production): atomic SET NX EX — fully protected.
+  //   · FilesystemKV (Docker): serialized in-process only.
+  //   · MemoryKV / no-KV: NOT protected (documented dev-mode).
+  // See docs/HOSTING.md#degraded-mode-contract for the full matrix.
   let flushResult: Awaited<ReturnType<typeof flushBootstrapToKvIfAbsent>>;
   try {
     flushResult = await flushBootstrapToKvIfAbsent();

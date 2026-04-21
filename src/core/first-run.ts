@@ -380,6 +380,21 @@ export async function flushBootstrapToKv(): Promise<void> {
  * otherwise. The caller is responsible for translating ok=false into
  * a visible error (the handler does not leak the winner's token
  * into the 409 response body).
+ *
+ * Degraded-mode contract (authoritative table lives in
+ * docs/HOSTING.md#degraded-mode-contract):
+ *   - Upstash (production): atomic SET NX EX — cross-lambda safe.
+ *   - FilesystemKV (Docker, single-process dev): serialized via the
+ *     store's write queue. Covers in-process concurrent requests;
+ *     cross-process races require Upstash.
+ *   - MemoryKV (test / ephemeral Node): Map.has guard — in-process
+ *     only; each lambda has its own memory store, so production on
+ *     MemoryKV is NOT safe for cross-lambda races.
+ *   - No external KV configured (isExternalKvAvailable() === false):
+ *     unprotected race window. Acceptable for single-process local
+ *     dev; NOT acceptable for production.
+ *
+ * @see docs/HOSTING.md#degraded-mode-contract
  */
 export async function flushBootstrapToKvIfAbsent(): Promise<
   { ok: true } | { ok: false; reason: "already_minted"; existing: BootstrapPayload | null }
