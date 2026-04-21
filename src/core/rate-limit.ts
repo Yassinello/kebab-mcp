@@ -12,6 +12,46 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex").slice(0, 16);
 }
 
+// ── HOST-05: in-memory-only rate-limit path (opt-in) ────────────────
+//
+// `MYMCP_RATE_LIMIT_INMEMORY=1` forces the limiter to use this
+// in-process Map instead of the KV backend. UNSAFE across replicas —
+// each process holds its own counter map — so it is NOT the default.
+// Intended for:
+//   - single-process dev/test setups that want deterministic
+//     non-KV behavior
+//   - pure unit tests that do not want to touch the filesystem
+// The normal path (flag unset / any other value) uses `getKVStore()`
+// which auto-selects Upstash or FilesystemKV; both converge counters
+// across replicas via KV. See docs/HOSTING.md §"Rate limiting".
+const inMemoryBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimitInMemory(key: string, limit: number, resetAt: number): RateLimitResult {
+  const now = Date.now();
+  const entry = inMemoryBuckets.get(key);
+  if (!entry || now >= entry.resetAt) {
+    // Fresh bucket (or the previous one has expired).
+    inMemoryBuckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: Math.max(0, limit - 1), resetAt };
+  }
+  entry.count += 1;
+  if (entry.count > limit) {
+    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
+  }
+  return { allowed: true, remaining: Math.max(0, limit - entry.count), resetAt: entry.resetAt };
+}
+
+/**
+ * Test-only: clear the in-memory rate-limit bucket map.
+ *
+ * Exposed under a `__` prefix so callers understand this is not part
+ * of the public API. Used by `tests/integration/multi-host.test.ts` to
+ * reset state between scenarios.
+ */
+export function __resetInMemoryRateLimitForTests(): void {
+  inMemoryBuckets.clear();
+}
+
 /**
  * Sliding-window (fixed per-minute bucket) rate limiter.
  *
@@ -44,6 +84,13 @@ export async function checkRateLimit(
   const idHash = hashToken(identifier);
   const tenantId = getCurrentTenantId() ?? "global";
   const key = `ratelimit:${tenantId}:${scope}:${idHash}:${minuteBucket}`;
+
+  // HOST-05: opt-in in-memory path. UNSAFE across replicas. Must be
+  // checked BEFORE getKVStore() so dev/test setups that want a pure
+  // in-process limiter never touch KV (filesystem or Upstash).
+  if (process.env.MYMCP_RATE_LIMIT_INMEMORY === "1") {
+    return checkRateLimitInMemory(key, limit, resetAt);
+  }
 
   const kv = getKVStore();
 
