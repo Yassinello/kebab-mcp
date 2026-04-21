@@ -37,6 +37,12 @@ const FILE_ALLOWLIST = new Set<string>([
   // allowlist the new home. The old shim entry stays to guard
   // against future inline expansion of the welcome-client.tsx shim.
   "app/welcome/WelcomeShell.tsx",
+  // Phase 47 WIRE-01a/b/c: step JSX + fetch-effect clusters split into
+  // per-step files. Each hosts its own `void fn()` idioms for
+  // effect-cleanup and click-handler fire-and-forgets.
+  "app/welcome/steps/storage.tsx",
+  "app/welcome/steps/mint.tsx",
+  "app/welcome/steps/test.tsx",
   "app/config/tabs/storage.tsx",
   // OBS-05: Health tab uses `void refresh()` inside a setInterval
   // callback — standard React idiom for ignoring a useCallback

@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import { isFirstRunMode, isBootstrapActive } from "@/core/first-run";
-import WelcomeClient from "./welcome-client";
+import { WelcomeShell } from "./WelcomeShell";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function WelcomePage({
       const proto = hdrs.get("x-forwarded-proto") || "https";
       const instanceUrl = host ? `${proto}://${host}` : "";
       return (
-        <WelcomeClient
+        <WelcomeShell
           initialBootstrap={false}
           previewMode
           previewToken={token}
@@ -75,7 +75,7 @@ export default async function WelcomePage({
   const recoveryResetActive = process.env.MYMCP_RECOVERY_RESET === "1";
 
   return (
-    <WelcomeClient
+    <WelcomeShell
       initialBootstrap={isBootstrapActive()}
       recoveryResetActive={recoveryResetActive}
     />

@@ -177,19 +177,26 @@ describe("TEST-03 batch A.1 — welcome-flow regressions", () => {
     // The concrete behavior is in the welcome render tree — the gate
     // variable was renamed from `permanent` to `persistenceReady`.
     // Phase 45 Task 5 moved the render tree from `welcome-client.tsx`
-    // (now a 29-LOC shim) into `WelcomeShell.tsx`. The grep-contract
-    // follows the body — it reads both files and accepts the match
-    // from either (the shim re-exports the shell, so both
-    // compositions are wired).
-    const welcomeClient = readFileSync(
-      resolve(process.cwd(), "app/welcome/welcome-client.tsx"),
-      "utf-8"
-    );
+    // into `WelcomeShell.tsx`; Phase 47 WIRE-01c further migrated the
+    // `persistenceReady` gate into `app/welcome/steps/test.tsx`. The
+    // grep-contract concatenates all three so the assertion fires
+    // against whichever file owns the gate today. Phase 47 WIRE-05
+    // retired the `welcome-client.tsx` shim — fall back to an empty
+    // string if the shim is gone.
+    const welcomeClient = (() => {
+      try {
+        return readFileSync(resolve(process.cwd(), "app/welcome/welcome-client.tsx"), "utf-8");
+      } catch {
+        return "";
+      }
+    })();
     const welcomeShell = readFileSync(
       resolve(process.cwd(), "app/welcome/WelcomeShell.tsx"),
       "utf-8"
     );
-    const combined = welcomeClient + "\n" + welcomeShell;
+    const testStep = readFileSync(resolve(process.cwd(), "app/welcome/steps/test.tsx"), "utf-8");
+    const mintStep = readFileSync(resolve(process.cwd(), "app/welcome/steps/mint.tsx"), "utf-8");
+    const combined = [welcomeClient, welcomeShell, testStep, mintStep].join("\n");
 
     // Must have the post-fix variable present.
     expect(combined).toMatch(/persistenceReady/);
