@@ -4,6 +4,7 @@ import { detectStorageMode } from "@/core/storage-mode";
 import { saveCredentialsToKV, readAllCredentialsFromKV } from "@/core/credential-store";
 import { getEnvStore, parseEnvFile } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/storage/import
@@ -20,7 +21,7 @@ import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
  * so a user importing their backup can restore display name + timezone
  * even before re-enabling KV/file storage.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -217,3 +218,5 @@ export async function POST(request: Request) {
     diff: { added, updated, unchanged },
   });
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

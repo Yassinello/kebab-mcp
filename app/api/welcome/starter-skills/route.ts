@@ -3,6 +3,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { isClaimer } from "@/core/first-run";
 import { STARTER_SKILLS } from "@/core/starter-skills";
 import { createSkill } from "@/connectors/skills/store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET  /api/welcome/starter-skills              → list curated starter skills
@@ -29,13 +30,13 @@ async function checkWelcomeAuth(request: Request): Promise<Response | null> {
   return adminError;
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkWelcomeAuth(request);
   if (authError) return authError;
   return NextResponse.json({ skills: STARTER_SKILLS });
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkWelcomeAuth(request);
   if (authError) return authError;
 
@@ -67,3 +68,6 @@ export async function POST(request: Request) {
     });
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const POST = withBootstrapRehydrate(postHandler);

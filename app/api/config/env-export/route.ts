@@ -3,13 +3,14 @@ import { checkAdminAuth } from "@/core/auth";
 import { getEnvStore } from "@/core/env-store";
 import { readAllCredentialsFromKV } from "@/core/credential-store";
 import { getInstanceConfigAsync, SETTINGS_ENV_KEYS } from "@/core/config";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/env-export
  * Returns all credentials as plain text .env format (unmasked).
  * Auth-gated. KV credentials take precedence over env vars.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -104,3 +105,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

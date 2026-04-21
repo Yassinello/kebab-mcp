@@ -1,3 +1,4 @@
+// BOOTSTRAP_EXEMPT: public liveness endpoint — cannot block on KV rehydrate; returns minimal { ok, version } and (with ?deep=1) per-connector diagnose(). Bootstrap state is never read here.
 import { VERSION } from "@/core/version";
 import { resolveRegistry } from "@/core/registry";
 import { checkAdminAuth } from "@/core/auth";

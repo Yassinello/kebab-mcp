@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/auth-token
@@ -16,7 +17,7 @@ import { checkAdminAuth } from "@/core/auth";
  * "token-less server" from "wrong token"). Both states now return 401 so
  * an unauthorized caller cannot tell them apart.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -26,3 +27,5 @@ export async function GET(request: Request) {
   }
   return NextResponse.json({ ok: true, token });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

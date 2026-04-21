@@ -3,6 +3,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { parseFrontmatter } from "@/core/frontmatter";
 import { fetchRemote } from "@/connectors/skills/lib/remote-fetcher";
 import { createSkill } from "@/connectors/skills/store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/config/skills/import
@@ -83,7 +84,7 @@ function buildSkillFromContent(
   };
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -142,3 +143,5 @@ export async function POST(request: Request) {
     });
   }
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

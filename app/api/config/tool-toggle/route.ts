@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { setToolDisabled } from "@/core/tool-toggles";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/config/tool-toggle
@@ -9,7 +10,7 @@ import { setToolDisabled } from "@/core/tool-toggles";
  * Body: { tool: string, disabled: boolean }
  * Writes to KV + emits env.changed to invalidate registry.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -48,3 +49,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

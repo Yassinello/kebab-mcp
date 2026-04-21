@@ -8,6 +8,7 @@ import {
   resetCredentialHydration,
 } from "@/core/credential-store";
 import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -44,7 +45,7 @@ async function persistKvSettings(kvVars: Record<string, string>): Promise<void> 
  * GET /api/config/env
  * Returns current env vars. Sensitive values are masked unless `?reveal=1`.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
  * Body: { vars: Record<string, string> } — batch write.
  * Or: { key, value } — single write.
  */
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -215,3 +216,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const PUT = withBootstrapRehydrate(putHandler);

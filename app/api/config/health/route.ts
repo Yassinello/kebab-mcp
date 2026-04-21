@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { isFirstRunMode, isBootstrapActive } from "@/core/first-run";
 import { isVercelAutoMagicAvailable } from "@/core/env-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export interface HealthResponse {
  * provenance (permanent vs in-memory bootstrap vs unconfigured) and whether
  * the Vercel auto-deploy path is available.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -52,3 +53,5 @@ export async function GET(request: Request) {
   };
   return NextResponse.json(body);
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

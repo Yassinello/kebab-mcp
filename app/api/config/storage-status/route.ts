@@ -7,6 +7,7 @@ import {
   isUpstashConfigured,
   isVercelApiConfigured,
 } from "@/core/credential-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/storage-status
@@ -15,7 +16,7 @@ import {
  * Auth: admin auth when MCP_AUTH_TOKEN is set; otherwise accept
  * first-run claimer or loopback (same pattern as /api/setup/test).
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   if (process.env.MCP_AUTH_TOKEN) {
     const authError = await checkAdminAuth(request);
     if (authError) return authError;
@@ -35,3 +36,5 @@ export async function GET(request: Request) {
     isVercel: process.env.VERCEL === "1",
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

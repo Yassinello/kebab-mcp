@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
-import { isClaimer, rehydrateBootstrapAsync } from "@/core/first-run";
+import { isClaimer } from "@/core/first-run";
 import { isLoopbackRequest } from "@/core/request-utils";
 import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { CRED_PREFIX } from "@/core/credential-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/storage/status
@@ -18,13 +19,12 @@ import { CRED_PREFIX } from "@/core/credential-store";
  *   ?force=1 — bust the 60s detection cache (used by "Recheck" button)
  *   ?counts=0 — skip the count scan when only the mode is needed (cheap path)
  */
-export async function GET(request: Request) {
-  // Rehydrate bootstrap state from /tmp (same container) or KV (cross-container)
-  // before the auth check. Without this, a cold lambda that didn't serve the
-  // original /welcome/claim call has no in-memory record of the claim and
-  // rejects the welcome flow's status polling with 401, leaving the user
-  // stuck on "Detecting your storage…".
-  await rehydrateBootstrapAsync();
+async function getHandler(request: Request) {
+  // Rehydrate is handled by withBootstrapRehydrate at the HOC boundary
+  // (DUR-01). Without it, a cold lambda that didn't serve the original
+  // /welcome/claim call has no in-memory record of the claim and rejects
+  // the welcome flow's status polling with 401, leaving the user stuck
+  // on "Detecting your storage…".
 
   // Accept EITHER a valid first-run claim cookie OR loopback OR admin auth.
   // During bootstrap, the welcome client only has the claim cookie — it
@@ -88,3 +88,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

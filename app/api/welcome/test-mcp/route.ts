@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/welcome/test-mcp
@@ -11,7 +12,7 @@ import { NextResponse } from "next/server";
  * Body: { token: string }
  * Response: { ok, authPassed, status, toolsCount?, error? }
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   let token: string | undefined;
   try {
     const body = (await request.json()) as { token?: string };
@@ -77,3 +78,5 @@ export async function POST(request: Request) {
     });
   }
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
 import type { z } from "zod";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/tool-schema?tool=<name>
@@ -12,7 +13,7 @@ import type { z } from "zod";
  * GET /api/config/tool-schema (no ?tool param)
  * Returns a list of all registered tools with name + description + connector.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -177,3 +178,5 @@ function unwrapZodType(name: string, zodType: z.ZodTypeAny): FieldDescriptor {
 
   return { name, type: "unknown", description, required, default: defaultValue };
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

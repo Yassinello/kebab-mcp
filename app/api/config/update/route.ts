@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { execSync } from "node:child_process";
 import { checkAdminAuth } from "@/core/auth";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET  /api/config/update → check if updates are available
@@ -46,7 +47,7 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
   return { ok: false, error: "No upstream or origin remote configured." };
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
   });
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -155,3 +156,6 @@ export async function POST(request: Request) {
     note: "Merged. Restart the dev server to load new code (Next.js auto-reloads most changes).",
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const POST = withBootstrapRehydrate(postHandler);

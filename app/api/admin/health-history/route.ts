@@ -1,6 +1,7 @@
 import { checkAdminAuth } from "@/core/auth";
 import { kvScanAll } from "@/core/kv-store";
 import { getContextKVStore } from "@/core/request-context";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/admin/health-history — admin-gated.
@@ -18,7 +19,7 @@ import { getContextKVStore } from "@/core/request-context";
  * Query params:
  * - `days` — retention window (default: MYMCP_HEALTH_SAMPLE_RETENTION_DAYS or 7)
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -77,3 +78,5 @@ export async function GET(request: Request) {
 
   return Response.json(samples);
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

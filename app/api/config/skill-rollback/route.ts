@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { rollbackSkill } from "@/connectors/skills/store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/config/skill-rollback
@@ -9,7 +10,7 @@ import { rollbackSkill } from "@/connectors/skills/store";
  * Rolls back a skill to a previous version. Creates a new version (N+1)
  * with the old content — history is append-only.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -41,3 +42,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

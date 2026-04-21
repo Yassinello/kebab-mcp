@@ -1,3 +1,4 @@
+// BOOTSTRAP_EXEMPT: inbound webhook receiver authenticated via per-webhook HMAC secrets; tenant-aware rehydrate tracked for v0.11 (37b-FOLLOW-UP.md). Reads only MYMCP_WEBHOOKS + MYMCP_WEBHOOK_SECRET_*, never MCP_AUTH_TOKEN.
 import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { getContextKVStore } from "@/core/request-context";
 

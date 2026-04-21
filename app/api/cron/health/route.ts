@@ -1,3 +1,4 @@
+// BOOTSTRAP_EXEMPT: Vercel cron endpoint authenticated via CRON_SECRET; each enabled connector handles its own state reads via diagnose(); rehydrate not needed on this path and would add cold-start latency to scheduled probes.
 import { resolveRegistry } from "@/core/registry";
 import { isLoopbackRequest } from "@/core/request-utils";
 

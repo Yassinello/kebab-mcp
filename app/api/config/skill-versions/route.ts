@@ -5,13 +5,14 @@ import {
   getSkillVersion,
   getSkillCurrentVersion,
 } from "@/connectors/skills/store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/skill-versions?id=<skillId>
  *
  * Returns all versions for a skill with their metadata.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -51,3 +52,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

@@ -3,6 +3,7 @@ import { getEnabledPacks } from "@/core/registry";
 import { withLogging } from "@/core/logging";
 import { requestContext } from "@/core/request-context";
 import { getTenantId } from "@/core/tenant";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * Tool call playground API — test any tool from the dashboard.
@@ -15,7 +16,7 @@ import { getTenantId } from "@/core/tenant";
  * the untenanted KV namespace even when called from a tenant-aware
  * dashboard session. See .planning/research/RISKS-AUDIT.md finding #4.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -69,3 +70,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

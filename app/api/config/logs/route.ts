@@ -3,6 +3,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { getRecentLogs, getDurableLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
 import { getTenantId, TenantError } from "@/core/tenant";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/logs?count=100&filter=all|errors|success
@@ -18,7 +19,7 @@ import { getTenantId, TenantError } from "@/core/tenant";
  *
  * Admin-auth-gated.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -65,3 +66,5 @@ export async function GET(request: Request) {
   }
   return NextResponse.json({ ok: true, logs, source: "memory" });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

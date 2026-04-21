@@ -4,6 +4,7 @@ import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { CRED_PREFIX, readAllCredentialsFromKV } from "@/core/credential-store";
 import { getEnvStore } from "@/core/env-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/storage/migrate
@@ -24,7 +25,7 @@ import { getEnvStore } from "@/core/env-store";
  * succeed in `migrated` and the failures in `errors` so the operator can
  * retry just those.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -223,3 +224,5 @@ export async function POST(request: Request) {
     errors: [],
   });
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

@@ -5,10 +5,10 @@ import {
   isClaimer,
   isFirstRunMode,
   isBootstrapActive,
-  rehydrateBootstrapAsync,
 } from "@/core/first-run";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
 import { getEnvStore, isVercelAutoMagicAvailable, triggerVercelRedeploy } from "@/core/env-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/welcome/init
@@ -23,7 +23,7 @@ import { getEnvStore, isVercelAutoMagicAvailable, triggerVercelRedeploy } from "
  * but never bubble up: the user always has a working in-memory token they
  * can fall back to copy/paste.
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   // Foot-shoot guard: MYMCP_RECOVERY_RESET=1 wipes the bootstrap on every
   // cold lambda startup (forceReset deletes /tmp + KV). Letting init mint
   // a token in this state hands the user a doomed credential — the very
@@ -39,7 +39,6 @@ export async function POST(request: Request) {
     );
   }
 
-  await rehydrateBootstrapAsync();
   if (!isFirstRunMode() && !isBootstrapActive()) {
     return NextResponse.json({ error: "Already initialized" }, { status: 409 });
   }
@@ -145,3 +144,5 @@ export async function POST(request: Request) {
     redeployError,
   });
 }
+
+export const POST = withBootstrapRehydrate(postHandler);

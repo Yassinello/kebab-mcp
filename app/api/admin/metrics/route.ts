@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getToolStats, getRecentLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/admin/metrics
@@ -22,7 +23,7 @@ import { getLogStore } from "@/core/log-store";
  * which tools are hot (some tool names hint at the deployment's
  * intended use).
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -42,3 +43,5 @@ export async function GET(request: Request) {
     storeKind: store.kind,
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

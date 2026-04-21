@@ -1,7 +1,7 @@
 import { createMcpHandler } from "mcp-handler";
 import { withLogging } from "@/core/logging";
 import { checkMcpAuth, extractToken } from "@/core/auth";
-import { isFirstRunMode, rehydrateBootstrapAsync } from "@/core/first-run";
+import { isFirstRunMode } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
 import { hydrateCredentialsFromKV, getHydratedCredentialSnapshot } from "@/core/credential-store";
@@ -9,6 +9,7 @@ import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
 import { requestContext } from "@/core/request-context";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -154,17 +155,15 @@ async function buildHandler(
 }
 
 async function handler(request: Request): Promise<Response> {
-  // Rehydrate first-run bootstrap state from /tmp (same container) or
-  // KV (cross-container) before the isFirstRunMode check. On Vercel
-  // without auto-magic, the welcome flow mints MCP_AUTH_TOKEN into the
-  // minting lambda's process.env only — cold lambdas that respond to
-  // Claude Desktop / Cursor / etc. have to pull the token back from
-  // persistent storage on first request, otherwise every MCP call
-  // returns 503 until someone manually pastes the token into Vercel
-  // env vars. The durable-backend welcome flow writes the bootstrap
-  // to KV at mint time (see persistBootstrapToKv), so this restore is
-  // effectively instant on any request after setup completes.
-  await rehydrateBootstrapAsync();
+  // Rehydrate is handled by withBootstrapRehydrate at the HOC boundary
+  // (DUR-01). On Vercel without auto-magic, the welcome flow mints
+  // MCP_AUTH_TOKEN into the minting lambda's process.env only — cold
+  // lambdas that respond to Claude Desktop / Cursor / etc. have to pull
+  // the token back from persistent storage on first request, otherwise
+  // every MCP call returns 503 until someone manually pastes the token
+  // into Vercel env vars. The durable-backend welcome flow writes the
+  // bootstrap to KV at mint time (see persistBootstrapToKv), so this
+  // restore is effectively instant on any request after setup completes.
 
   // Zero-config / first-run guard: if the instance has not yet been
   // initialized via /welcome, refuse all MCP traffic with a clear message.
@@ -204,4 +203,5 @@ async function handler(request: Request): Promise<Response> {
   return response;
 }
 
-export { handler as GET, handler as POST, handler as DELETE };
+const wrapped = withBootstrapRehydrate(handler);
+export { wrapped as GET, wrapped as POST, wrapped as DELETE };

@@ -7,12 +7,13 @@ import {
   updateSkillVersioned,
 } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: Request, ctx: RouteContext) {
+async function getHandler(request: Request, ctx: RouteContext) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
@@ -23,7 +24,7 @@ export async function GET(request: Request, ctx: RouteContext) {
   return NextResponse.json({ ok: true, skill });
 }
 
-export async function PATCH(request: Request, ctx: RouteContext) {
+async function patchHandler(request: Request, ctx: RouteContext) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
@@ -61,7 +62,7 @@ export async function PATCH(request: Request, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(request: Request, ctx: RouteContext) {
+async function deleteHandler(request: Request, ctx: RouteContext) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
@@ -71,3 +72,7 @@ export async function DELETE(request: Request, ctx: RouteContext) {
   }
   return NextResponse.json({ ok: true });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const PATCH = withBootstrapRehydrate(patchHandler);
+export const DELETE = withBootstrapRehydrate(deleteHandler);

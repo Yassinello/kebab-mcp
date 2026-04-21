@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { getTenantId } from "@/core/tenant";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 interface RateLimitScope {
   scope: string;
@@ -26,7 +27,7 @@ interface RateLimitScope {
  * An explicit `admin:global` future header could opt into the old
  * cross-tenant view; not exposed in v0.10.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -116,3 +117,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

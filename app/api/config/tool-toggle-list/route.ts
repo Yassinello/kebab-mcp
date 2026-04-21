@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getDisabledTools, getDisabledToolsForTenant } from "@/core/tool-toggles";
 import { getTenantId, TenantError } from "@/core/tenant";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/tool-toggle-list
@@ -9,7 +10,7 @@ import { getTenantId, TenantError } from "@/core/tenant";
  * Returns the list of currently disabled tool names. Auth-gated.
  * When x-mymcp-tenant header is present, returns tenant-scoped toggles.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -34,3 +35,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

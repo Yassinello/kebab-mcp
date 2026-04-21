@@ -3,13 +3,14 @@ import { resolveRegistry } from "@/core/registry";
 import { getInstanceConfigAsync } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
 import { VERSION } from "@/core/version";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * Private admin status endpoint — requires ADMIN_AUTH_TOKEN.
  * Returns detailed pack diagnostics, tool counts, config, and recent logs.
  * Runs diagnose() on enabled packs to verify credentials actually work.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -68,3 +69,5 @@ export async function GET(request: Request) {
     _ephemeral: "Logs are in-memory and reset on cold start.",
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

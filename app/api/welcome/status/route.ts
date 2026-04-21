@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { isFirstRunMode, isBootstrapActive, rehydrateBootstrapAsync } from "@/core/first-run";
+import { isFirstRunMode, isBootstrapActive } from "@/core/first-run";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/welcome/status
@@ -8,10 +9,11 @@ import { isFirstRunMode, isBootstrapActive, rehydrateBootstrapAsync } from "@/co
  * their token into Vercel and triggered a redeploy. At that point
  * MCP_AUTH_TOKEN is set "for real" and isBootstrapActive() returns false.
  */
-export async function GET() {
-  await rehydrateBootstrapAsync();
+async function getHandler(_request: Request) {
   const initialized = !isFirstRunMode();
   const isBootstrap = isBootstrapActive();
   const permanent = initialized && !isBootstrap;
   return NextResponse.json({ initialized, permanent, isBootstrap });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

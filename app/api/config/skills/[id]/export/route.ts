@@ -1,5 +1,6 @@
 import { checkAdminAuth } from "@/core/auth";
 import { getSkill } from "@/connectors/skills/store";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -17,7 +18,7 @@ interface RouteContext {
  *
  *   {content}
  */
-export async function GET(request: Request, ctx: RouteContext) {
+async function getHandler(request: Request, ctx: RouteContext) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
@@ -49,3 +50,5 @@ export async function GET(request: Request, ctx: RouteContext) {
     },
   });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

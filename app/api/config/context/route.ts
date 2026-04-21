@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getKVStore } from "@/core/kv-store";
 import { getInstanceConfigAsync, saveInstanceConfig } from "@/core/config";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * GET /api/config/context
@@ -25,7 +26,7 @@ interface ContextState {
   vaultPath: string;
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
   } satisfies ContextState);
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -93,3 +94,6 @@ export async function PUT(request: Request) {
 
   return NextResponse.json({ ok: true, mode });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const PUT = withBootstrapRehydrate(putHandler);

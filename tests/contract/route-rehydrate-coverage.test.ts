@@ -88,7 +88,7 @@ function hasExportedVerb(source: string): boolean {
   return re.test(source);
 }
 
-describe.skip("route-rehydrate-coverage contract (DUR-01 + DUR-03)", () => {
+describe("route-rehydrate-coverage contract (DUR-01 + DUR-03)", () => {
   it("every auth-gated route wraps exports in withBootstrapRehydrate or carries BOOTSTRAP_EXEMPT marker", () => {
     const projectRoot = join(__dirname, "..", "..");
     const files: string[] = [];

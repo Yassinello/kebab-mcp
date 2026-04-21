@@ -7,9 +7,10 @@ import {
 } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 import { getEnabledPacks } from "@/core/registry";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /** GET /api/config/skills — list all skills. */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
  * POST /api/config/skills — create a new skill.
  * Body: SkillCreateInput (name, description, content, arguments, source)
  */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -98,3 +99,6 @@ function findToolCollision(toolName: string): string | null {
   }
   return null;
 }
+
+export const GET = withBootstrapRehydrate(getHandler);
+export const POST = withBootstrapRehydrate(postHandler);

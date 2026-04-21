@@ -1,12 +1,13 @@
 import { Google } from "arctic";
 import { checkAdminAuth } from "@/core/auth";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * Initiates Google OAuth consent flow.
  * Redirects user to Google's consent page.
  * Admin auth required.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -52,3 +53,5 @@ export async function GET(request: Request) {
 
   return response;
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

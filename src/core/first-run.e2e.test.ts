@@ -97,7 +97,7 @@ describe("e2e: happy path manual flow", () => {
     expect(process.env.MCP_AUTH_TOKEN).toBeUndefined();
 
     // Step 3: status — bootstrap active
-    const statusRes = await statusGet();
+    const statusRes = await statusGet(makeRequest("http://localhost/api/welcome/status"));
     const statusBody = (await statusRes.json()) as {
       initialized: boolean;
       permanent: boolean;
@@ -111,7 +111,7 @@ describe("e2e: happy path manual flow", () => {
     clearBootstrap();
     process.env.MCP_AUTH_TOKEN = "x".repeat(32);
 
-    const statusRes2 = await statusGet();
+    const statusRes2 = await statusGet(makeRequest("http://localhost/api/welcome/status"));
     const statusBody2 = (await statusRes2.json()) as {
       initialized: boolean;
       permanent: boolean;

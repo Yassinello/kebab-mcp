@@ -1,11 +1,12 @@
 import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * Run diagnose() on all enabled packs and return results.
  * Used by the setup page for live credential verification.
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
@@ -38,3 +39,5 @@ export async function GET(request: Request) {
 
   return Response.json({ packs: results });
 }
+
+export const GET = withBootstrapRehydrate(getHandler);

@@ -29,7 +29,10 @@ export const BOOTSTRAP_EXEMPT_MARKER = "BOOTSTRAP_EXEMPT:";
 // only by `__resetBootstrapRehydrateForTests()`.
 let migrationScheduled = false;
 
-type Handler<C = unknown> = (req: Request, ctx?: C) => Promise<Response>;
+// Any Next.js route handler signature: first arg is the Request, optional
+// trailing arg is the dynamic-route ctx `{ params: Promise<...> }`. The
+// generic `H` below preserves whichever signature the caller produced.
+type AnyHandler = (req: Request, ...rest: never[]) => Promise<Response>;
 
 /**
  * Wrap a Next.js route handler so `rehydrateBootstrapAsync()` runs before
@@ -40,18 +43,25 @@ type Handler<C = unknown> = (req: Request, ctx?: C) => Promise<Response>;
  * Re-throws rehydrate errors — the caller (Next.js) decides how to respond.
  * No swallowing; the session-bug class was partly caused by silent
  * swallows hiding infrastructure failures.
+ *
+ * Generic `H` preserves the caller's exact signature (including ctx type
+ * for dynamic routes like `[id]/route.ts`) — `wrapped as H` is a safe
+ * cast because the wrapper forwards `...rest` verbatim. Using `never[]`
+ * on the bound keeps `H` contravariant so routes with typed ctx (e.g.
+ * `{ params: Promise<{ id: string }> }`) still satisfy `H extends AnyHandler`.
  */
-export function withBootstrapRehydrate<H extends Handler>(handler: H): H {
-  const wrapped = async (req: Request, ctx?: unknown): Promise<Response> => {
+export function withBootstrapRehydrate<H extends AnyHandler>(handler: H): H {
+  const wrapped = (async (req: Request, ...rest: unknown[]): Promise<Response> => {
     await rehydrateBootstrapAsync();
     if (!migrationScheduled) {
       migrationScheduled = true;
       // fire-and-forget OK: v0.10 one-shot tenant-prefix migration; KV-flagged idempotent, never blocks request path
       void runV010TenantPrefixMigration().catch(() => {});
     }
-    return handler(req, ctx);
-  };
-  return wrapped as H;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (handler as unknown as (req: Request, ...r: any[]) => Promise<Response>)(req, ...rest);
+  }) as unknown as H;
+  return wrapped;
 }
 
 /**

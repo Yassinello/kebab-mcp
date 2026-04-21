@@ -1,3 +1,4 @@
+// BOOTSTRAP_EXEMPT: public OAuth redirect target; reads only deploy-time GOOGLE_CLIENT_ID/SECRET + VERCEL_URL, never bootstrap state or MCP_AUTH_TOKEN.
 import { Google } from "arctic";
 
 /**

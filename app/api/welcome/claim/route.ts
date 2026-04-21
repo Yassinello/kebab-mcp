@@ -3,11 +3,11 @@ import {
   getOrCreateClaim,
   isFirstRunMode,
   isBootstrapActive,
-  rehydrateBootstrapAsync,
   FIRST_RUN_COOKIE_NAME,
   CLAIM_TTL_MS,
 } from "@/core/first-run";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
+import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 /**
  * POST /api/welcome/claim
@@ -18,8 +18,7 @@ import { SigningSecretUnavailableError } from "@/core/signing-secret";
  *   { status: "new", isNew: true } (sets cookie)
  *   { status: "claimed-by-other" }
  */
-export async function POST(request: Request) {
-  await rehydrateBootstrapAsync();
+async function postHandler(request: Request) {
   if (!isFirstRunMode() && !isBootstrapActive()) {
     return NextResponse.json({ status: "already-initialized" });
   }
@@ -61,3 +60,5 @@ export async function POST(request: Request) {
 
   return res;
 }
+
+export const POST = withBootstrapRehydrate(postHandler);
