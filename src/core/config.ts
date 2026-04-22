@@ -41,11 +41,13 @@ export const SETTINGS_ENV_KEYS = [
 ] as const;
 
 function envConfig(): InstanceConfig {
+  // Phase 50 / BRAND-01: KEBAB_* is the modern key; getConfig() falls
+  // back to MYMCP_* with a once-per-process deprecation warning.
   return {
-    timezone: getConfig("MYMCP_TIMEZONE") || "UTC",
-    locale: getConfig("MYMCP_LOCALE") || "en-US",
-    displayName: getConfig("MYMCP_DISPLAY_NAME") || "User",
-    contextPath: getConfig("MYMCP_CONTEXT_PATH") || "System/context.md",
+    timezone: getConfig("KEBAB_TIMEZONE") || "UTC",
+    locale: getConfig("KEBAB_LOCALE") || "en-US",
+    displayName: getConfig("KEBAB_DISPLAY_NAME") || "User",
+    contextPath: getConfig("KEBAB_CONTEXT_PATH") || "System/context.md",
   };
 }
 
@@ -135,10 +137,11 @@ export async function getInstanceConfigAsync(tenantId?: string | null): Promise<
   // One-time env → KV migration per key. Idempotent: if KV already has a
   // value we never touch it.
   const migrations: Array<Promise<void>> = [];
-  const envDisplay = getConfig("MYMCP_DISPLAY_NAME");
-  const envTz = getConfig("MYMCP_TIMEZONE");
-  const envLocale = getConfig("MYMCP_LOCALE");
-  const envCtx = getConfig("MYMCP_CONTEXT_PATH");
+  // Phase 50 / BRAND-01: KEBAB_* primary; facade handles MYMCP_* fallback.
+  const envDisplay = getConfig("KEBAB_DISPLAY_NAME");
+  const envTz = getConfig("KEBAB_TIMEZONE");
+  const envLocale = getConfig("KEBAB_LOCALE");
+  const envCtx = getConfig("KEBAB_CONTEXT_PATH");
   if (kvDisplay === null && envDisplay) {
     migrations.push(kv.set(KV_KEYS.displayName, envDisplay));
   }

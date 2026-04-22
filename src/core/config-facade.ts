@@ -31,6 +31,7 @@
 
 import { getCredential, requestContext } from "./request-context";
 import { McpConfigError } from "./errors";
+import { BRAND, LEGACY_BRAND, deprecationMsg } from "./constants/brand";
 
 /**
  * Snapshot of process.env captured at module load.
@@ -68,6 +69,78 @@ const RUNTIME_READ_THROUGH = new Set<string>([
 ]);
 
 /**
+ * Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback.
+ *
+ * Dedupe set: once a legacy MYMCP_* read falls through to emit a
+ * deprecation warning, that legacy key is added here so subsequent
+ * reads within the same process stay quiet. This keeps boot logs
+ * scannable without spamming the tenant per warm-lambda invocation.
+ *
+ * Reset via `__resetBrandDeprecationWarnings()` (tests only).
+ */
+const brandDeprecationWarned = new Set<string>();
+
+function emitBrandDeprecation(legacyKey: string, modernKey: string): void {
+  if (brandDeprecationWarned.has(legacyKey)) return;
+  brandDeprecationWarned.add(legacyKey);
+  // Intentional console.warn (not getLogger) — facade must not depend
+  // on logging.ts (circular import risk). Standard deprecated-API shape.
+  console.warn(deprecationMsg(legacyKey, modernKey));
+}
+
+/** Test-only: reset the once-per-process warning dedupe set. */
+export function __resetBrandDeprecationWarnings(): void {
+  brandDeprecationWarned.clear();
+}
+
+/** Test-only: inspect which legacy keys have been warned. */
+export function __getBrandDeprecationWarnings(): ReadonlySet<string> {
+  return brandDeprecationWarned;
+}
+
+/**
+ * Resolve a KEBAB_* / MYMCP_* alias lookup.
+ *
+ * Contract:
+ *  - Non-prefixed keys (e.g. MCP_AUTH_TOKEN, ADMIN_AUTH_TOKEN) — passthrough.
+ *  - KEBAB_* — look up verbatim; fall back to MYMCP_* suffix (warn once).
+ *  - MYMCP_* — look up KEBAB_* with same suffix first; fall back to
+ *    the requested MYMCP_* (warn once on fallback hit).
+ *
+ * Returns undefined when neither is set. Empty string is returned verbatim
+ * (matches pre-Phase-50 semantics — only `!raw` callers treat "" as unset).
+ */
+function resolveAlias(key: string): string | undefined {
+  // Fast path: non-prefixed keys (e.g. MCP_AUTH_TOKEN, NODE_ENV, VERCEL).
+  if (!key.startsWith(BRAND.envPrefix) && !key.startsWith(LEGACY_BRAND.envPrefix)) {
+    return process.env[key];
+  }
+
+  const suffix = key.startsWith(BRAND.envPrefix)
+    ? key.slice(BRAND.envPrefix.length)
+    : key.slice(LEGACY_BRAND.envPrefix.length);
+
+  const kebabKey = BRAND.envPrefix + suffix;
+  const legacyKey = LEGACY_BRAND.envPrefix + suffix;
+
+  const kebabVal = process.env[kebabKey];
+  if (kebabVal !== undefined) return kebabVal;
+
+  const legacyVal = process.env[legacyKey];
+  if (legacyVal !== undefined) {
+    // Empty-string legacy values are treated as "unset" for the purposes
+    // of deprecation warnings: a literal `MYMCP_FOO=""` in the environment
+    // carries no meaningful config, so warning about it would be noise.
+    // The value is still returned verbatim to preserve pre-Phase-50
+    // semantics for any caller that distinguishes "" from undefined.
+    if (legacyVal !== "") emitBrandDeprecation(legacyKey, kebabKey);
+    return legacyVal;
+  }
+
+  return undefined;
+}
+
+/**
  * Primary accessor. Resolves: context → runtime → live process.env → undefined.
  *
  * **Why "live process.env" and not the frozen bootEnv:** SEC-02's
@@ -99,7 +172,9 @@ export function getConfig(key: string): string | undefined {
     if (ctx !== undefined) return ctx;
   }
   if (RUNTIME_READ_THROUGH.has(key)) return process.env[key];
-  return process.env[key];
+  // Phase 50 / BRAND-01: branded-key alias resolution (KEBAB_* priority,
+  // MYMCP_* fallback with once-per-process deprecation warning).
+  return resolveAlias(key);
 }
 
 /**
