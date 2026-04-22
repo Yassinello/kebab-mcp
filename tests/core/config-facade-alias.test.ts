@@ -51,7 +51,7 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
     // No warning should be logged — KEBAB_* is present.
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated/i.test(arg));
+      .filter((arg: unknown) => typeof arg === "string" && /deprecated/i.test(arg));
     expect(deprecationWarnings).toHaveLength(0);
   });
 
@@ -63,7 +63,7 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
 
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated/i.test(arg));
+      .filter((arg: unknown) => typeof arg === "string" && /deprecated/i.test(arg));
     expect(deprecationWarnings).toHaveLength(0);
   });
 
@@ -77,7 +77,8 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
       .filter(
-        (arg) => typeof arg === "string" && /deprecated.*MYMCP_TIMEZONE.*KEBAB_TIMEZONE/i.test(arg)
+        (arg: unknown) =>
+          typeof arg === "string" && /deprecated.*MYMCP_TIMEZONE.*KEBAB_TIMEZONE/i.test(arg)
       );
     expect(deprecationWarnings).toHaveLength(1);
     expect(__getBrandDeprecationWarnings().has("MYMCP_TIMEZONE")).toBe(true);
@@ -91,7 +92,8 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
       .filter(
-        (arg) => typeof arg === "string" && /deprecated.*MYMCP_TIMEZONE.*KEBAB_TIMEZONE/i.test(arg)
+        (arg: unknown) =>
+          typeof arg === "string" && /deprecated.*MYMCP_TIMEZONE.*KEBAB_TIMEZONE/i.test(arg)
       );
     expect(deprecationWarnings).toHaveLength(1);
   });
@@ -112,7 +114,7 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
 
     const deprecationCalls = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated/i.test(arg));
+      .filter((arg: unknown) => typeof arg === "string" && /deprecated/i.test(arg));
     // Exactly 2 — one per variable.
     expect(deprecationCalls).toHaveLength(2);
   });
@@ -123,7 +125,7 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
       expect(getConfig("ADMIN_AUTH_TOKEN")).toBe("secret-token");
       const deprecationWarnings = warnSpy.mock.calls
         .flat()
-        .filter((arg) => typeof arg === "string" && /deprecated/i.test(arg));
+        .filter((arg: unknown) => typeof arg === "string" && /deprecated/i.test(arg));
       expect(deprecationWarnings).toHaveLength(0);
     } finally {
       delete process.env.ADMIN_AUTH_TOKEN;
@@ -151,7 +153,7 @@ describe("Phase 50 / BRAND-01 — KEBAB_* priority + MYMCP_* fallback", () => {
     // No alias fallback concerns (no warning expected).
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated/i.test(arg));
+      .filter((arg: unknown) => typeof arg === "string" && /deprecated/i.test(arg));
     expect(deprecationWarnings).toHaveLength(0);
   });
 });

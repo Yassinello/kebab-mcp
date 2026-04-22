@@ -56,7 +56,7 @@ const TOGGLE_VARS = [
   "MYMCP_DISABLE_COMPOSIO",
   "MYMCP_DISABLE_PAYWALL",
   "MYMCP_DISABLE_VAULT",
-  "MYMCP_ENABLED_PACKS",
+  "KEBAB_ENABLED_PACKS",
 ];
 
 function snapshotEnv(): EnvSnapshot {
@@ -159,11 +159,11 @@ describe("registry env-var transitions", () => {
     expect(await enabledIds()).not.toContain("github");
   });
 
-  it("MYMCP_ENABLED_PACKS=... limits the set to the listed connectors", async () => {
+  it("KEBAB_ENABLED_PACKS=... limits the set to the listed connectors", async () => {
     process.env.NOTION_API_KEY = "secret_test";
     process.env.SLACK_BOT_TOKEN = "xoxb-test";
     process.env.LINEAR_API_KEY = "lin_api_test";
-    process.env.MYMCP_ENABLED_PACKS = "notion,slack,skills,admin";
+    process.env.KEBAB_ENABLED_PACKS = "notion,slack,skills,admin";
     const enabled = await enabledIds();
     expect(enabled).toContain("notion");
     expect(enabled).toContain("slack");

@@ -325,7 +325,12 @@ describe("TEST-01 Welcome durability — cross-lambda rehydrate", () => {
     unsetAllKvCreds();
     clearBootstrapEnv();
     delete process.env.MYMCP_ALLOW_EPHEMERAL_SECRET;
-    process.env.NODE_ENV = "production";
+    // Phase 50 Task 5B (carry-over): NODE_ENV is a readonly `'development'
+    // | 'production' | 'test'` under @types/node + our 4 strict-flag
+    // tsconfig, so `process.env.NODE_ENV = 'production'` hits TS2540.
+    // Cast through Record<string, string|undefined> for the minimally
+    // invasive fix — preserves test intent, no behavior change.
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     process.env.VERCEL = "1";
     clearColdLambdaTmp();
 

@@ -49,7 +49,9 @@ describe("Phase 50 / BRAND-02 — kebab_admin_token dual-write + dual-read", () 
 
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated.*mymcp_admin_token/i.test(arg));
+      .filter(
+        (arg: unknown) => typeof arg === "string" && /deprecated.*mymcp_admin_token/i.test(arg)
+      );
     expect(deprecationWarnings).toHaveLength(1);
   });
 
@@ -65,7 +67,9 @@ describe("Phase 50 / BRAND-02 — kebab_admin_token dual-write + dual-read", () 
 
     const deprecationWarnings = warnSpy.mock.calls
       .flat()
-      .filter((arg) => typeof arg === "string" && /deprecated.*mymcp_admin_token/i.test(arg));
+      .filter(
+        (arg: unknown) => typeof arg === "string" && /deprecated.*mymcp_admin_token/i.test(arg)
+      );
     expect(deprecationWarnings).toHaveLength(1);
   });
 

@@ -29,24 +29,25 @@ import path from "node:path";
  * The default `vitest.config.ts` excludes `tests/components/**` and
  * `tests/ui/**` so render tests don't run twice.
  */
-// The `pool` + `poolOptions` options existed in vitest 3 and still
-// work in vitest 4's runtime (verified: `npm run test:ui` spins up
-// exactly 1 forked worker with files serialized), but vitest 4's
-// `InlineConfig` type has narrowed: `poolOptions` is gated behind a
-// pool-specific discriminator that flat config literals don't match.
-// The shape below is cast through `as Parameters<typeof defineConfig>[0]`
-// so TS accepts the known-good runtime shape. When vitest 4's types
-// catch up to the flat runtime, drop the cast.
+// Phase 50 Task 5C (carry-over): vitest 4 REMOVED `test.poolOptions`
+// and promoted pool-specific config to TOP-LEVEL `forks` / `threads`
+// options. Pre-Phase-50 config had `pool: "forks" + poolOptions.forks`
+// which worked at runtime but emitted a loud DEPRECATED warning on
+// every `npm test` invocation. See
+// https://vitest.dev/guide/migration#pool-rework.
+//
+// Type cast: vitest 4's public InlineConfig TypeScript export does not
+// (yet) include the new top-level `forks` key, even though the runtime
+// accepts it. The cast defers to the runtime-verified shape; drop the
+// cast once vitest's types catch up.
 export default defineConfig({
   test: {
     name: "ui",
     environment: "jsdom",
     include: ["tests/components/**/*.test.tsx", "tests/ui/**/*.test.tsx", "tests/ui/**/*.test.ts"],
     pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
+    forks: {
+      singleFork: true,
     },
     testTimeout: 10_000,
     fileParallelism: false,

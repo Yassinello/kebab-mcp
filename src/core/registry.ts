@@ -274,7 +274,7 @@ function gateConnector(
 ): GateResult {
   // Check explicit enable list (if set)
   if (enabledOverride && !enabledOverride.has(entry.id)) {
-    return { kind: "reject", reason: "not listed in MYMCP_ENABLED_PACKS" };
+    return { kind: "reject", reason: "not listed in KEBAB_ENABLED_PACKS" };
   }
   // Check force-disable
   const disableKey = `MYMCP_DISABLE_${entry.id.toUpperCase()}`;

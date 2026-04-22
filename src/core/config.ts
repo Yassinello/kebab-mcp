@@ -213,12 +213,15 @@ export function getErrorWebhookUrl(): string | undefined {
 }
 
 /**
- * Parse MYMCP_ENABLED_PACKS if set.
+ * Parse KEBAB_ENABLED_PACKS if set (or the legacy MYMCP_* alias).
  * Returns undefined if not set (all packs auto-activate by env vars).
  * Returns Set of pack IDs if set (only listed packs are considered).
+ *
+ * Phase 50 / BRAND-01: facade handles KEBAB_* priority, MYMCP_* fallback
+ * with a once-per-process deprecation warning.
  */
 export function getEnabledPacksOverride(): Set<string> | undefined {
-  const raw = getConfig("MYMCP_ENABLED_PACKS");
+  const raw = getConfig("KEBAB_ENABLED_PACKS");
   if (!raw) return undefined;
   return new Set(
     raw

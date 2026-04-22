@@ -96,6 +96,18 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  // Phase 50 Task 5A (carry-over): .mjs scripts need Node globals
+  // (console, process). Pre-Phase-50 config only granted globals to
+  // scripts/**/*.{js,ts} — .mjs was silently left without a globals
+  // block, which surfaced as 10 no-undef errors on scripts/audit-gate.mjs
+  // added in Phase 44. Module sourceType matches the ESM .mjs reality.
+  {
+    files: ["scripts/**/*.mjs", "*.mjs"],
+    languageOptions: {
+      globals: NODE_GLOBALS,
+      sourceType: "module",
+    },
+  },
   // create-mymcp is a standalone Node CLI shipped as its own package.
   // v0.6 LOW: flat-config override instead of `/* eslint-env node */`
   // (which flat config no longer supports) — gives the installer the

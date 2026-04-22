@@ -1,6 +1,6 @@
 /**
  * Unit tests for the pack registry.
- * Tests enable/disable logic, MYMCP_DISABLE_*, MYMCP_ENABLED_PACKS.
+ * Tests enable/disable logic, MYMCP_DISABLE_*, KEBAB_ENABLED_PACKS.
  *
  * Run: npx tsx scripts/registry-test.ts
  *
@@ -105,25 +105,25 @@ async function run() {
     assert(google!.reason.includes("MYMCP_DISABLE_GOOGLE"), "reason mentions disable var");
   }
 
-  console.log("\nTest 5: MYMCP_ENABLED_PACKS restricts to listed packs only");
+  console.log("\nTest 5: KEBAB_ENABLED_PACKS restricts to listed packs only");
   resetEnv();
   setGoogleEnv();
   setVaultEnv();
-  process.env.MYMCP_ENABLED_PACKS = "vault,admin";
+  process.env.KEBAB_ENABLED_PACKS = "vault,admin";
   {
     const reg = await resolveRegistryAsync();
     const google = reg.find((p) => p.manifest.id === "google");
     const vault = reg.find((p) => p.manifest.id === "vault");
     const admin = reg.find((p) => p.manifest.id === "admin");
     assert(google!.enabled === false, "google pack disabled (not in list)");
-    assert(google!.reason.includes("MYMCP_ENABLED_PACKS"), "reason mentions enabled list");
+    assert(google!.reason.includes("KEBAB_ENABLED_PACKS"), "reason mentions enabled list");
     assert(vault!.enabled === true, "vault pack enabled (in list + creds)");
     assert(admin!.enabled === true, "admin pack enabled (in list)");
   }
 
-  console.log("\nTest 6: MYMCP_ENABLED_PACKS + missing creds = disabled");
+  console.log("\nTest 6: KEBAB_ENABLED_PACKS + missing creds = disabled");
   resetEnv();
-  process.env.MYMCP_ENABLED_PACKS = "google,admin";
+  process.env.KEBAB_ENABLED_PACKS = "google,admin";
   {
     const reg = await resolveRegistryAsync();
     const google = reg.find((p) => p.manifest.id === "google");

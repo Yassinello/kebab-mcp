@@ -71,7 +71,7 @@ const TOGGLE_VARS = [
   "MYMCP_DISABLE_AIRTABLE",
   "MYMCP_DISABLE_PAYWALL",
   "MYMCP_DISABLE_WEBHOOK",
-  "MYMCP_ENABLED_PACKS",
+  "KEBAB_ENABLED_PACKS",
 ];
 
 function snapshotEnv(): EnvSnapshot {
