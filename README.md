@@ -554,23 +554,28 @@ Each token must be at least 16 characters. An 8-character SHA-256 hash prefix of
 
 ### Instance Settings
 
-| Variable                  | Default             | Description                                 |
-| ------------------------- | ------------------- | ------------------------------------------- |
-| `MYMCP_TIMEZONE`          | `UTC`               | Timezone for date formatting                |
-| `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting           |
-| `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard                   |
-| `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault               |
-| `GITHUB_BRANCH`           | `main`              | Default branch for vault repo               |
-| `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                          |
-| `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts (Slack-compatible) |
+v0.12 renamed the env-var prefix from `MYMCP_*` to `KEBAB_*`. Both
+are accepted during the 2-release transition; the operator sees one
+boot-time deprecation warning per legacy variable. See
+[CHANGELOG § v0.12 migration guide](CHANGELOG.md).
+
+| Variable                  | Legacy name               | Default             | Description                                 |
+| ------------------------- | ------------------------- | ------------------- | ------------------------------------------- |
+| `KEBAB_TIMEZONE`          | `MYMCP_TIMEZONE`          | `UTC`               | Timezone for date formatting                |
+| `KEBAB_LOCALE`            | `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting           |
+| `KEBAB_DISPLAY_NAME`      | `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard                   |
+| `KEBAB_CONTEXT_PATH`      | `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault               |
+| `GITHUB_BRANCH`           | —                         | `main`              | Default branch for vault repo               |
+| `KEBAB_TOOL_TIMEOUT`      | `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                          |
+| `KEBAB_ERROR_WEBHOOK_URL` | `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts (Slack-compatible) |
 
 ### Connector Control
 
 Connectors activate automatically when their credentials are present. Override with:
 
 ```bash
-MYMCP_DISABLE_GOOGLE=true          # Force-disable even with credentials
-MYMCP_ENABLED_PACKS=vault,admin    # Only listed connectors are considered
+MYMCP_DISABLE_GOOGLE=true          # Force-disable even with credentials (legacy; KEBAB_* equivalent accepted)
+KEBAB_ENABLED_PACKS=vault,admin    # Only listed connectors are considered (MYMCP_ENABLED_PACKS accepted)
 ```
 
 ## What's New
@@ -655,13 +660,17 @@ Pre-commit hook (via Husky): `lint-staged` + `contract test`
 
 ## Documentation
 
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — symptom → fix index for every shipped bug + security finding
-- [docs/HOSTING.md](docs/HOSTING.md) — host compatibility matrix (Vercel, Docker, Fly, Render, Cloud Run, bare-metal)
+Ordered by reader journey — discover, deploy, use, author, contribute.
+
+- [docs/API.md](docs/API.md) — route-by-route API reference (all 42 endpoints) (new in v0.12 Phase 50)
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — per-connector setup and env var reference
+- [docs/CONNECTOR-AUTHORING.md](docs/CONNECTOR-AUTHORING.md) — zero-to-live authoring walkthrough (new in v0.12 Phase 50)
+- [docs/HOSTING.md](docs/HOSTING.md) — host compatibility matrix (Vercel, Docker, Fly, Render, Cloud Run, bare-metal) + degraded-mode contract
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — symptom → fix index for every shipped bug + security finding
 - [docs/SECURITY-ADVISORIES.md](docs/SECURITY-ADVISORIES.md) — published advisory index
 - [CLAUDE.md](CLAUDE.md) — developer / fork-maintainer guide (durable bootstrap pattern, conventions)
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guide + coverage philosophy
 - [CHANGELOG.md](CHANGELOG.md) — version history
-- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guide
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
 
 ## Contributing
