@@ -3,9 +3,10 @@ import { isPublicUrlSync } from "@/core/url-safety";
 import { Stagehand } from "@browserbasehq/stagehand";
 import Browserbase from "@browserbasehq/sdk";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 export function sanitizeError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
+  const msg = toMsg(err);
   // Strip anything that looks like an API key or env var value
   const cleaned = msg
     .replace(/sk-[a-zA-Z0-9_-]{20,}/g, "sk-***")

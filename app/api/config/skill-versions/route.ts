@@ -6,6 +6,7 @@ import {
 } from "@/connectors/skills/store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * GET /api/config/skill-versions?id=<skillId>
@@ -43,10 +44,7 @@ async function getHandler(ctx: PipelineContext) {
       versions: versions.filter(Boolean),
     });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 

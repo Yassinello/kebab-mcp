@@ -16,6 +16,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getLogger } from "./logging";
+import { toMsg } from "./error-utils";
 
 /** Generate a short, non-reversible error ID for client/server correlation. */
 export function generateErrorId(): string {
@@ -48,7 +49,7 @@ function sanitize(msg: string): string {
  */
 export function errorResponse(err: unknown, opts: { status: number; route: string }): Response {
   const errorId = generateErrorId();
-  const message = err instanceof Error ? err.message : String(err);
+  const message = toMsg(err);
   const sanitized = sanitize(message);
   getLogger(`API:${opts.route}`).error(sanitized, {
     errorId,

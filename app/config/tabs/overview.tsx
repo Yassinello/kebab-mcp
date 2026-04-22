@@ -6,6 +6,7 @@ import type { InstanceConfig } from "@/core/types";
 import { HealthWidget } from "./health-widget";
 import { ConnectorHealthWidget } from "./connector-health";
 import { RateLimitsWidget } from "./rate-limits-widget";
+import { toMsg } from "@/core/error-utils";
 
 type UpdateStatus =
   | { state: "loading" }
@@ -71,9 +72,7 @@ export function OverviewTab({
           }
         }
       )
-      .catch((err) =>
-        setUpdate({ state: "error", error: err instanceof Error ? err.message : String(err) })
-      );
+      .catch((err) => setUpdate({ state: "error", error: toMsg(err) }));
   }, []);
 
   const pullUpdates = async () => {
@@ -91,7 +90,7 @@ export function OverviewTab({
         setResult({ state: "error", reason: data.reason || "Update failed" });
       }
     } catch (err) {
-      setResult({ state: "error", reason: err instanceof Error ? err.message : String(err) });
+      setResult({ state: "error", reason: toMsg(err) });
     }
   };
 

@@ -7,6 +7,7 @@ import { getContextKVStore } from "@/core/request-context";
 import { hasUpstashCreds } from "@/core/upstash-env";
 import { getLogger } from "@/core/logging";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const skillsLog = getLogger("CONNECTOR:skills");
 
@@ -203,7 +204,7 @@ export function listSkillsSync(): Skill[] {
     // misconfigured skills store surfaces in logs instead of being
     // invisible (which hid a bug during the 2026-04-20 session).
     skillsLog.warn("listSkillsSync fell back to empty list", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toMsg(err),
       filePath,
     });
     return [];

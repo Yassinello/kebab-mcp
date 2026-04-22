@@ -41,6 +41,7 @@ import { getKVStore, kvScanAll, type KVStore } from "../kv-store";
 import { getCurrentTenantId } from "../request-context";
 import { withTenantPrefix } from "../tenant";
 import { getLogger } from "../logging";
+import { toMsg } from "../error-utils";
 
 const migrationLog = getLogger("MIGRATION");
 
@@ -168,7 +169,7 @@ export async function runV011TenantScopeMigration(): Promise<void> {
     }
   } catch (err) {
     migrationLog.warn("v0.11-tenant-scope: skipped", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toMsg(err),
     });
   }
 }

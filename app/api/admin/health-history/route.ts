@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { getLogger } from "@/core/logging";
 import { getConfigInt } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const logger = getLogger("admin.health-history");
 
@@ -81,7 +82,7 @@ async function getHandler(ctx: PipelineContext) {
     // fire-and-forget OK: stale-sample cleanup is defense-in-depth; TTL is the primary eviction
     void Promise.all(staleKeys.map((k) => kv.delete(k))).catch((err) => {
       logger.warn("stale-sample cleanup partial failure", {
-        error: err instanceof Error ? err.message : String(err),
+        error: toMsg(err),
         attempted: staleKeys.length,
       });
     });

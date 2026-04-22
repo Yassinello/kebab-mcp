@@ -6,6 +6,7 @@
 
 import { fetchWithTimeout } from "@/core/fetch-utils";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 const RUN_SYNC_TIMEOUT_SECONDS = 55;
@@ -56,7 +57,7 @@ export async function runActor(
       APIFY_FETCH_TIMEOUT_MS
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     throw new Error(sanitize(`Apify fetch failed: ${msg}`), { cause: err });
   }
 
@@ -95,7 +96,7 @@ export async function apifyGet<T = unknown>(pathAndQuery: string): Promise<T> {
       APIFY_FETCH_TIMEOUT_MS
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     throw new Error(sanitize(`Apify fetch failed: ${msg}`), { cause: err });
   }
   if (!res.ok) {

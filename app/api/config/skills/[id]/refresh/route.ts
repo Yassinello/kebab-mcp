@@ -3,6 +3,7 @@ import { getSkill } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -35,10 +36,7 @@ async function postHandler(ctx: PipelineContext) {
     }
     return NextResponse.json({ ok: true, skill: updated });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 

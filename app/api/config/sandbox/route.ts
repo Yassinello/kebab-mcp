@@ -5,6 +5,7 @@ import { withLogging } from "@/core/logging";
 import { checkRateLimit } from "@/core/rate-limit";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/config/sandbox
@@ -76,7 +77,7 @@ async function postHandler(ctx: PipelineContext) {
         } catch (err) {
           return NextResponse.json({
             ok: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: toMsg(err),
             durationMs: Date.now() - start,
           });
         }

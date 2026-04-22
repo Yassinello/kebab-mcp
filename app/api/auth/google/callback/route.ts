@@ -2,6 +2,7 @@
 // PIPELINE_EXEMPT: public OAuth redirect receiver; no auth/rate-limit/tenant state to wire through the pipeline, and reply is a redirect not a JSON contract.
 import { Google } from "arctic";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Google OAuth callback — exchanges code for tokens.
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     return new Response(tokenPage(`OAuth error: ${msg}`, null), {
       status: 500,
       headers: { "Content-Type": "text/html" },

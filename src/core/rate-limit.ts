@@ -3,6 +3,7 @@ import { kvScanAll } from "./kv-store";
 import { getContextKVStore, getCurrentTenantId } from "./request-context";
 import { dualReadKV } from "./migrations/v0.11-tenant-scope";
 import { getConfigInt, getConfig } from "./config-facade";
+import { toMsg } from "./error-utils";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -165,10 +166,7 @@ export async function checkRateLimit(
     return { allowed: true, remaining: limit - count - 1, resetAt };
   } catch (err) {
     // Fail open: KV errors must not block legitimate requests
-    console.warn(
-      "[Kebab MCP] Rate limit KV error (failing open):",
-      err instanceof Error ? err.message : String(err)
-    );
+    console.warn("[Kebab MCP] Rate limit KV error (failing open):", toMsg(err));
     return { allowed: true, remaining: -1, resetAt };
   }
 }

@@ -2,6 +2,7 @@ import type { Skill } from "../store";
 import { replaceSkill } from "../store";
 import { fetchWithByteCap } from "@/core/fetch-utils";
 import { isPublicUrl } from "@/core/url-safety";
+import { toMsg } from "@/core/error-utils";
 
 // Phase 44 SCM-05b: this file retains an inline `new AbortController() +
 // setTimeout` in fetchRemote because it composes with fetchWithByteCap
@@ -121,7 +122,7 @@ export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
     }
     return { ok: false, error: `too many redirects (${MAX_REDIRECTS})` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     // Collapse low-level network errors into a generic message — internal
     // hostnames in error text would help SSRF probing.
     if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EHOSTUNREACH/i.test(msg)) {

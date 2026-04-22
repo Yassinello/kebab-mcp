@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { vaultRead, vaultWrite, vaultDelete } from "../lib/github";
+import { toMsg } from "@/core/error-utils";
 
 export const vaultMoveSchema = {
   from: z.string().describe("Current path, e.g. Inbox/note.md"),
@@ -20,7 +21,7 @@ export async function handleVaultMove(params: { from: string; to: string; messag
   try {
     await vaultDelete(params.from, commitMsg, source.sha);
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = toMsg(error);
     // Write succeeded but delete failed — note is duplicated
     return {
       content: [

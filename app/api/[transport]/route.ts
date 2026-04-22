@@ -13,6 +13,7 @@ import {
   hydrateCredentialsStep,
   type PipelineContext,
 } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -31,20 +32,12 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
     // intentional — startup log ordering is not a hot-path constraint.
     // fire-and-forget OK: startup log; failure is logged below and does not affect transport correctness
     void logRegistryState().catch((err) =>
-      console.info(
-        `[Kebab MCP] initial logRegistryState failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      )
+      console.info(`[Kebab MCP] initial logRegistryState failed: ${toMsg(err)}`)
     );
     on("env.changed", () => {
       // fire-and-forget OK: re-log after env change; observational only
       void logRegistryState().catch((err) =>
-        console.info(
-          `[Kebab MCP] logRegistryState on env.changed failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        )
+        console.info(`[Kebab MCP] logRegistryState on env.changed failed: ${toMsg(err)}`)
       );
     });
   }
@@ -145,18 +138,12 @@ async function buildHandler(
             if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
               (maybePromise as Promise<void>).catch((err) =>
                 console.info(
-                  `[Kebab MCP] ${pack.manifest.id}.registerPrompts rejected: ${
-                    err instanceof Error ? err.message : String(err)
-                  }`
+                  `[Kebab MCP] ${pack.manifest.id}.registerPrompts rejected: ${toMsg(err)}`
                 )
               );
             }
           } catch (err) {
-            console.info(
-              `[Kebab MCP] ${pack.manifest.id}.registerPrompts threw: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
+            console.info(`[Kebab MCP] ${pack.manifest.id}.registerPrompts threw: ${toMsg(err)}`);
           }
         }
       }

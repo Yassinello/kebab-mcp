@@ -3,6 +3,7 @@ import type { ConnectorManifest, ToolDefinition, ToolResult } from "@/core/types
 import { listSkillsSync, getSkill, type Skill } from "./store";
 import { renderSkill } from "./lib/render";
 import { maybeRefreshRemote } from "./lib/remote-fetcher";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Build a Zod input schema from a skill's declared arguments.
@@ -138,18 +139,12 @@ export const skillsConnector: ConnectorManifest = {
           });
         } catch (err) {
           console.info(
-            `[Kebab MCP] Skipping prompt registration for skill "${skill.id}": ${
-              err instanceof Error ? err.message : String(err)
-            }`
+            `[Kebab MCP] Skipping prompt registration for skill "${skill.id}": ${toMsg(err)}`
           );
         }
       }
     } catch (err) {
-      console.info(
-        `[Kebab MCP] Skills prompt registration unavailable: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
+      console.info(`[Kebab MCP] Skills prompt registration unavailable: ${toMsg(err)}`);
     }
   },
 };

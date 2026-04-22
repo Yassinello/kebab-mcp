@@ -9,6 +9,7 @@ import { pingKV } from "@/core/kv-store";
 import { getBootstrapState, getLastRehydrateAt } from "@/core/first-run";
 import { getActiveDestructiveVars } from "@/core/env-safety";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Public health endpoint.
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
           connector: p.manifest.id,
           label: p.manifest.label,
           ok: false,
-          message: err instanceof Error ? err.message : String(err),
+          message: toMsg(err),
           durationMs: Date.now() - start,
         };
       }

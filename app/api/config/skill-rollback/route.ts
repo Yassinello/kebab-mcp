@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { rollbackSkill } from "@/connectors/skills/store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/config/skill-rollback
@@ -35,10 +36,7 @@ async function postHandler(ctx: PipelineContext) {
     }
     return NextResponse.json({ ok: true, skill });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 

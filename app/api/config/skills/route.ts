@@ -8,6 +8,7 @@ import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 import { getEnabledPacksLazy } from "@/core/registry";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /** GET /api/config/skills — list all skills. */
 async function getHandler() {
@@ -15,10 +16,7 @@ async function getHandler() {
     const skills = await listSkills();
     return NextResponse.json({ ok: true, skills });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 
@@ -67,10 +65,7 @@ async function postHandler(ctx: PipelineContext) {
 
     return NextResponse.json({ ok: true, skill }, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 

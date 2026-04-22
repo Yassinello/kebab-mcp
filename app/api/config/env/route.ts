@@ -11,6 +11,7 @@ import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
 import type { PipelineContext } from "@/core/pipeline";
 import { getCurrentTenantId } from "@/core/request-context";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -204,7 +205,7 @@ async function putHandler(ctx: PipelineContext) {
       kvWritten,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     // Vercel filesystem races with our detection cache (e.g. cached as 'file'
     // but the FS just lost write permission). Surface a clean static-mode
     // error so the frontend renders the right helper.

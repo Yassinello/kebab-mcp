@@ -5,6 +5,7 @@ import { getEnvStore, parseEnvFile } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/storage/import
@@ -169,9 +170,7 @@ async function postHandler(ctx: PipelineContext) {
         contextPath: settingsToWrite.MYMCP_CONTEXT_PATH,
       });
     } catch (err) {
-      writeErrors.push(
-        `Settings write failed: ${err instanceof Error ? err.message : String(err)}`
-      );
+      writeErrors.push(`Settings write failed: ${toMsg(err)}`);
     }
   }
 
@@ -185,9 +184,7 @@ async function postHandler(ctx: PipelineContext) {
         await store.write(credsToWrite);
       }
     } catch (err) {
-      writeErrors.push(
-        `Credential write failed: ${err instanceof Error ? err.message : String(err)}`
-      );
+      writeErrors.push(`Credential write failed: ${toMsg(err)}`);
     }
   }
 

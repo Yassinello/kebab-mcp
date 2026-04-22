@@ -8,6 +8,7 @@ import {
 } from "@/core/pipeline";
 import { getLogger } from "@/core/logging";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const logger = getLogger("cron.health");
 
@@ -73,7 +74,7 @@ async function cronHealthHandler(_ctx: PipelineContext): Promise<Response> {
         // cron handler.
         // silent-swallow-ok: error-webhook alert is best-effort observability; a failed alert must not break the cron health response
         logger.warn("error-webhook alert failed", {
-          error: err instanceof Error ? err.message : String(err),
+          error: toMsg(err),
           packs: degraded.length,
         });
       }

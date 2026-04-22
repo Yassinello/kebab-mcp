@@ -3,6 +3,7 @@ import { getDisabledTools, getDisabledToolsForTenant } from "@/core/tool-toggles
 import { getTenantId, TenantError } from "@/core/tenant";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * GET /api/config/tool-toggle-list
@@ -28,10 +29,7 @@ async function getHandler(ctx: PipelineContext) {
       : await getDisabledTools();
     return NextResponse.json({ ok: true, disabled: Array.from(disabled) });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: toMsg(err) }, { status: 500 });
   }
 }
 

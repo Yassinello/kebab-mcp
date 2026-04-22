@@ -15,6 +15,7 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/welcome/init
@@ -112,7 +113,7 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
   try {
     flushResult = await flushBootstrapToKvIfAbsent();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     console.error(`[Kebab MCP first-run] flushBootstrapToKvIfAbsent failed: ${msg}`);
     return NextResponse.json(
       {
@@ -145,7 +146,7 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
     await getEnvStore().write({ MCP_AUTH_TOKEN: token });
     envWritten = true;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = toMsg(e);
     console.warn(`[Kebab MCP first-run] auto-magic env write failed: ${msg}`);
   }
 
@@ -162,7 +163,7 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
       console.warn(`[Kebab MCP first-run] auto-magic redeploy failed: ${result.error}`);
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = toMsg(e);
     redeployError = msg;
     console.warn(`[Kebab MCP first-run] auto-magic redeploy threw: ${msg}`);
   }

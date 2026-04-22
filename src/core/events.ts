@@ -1,3 +1,4 @@
+import { toMsg } from "./error-utils";
 /**
  * Tiny framework event bus.
  *
@@ -58,10 +59,7 @@ export function emit(event: FrameworkEvent): void {
       fn();
     } catch (err) {
       // Never let a buggy listener break the emitter.
-      console.warn(
-        `[events] listener for ${event} threw:`,
-        err instanceof Error ? err.message : err
-      );
+      console.warn(`[events] listener for ${event} threw:`, toMsg(err));
     }
   }
 }

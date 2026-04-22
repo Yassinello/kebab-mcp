@@ -4,6 +4,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { isLoopbackRequest } from "@/core/request-utils";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/setup/save
@@ -92,10 +93,7 @@ async function postHandler(ctx: PipelineContext) {
       written: result.written,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: toMsg(err) }, { status: 500 });
   }
 }
 

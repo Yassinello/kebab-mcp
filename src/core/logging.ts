@@ -5,6 +5,7 @@ import { startToolSpan, endToolSpan } from "./tracing";
 import { getToolTimeout } from "./config";
 import { getCurrentTenantId } from "./request-context";
 import { getConfig } from "./config-facade";
+import { toMsg } from "./error-utils";
 
 // ── T10: MYMCP_TOOL_TIMEOUT enforcement at the transport ─────────
 //
@@ -184,10 +185,7 @@ export function logToolCall(log: ToolLog) {
         .append(entry)
         .catch((err: Error) => console.error("[Kebab MCP] Durable log write failed:", err.message));
     } catch (err) {
-      console.error(
-        "[Kebab MCP] Durable log store unavailable:",
-        err instanceof Error ? err.message : String(err)
-      );
+      console.error("[Kebab MCP] Durable log store unavailable:", toMsg(err));
     }
   }
 
@@ -492,7 +490,7 @@ export function withLogging<TParams>(
         };
       }
 
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toMsg(error);
       logToolCall({
         tool: toolName,
         durationMs,

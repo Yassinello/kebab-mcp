@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { setToolDisabled } from "@/core/tool-toggles";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/config/tool-toggle
@@ -42,10 +43,7 @@ async function postHandler(ctx: PipelineContext) {
       message: `Tool ${toolName} is now ${disabled ? "disabled" : "enabled"}.`,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: toMsg(err) }, { status: 500 });
   }
 }
 

@@ -1,5 +1,6 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -33,7 +34,7 @@ export async function linearQuery<T>(
     throw new McpToolError({
       code: ErrorCode.EXTERNAL_API_ERROR,
       toolName: "linear",
-      message: `Network error reaching Linear API: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Network error reaching Linear API: ${toMsg(err)}`,
       userMessage: "Could not reach the Linear API. Check your network connection.",
       retryable: true,
       cause: err instanceof Error ? err : undefined,

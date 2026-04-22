@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Claim-status hook (UX-02c / Phase 45 Task 3).
@@ -64,7 +65,7 @@ export function useClaimStatus(initialClaim: ClaimStatus = "loading"): UseClaimS
       } catch (err) {
         if (cancelled) return;
         if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(toMsg(err));
       }
     })();
 

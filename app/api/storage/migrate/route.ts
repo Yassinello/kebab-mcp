@@ -6,6 +6,7 @@ import { getEnvStore } from "@/core/env-store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * POST /api/storage/migrate
@@ -69,7 +70,7 @@ async function postHandler(ctx: PipelineContext) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Failed to read source env store: ${err instanceof Error ? err.message : String(err)}`,
+          error: `Failed to read source env store: ${toMsg(err)}`,
         },
         { status: 500 }
       );
@@ -121,7 +122,7 @@ async function postHandler(ctx: PipelineContext) {
       } catch (err) {
         errors.push({
           key: k,
-          error: err instanceof Error ? err.message : String(err),
+          error: toMsg(err),
         });
       }
     }
@@ -169,7 +170,7 @@ async function postHandler(ctx: PipelineContext) {
     return NextResponse.json(
       {
         ok: false,
-        error: `Destination filesystem is not writable: ${err instanceof Error ? err.message : String(err)}. Migration aborted to avoid data loss.`,
+        error: `Destination filesystem is not writable: ${toMsg(err)}. Migration aborted to avoid data loss.`,
       },
       { status: 422 }
     );
@@ -208,7 +209,7 @@ async function postHandler(ctx: PipelineContext) {
     return NextResponse.json(
       {
         ok: false,
-        error: `Write to env store failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Write to env store failed: ${toMsg(err)}`,
       },
       { status: 500 }
     );

@@ -46,6 +46,7 @@ import {
 import { hasUpstashCreds } from "./upstash-env";
 import { getLogger } from "./logging";
 import { withSpan } from "./tracing";
+import { toMsg } from "./error-utils";
 
 const firstRunLog = getLogger("FIRST-RUN");
 // Note: the v0.10 tenant-prefix migration trigger lives in
@@ -137,9 +138,7 @@ async function loadBootstrapFromKv(): Promise<BootstrapPayload | null> {
     // delete KV key + clear in-memory state).
     return parsed;
   } catch (err) {
-    console.info(
-      `[Kebab MCP first-run] KV load skipped: ${err instanceof Error ? err.message : String(err)}`
-    );
+    console.info(`[Kebab MCP first-run] KV load skipped: ${toMsg(err)}`);
     return null;
   }
 }
@@ -150,9 +149,7 @@ async function deleteBootstrapFromKv(): Promise<void> {
     const kv = getKVStore();
     await kv.delete(KV_BOOTSTRAP_KEY);
   } catch (err) {
-    console.info(
-      `[Kebab MCP first-run] KV delete skipped: ${err instanceof Error ? err.message : String(err)}`
-    );
+    console.info(`[Kebab MCP first-run] KV delete skipped: ${toMsg(err)}`);
   }
 }
 
@@ -468,9 +465,7 @@ export function rehydrateBootstrapFromTmp(): void {
     // longer verify.
     // fire-and-forget OK: recovery reset; signing-secret rotation is idempotent and safe to retry
     void rotateSigningSecret().catch((err: unknown) => {
-      console.info(
-        `[Kebab MCP first-run] rotateSigningSecret skipped: ${err instanceof Error ? err.message : String(err)}`
-      );
+      console.info(`[Kebab MCP first-run] rotateSigningSecret skipped: ${toMsg(err)}`);
     });
     console.warn(
       "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset and signing secret rotated. Remove the env var after recovery."
@@ -535,7 +530,7 @@ async function recordRehydrateSuccess(): Promise<void> {
     await incrementRehydrateCount();
   } catch (err) {
     firstRunLog.warn("rehydrate-meta write skipped", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toMsg(err),
     });
   }
 }
@@ -562,7 +557,7 @@ async function incrementRehydrateCount(): Promise<void> {
     await kv.set(REHYDRATE_COUNT_KV_KEY, JSON.stringify(parsed));
   } catch (err) {
     firstRunLog.warn("rehydrate-count increment skipped", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toMsg(err),
     });
   }
 }

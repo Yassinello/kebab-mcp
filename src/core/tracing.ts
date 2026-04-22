@@ -17,6 +17,7 @@
  */
 
 import type { Span } from "@opentelemetry/api";
+import { toMsg } from "./error-utils";
 
 const TRACER_NAME = "mymcp";
 
@@ -73,7 +74,7 @@ function autoBootstrap(): void {
     // knows OTel was requested but could not be started.
     console.warn(
       "[Kebab MCP] OTel bootstrap failed: " +
-        (error instanceof Error ? error.message : String(error)) +
+        toMsg(error) +
         ". Install @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-http to enable tracing."
     );
   }

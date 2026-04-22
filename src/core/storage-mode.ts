@@ -35,6 +35,7 @@ import os from "node:os";
 import path from "node:path";
 import { getUpstashCreds } from "./upstash-env";
 import { fetchWithTimeout } from "./fetch-utils";
+import { toMsg } from "./error-utils";
 
 export type StorageMode = "kv" | "file" | "static" | "kv-degraded";
 
@@ -167,7 +168,7 @@ async function pingUpstash(
     return {
       ok: false,
       latencyMs,
-      error: err instanceof Error ? err.message : String(err),
+      error: toMsg(err),
     };
   }
 }

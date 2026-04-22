@@ -21,6 +21,7 @@
  */
 
 import yaml from "js-yaml";
+import { toMsg } from "./error-utils";
 
 export interface FrontmatterResult {
   meta: Record<string, unknown>;
@@ -60,9 +61,7 @@ export function parseFrontmatter(raw: string): FrontmatterResult {
   const warnings: string[] = [];
 
   if (frontText.length > MAX_FRONTMATTER_BYTES) {
-    warnings.push(
-      `Frontmatter exceeds ${MAX_FRONTMATTER_BYTES} bytes — refusing to parse`
-    );
+    warnings.push(`Frontmatter exceeds ${MAX_FRONTMATTER_BYTES} bytes — refusing to parse`);
     return { meta: {}, body, warnings };
   }
 
@@ -79,9 +78,7 @@ export function parseFrontmatter(raw: string): FrontmatterResult {
   try {
     parsed = yaml.load(frontText, { schema: yaml.JSON_SCHEMA });
   } catch (err) {
-    warnings.push(
-      `Frontmatter YAML parse failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    warnings.push(`Frontmatter YAML parse failed: ${toMsg(err)}`);
     return { meta: {}, body, warnings };
   }
 

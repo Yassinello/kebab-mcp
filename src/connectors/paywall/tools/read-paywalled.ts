@@ -5,6 +5,7 @@ import { fetchHtmlWithCookie } from "../lib/fetch-html";
 import { extractArticle, PaywallExtractError } from "../lib/extract";
 import { SOURCES } from "../sources";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 export const readPaywalledSchema = {
   url: z.string().url().describe("URL of the paywalled article (Medium, Substack)"),
@@ -48,7 +49,7 @@ export async function handleReadPaywalled(params: { url: string }): Promise<Tool
     html = res.html;
     finalUrl = res.finalUrl;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     return errorResult(`Failed to fetch ${source.displayName} article: ${msg}`);
   }
 
@@ -69,7 +70,7 @@ export async function handleReadPaywalled(params: { url: string }): Promise<Tool
         `Cookie appears expired or article unreadable. Re-extract it from your browser and update ${source.cookieEnvVar} in /config → Packs → Paywall. (If the article loads fine in your browser, try \`read_paywalled_hard\`.)`
       );
     }
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toMsg(err);
     return errorResult(`Extraction failed: ${msg}`);
   }
 }

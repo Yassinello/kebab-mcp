@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { ConnectorSummary } from "../tabs";
+import { toMsg } from "@/core/error-utils";
 
 interface ToolRow {
   name: string;
@@ -131,7 +132,7 @@ export function ToolsTab({
     } catch (err) {
       setResults((p) => ({
         ...p,
-        [name]: { ok: false, error: err instanceof Error ? err.message : String(err) },
+        [name]: { ok: false, error: toMsg(err) },
       }));
     }
     setRunning(null);

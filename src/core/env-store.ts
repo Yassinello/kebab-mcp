@@ -10,6 +10,7 @@
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
+import { toMsg } from "./error-utils";
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -258,7 +259,7 @@ export async function triggerVercelRedeploy(): Promise<{
       const data = (await res.json()) as VercelDeploymentsListResponse;
       latest = data.deployments?.[0];
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = toMsg(e);
       return {
         ok: false,
         error: `Vercel deployments list error: ${sanitizeVercelBody(msg, token)}`,
@@ -317,7 +318,7 @@ export async function triggerVercelRedeploy(): Promise<{
     const deploymentId = data.id || data.uid;
     return { ok: true, deploymentId };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = toMsg(e);
     return {
       ok: false,
       error: `Vercel create deployment error: ${sanitizeVercelBody(msg, token)}`,

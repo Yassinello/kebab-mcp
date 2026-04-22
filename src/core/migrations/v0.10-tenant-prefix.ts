@@ -33,6 +33,7 @@
 
 import { getKVStore, kvScanAll } from "../kv-store";
 import { getLogger } from "../logging";
+import { toMsg } from "../error-utils";
 
 const MIGRATION_KEY = "mymcp:migrations:v0.10-tenant-prefix";
 const logger = getLogger("MIGRATION");
@@ -86,9 +87,7 @@ export async function runV010TenantPrefixMigration(): Promise<void> {
     }
   } catch (err) {
     // Never fail boot — migration is idempotent best-effort.
-    logger.info(
-      `v0.10-tenant-prefix: skipped (${err instanceof Error ? err.message : String(err)})`
-    );
+    logger.info(`v0.10-tenant-prefix: skipped (${toMsg(err)})`);
   }
 }
 

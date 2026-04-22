@@ -21,6 +21,7 @@ import { kvScanAll } from "./kv-store";
 import { getContextKVStore } from "./request-context";
 import { hasUpstashCreds } from "./upstash-env";
 import { getConfig } from "./config-facade";
+import { toMsg } from "./error-utils";
 
 export const CRED_PREFIX = "cred:";
 
@@ -143,10 +144,7 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
       console.log(`[Kebab MCP] Hydrated ${keys.length} credential(s) from KV (SEC-02 snapshot)`);
     }
   } catch (err) {
-    console.warn(
-      "[Kebab MCP] Failed to hydrate credentials from KV:",
-      err instanceof Error ? err.message : err
-    );
+    console.warn("[Kebab MCP] Failed to hydrate credentials from KV:", toMsg(err));
   }
 }
 

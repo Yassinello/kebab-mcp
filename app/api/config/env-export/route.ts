@@ -3,6 +3,7 @@ import { getEnvStore } from "@/core/env-store";
 import { readAllCredentialsFromKV } from "@/core/credential-store";
 import { getInstanceConfigAsync, SETTINGS_ENV_KEYS } from "@/core/config";
 import { withAdminAuth } from "@/core/with-admin-auth";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * GET /api/config/env-export
@@ -95,10 +96,7 @@ async function getHandler() {
       },
     });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: toMsg(err) }, { status: 500 });
   }
 }
 

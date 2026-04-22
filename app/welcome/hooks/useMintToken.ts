@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Token-mint hook (UX-02c / Phase 45 Task 3).
@@ -73,7 +74,7 @@ export function useMintToken(): UseMintTokenResult {
       setResult(data);
       return { ...data, ok: true };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toMsg(err);
       setError(msg);
       return { ok: false, error: msg };
     } finally {

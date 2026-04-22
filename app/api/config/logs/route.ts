@@ -6,6 +6,7 @@ import { withAdminAuth } from "@/core/with-admin-auth";
 import { getLogger } from "@/core/logging";
 import type { PipelineContext } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const logsRouteLog = getLogger("API:config/logs");
 
@@ -80,7 +81,7 @@ async function getHandler(ctx: PipelineContext) {
       // Fall through to the in-memory ring buffer so the dashboard
       // never loses visibility if the store is momentarily unhealthy.
       logsRouteLog.error("log store read failed, falling back to memory", {
-        error: err instanceof Error ? err.message : String(err),
+        error: toMsg(err),
       });
     }
   }

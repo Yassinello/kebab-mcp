@@ -1,5 +1,6 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
 import { getConfig } from "@/core/config-facade";
+import { toMsg } from "@/core/error-utils";
 
 const AIRTABLE_BASE_URL = "https://api.airtable.com/v0";
 
@@ -32,7 +33,7 @@ export async function airtableRequest<T>(endpoint: string, options: RequestInit 
     throw new McpToolError({
       code: ErrorCode.EXTERNAL_API_ERROR,
       toolName: "airtable",
-      message: `Network error reaching Airtable API: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Network error reaching Airtable API: ${toMsg(err)}`,
       userMessage: "Could not reach the Airtable API. Check your network connection.",
       retryable: true,
       cause: err instanceof Error ? err : undefined,
