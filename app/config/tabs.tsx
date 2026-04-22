@@ -73,6 +73,12 @@ const HealthTab = dynamic(
   // ssr: false — health polls /api/health on an interval.
   { ssr: false, loading: () => <TabLoadingSkeleton label="Health" /> }
 );
+const DevicesTab = dynamic(
+  () => import("./tabs/devices").then((m) => ({ default: m.DevicesTab })),
+  // ssr: false — Devices fetches /api/admin/devices on mount and issues
+  // mutation POST/DELETE on user action; no deterministic SSR value.
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Devices" /> }
+);
 
 // Re-export the DocEntry type for page.tsx. Keeping this under `export
 // type` ensures Turbopack does NOT pull the runtime documentation tab
@@ -181,6 +187,10 @@ export function ConfigTabs({
     case "health":
       section = "Health";
       tab = <HealthTab />;
+      break;
+    case "devices":
+      section = "Devices";
+      tab = <DevicesTab tenantId={tenantId} baseUrl={baseUrl} />;
       break;
     case "overview":
     default:

@@ -27,6 +27,10 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
     title: "Health",
     subtitle: "Live instance diagnostics — bootstrap state, KV, rehydrate counters.",
   },
+  devices: {
+    title: "Devices",
+    subtitle: "Manage per-client tokens: add, rename, rotate, revoke.",
+  },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };
 
