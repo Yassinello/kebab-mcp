@@ -126,7 +126,7 @@ async function handleInvite(body: PostBody): Promise<Response> {
         {
           error: "signing_secret_unavailable",
           message: err.message,
-          hint: "Set UPSTASH_REDIS_REST_URL (Upstash) or MYMCP_ALLOW_EPHEMERAL_SECRET=1 for local dev.",
+          hint: "Set UPSTASH_REDIS_REST_URL (Upstash). See docs/SECURITY-ADVISORIES.md#sec-05.",
         },
         { status: 503 }
       );
