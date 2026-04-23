@@ -9,13 +9,25 @@
  * admins and that it respects the ?refresh URL param via
  * useMetricsPoll.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
+import { render, cleanup, screen } from "@testing-library/react";
 import { LatencyBarChart } from "@/../app/config/tabs/health/LatencyBarChart";
 import { KvQuotaPanel } from "@/../app/config/tabs/health/KvQuotaPanel";
 import { MetricsSection } from "@/../app/config/tabs/health/MetricsSection";
 
+// jsdom has no ResizeObserver — Recharts' ResponsiveContainer requires it.
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
+});
+
 describe("LatencyBarChart", () => {
+  afterEach(() => cleanup());
   it("renders only top-10 bars when given 15 tools", () => {
     const tools = Array.from({ length: 15 }, (_, i) => ({
       name: `tool${i}`,
@@ -35,6 +47,7 @@ describe("LatencyBarChart", () => {
 });
 
 describe("KvQuotaPanel", () => {
+  afterEach(() => cleanup());
   it("renders unavailable label when source is 'unknown'", () => {
     render(
       <KvQuotaPanel
@@ -135,20 +148,17 @@ describe("MetricsSection", () => {
   afterEach(() => {
     global.fetch = originalFetch;
     vi.restoreAllMocks();
+    cleanup();
   });
 
   it("hides TenantSelector for scoped admin (rootScope=false)", () => {
-    const { container } = render(
-      <MetricsSection rootScope={false} tenantIds={["alpha", "bravo"]} />
-    );
-    // No select element from the tenant selector.
-    expect(container.querySelector("select")).toBeNull();
+    render(<MetricsSection rootScope={false} tenantIds={["alpha", "bravo"]} />);
+    // Tenant select has the "All tenants (aggregate)" option — absent for scoped.
+    expect(screen.queryByText(/All tenants \(aggregate\)/i)).toBeNull();
   });
 
   it("shows TenantSelector for root scope", () => {
-    const { container } = render(
-      <MetricsSection rootScope={true} tenantIds={["alpha", "bravo"]} />
-    );
-    expect(container.querySelector("select")).toBeTruthy();
+    render(<MetricsSection rootScope={true} tenantIds={["alpha", "bravo"]} />);
+    expect(screen.getByText(/All tenants \(aggregate\)/i)).toBeTruthy();
   });
 });

@@ -6,9 +6,13 @@
  * Hand-rolled SVG heatmap; jsdom renders the raw <rect> nodes so we
  * can assert on their fill attributes.
  */
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "vitest";
+import { render, cleanup } from "@testing-library/react";
 import { ErrorHeatmap } from "@/../app/config/tabs/health/ErrorHeatmap";
+
+afterEach(() => {
+  cleanup();
+});
 
 const NOW = 1745_000_000_000; // deterministic; tests don't care about the exact value.
 const HOUR_MS = 3600_000;
