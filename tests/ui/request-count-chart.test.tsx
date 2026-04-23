@@ -8,9 +8,24 @@
  * so we check for the presence of the ResponsiveContainer wrapper
  * class and the empty-state text directly.
  */
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeAll } from "vitest";
+import { render, cleanup, screen } from "@testing-library/react";
 import { RequestCountChart } from "@/../app/config/tabs/health/RequestCountChart";
+
+// jsdom has no ResizeObserver — Recharts' ResponsiveContainer requires it.
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
+});
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("RequestCountChart", () => {
   it("renders empty-state text when hours is empty", () => {
