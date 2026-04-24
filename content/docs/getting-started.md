@@ -6,7 +6,7 @@ order: 10
 
 ## What Kebab MCP gives you
 
-A single Vercel deploy that exposes 86+ tools across 14 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation) behind one MCP endpoint. Plus user-defined Skills that create dynamic tools from prompt templates. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
+A single Vercel deploy that exposes 86+ tools across 15 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation, and bring-your-own HTTP APIs) behind one MCP endpoint. Plus user-defined Skills that create dynamic tools from prompt templates. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
 
 ## Five-minute deploy
 

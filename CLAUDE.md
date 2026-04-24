@@ -29,6 +29,7 @@ src/connectors/composio/manifest.ts   — Composio bridge (2 tools)
 src/connectors/paywall/manifest.ts    — Paywall readers (2 tools)
 src/connectors/webhook/manifest.ts    — Webhook receiver (3 tools)
 src/connectors/skills/manifest.ts     — Skills — dynamic user-defined tools
+src/connectors/api/manifest.ts        — API Connections — user-defined HTTP tools (v0.15+)
 src/connectors/admin/manifest.ts      — Admin connector (5 tools)
 src/connectors/*/tools/               — Individual tool handlers
 src/connectors/*/lib/                 — API wrappers and helpers

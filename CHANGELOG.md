@@ -4,6 +4,86 @@ All notable changes to Kebab MCP.
 
 ## [Unreleased]
 
+## [v0.15.0] — API Connections & Custom Tools
+
+Lets users bring their own HTTP APIs as first-class connectors and
+expose their endpoints as MCP tools Claude can call. Two new objects
+are introduced: **API Connection** (URL + auth + headers) and
+**Custom Tool** (action attached to a connection).
+
+### Added
+
+- **API Connections CRUD (CONN-01..05):** New "API Connections" section
+  in `/config → Connectors`. Supports four auth variants — `none`,
+  `bearer`, `api_key_header`, `basic`. Default headers + timeout are
+  per-connection. SSRF guard at save + invocation (`isPublicUrl` /
+  `isPublicUrlSync`). Secrets are redacted in GET responses — rotation
+  requires a fresh PATCH payload.
+- **Custom Tools (TOOL-01..06):** Registered via a new
+  `api-connections` connector that reads from the KV-backed tool store
+  and injects definitions at registry scan time. Tool name collisions
+  across connectors are rejected at create time (409). Tools declare
+  `read` / `write` + `destructive` so MCP clients can prompt.
+- **cURL importer (TOOL-06):** `POST /api/config/api-tools/parse-curl`
+  accepts a command string copy-pasted from Postman / Chrome DevTools /
+  API docs and returns a pre-filled tool draft (method, path, query,
+  body, Authorization bearer promoted to connection auth).
+- **Tool builder UI (UI-02, UI-03):** New **+ New custom tool** button
+  on the Tools tab opens a 2-step wizard — step 1 chooses "paste cURL"
+  vs blank template, step 2 edits method / path / arguments / query /
+  body / auth flags. Custom tools appear inline in the aggregated
+  Tools view with their connector label ("API Connections").
+- **Connection test endpoint (CONN-05):** `POST
+  /api/config/api-connections/:id/test` probes the base URL with the
+  current auth and returns `{ ok, status, ms }` so users can verify
+  reachability before wiring tools.
+- **Delete cascade:** Removing an API Connection also removes every
+  tool attached to it (count returned in the DELETE response).
+
+### Safety
+
+- **SSRF guard (SAFE-01):** Private IPs (127/8, RFC1918, CGNAT, IPv6
+  ULA, link-local), cloud-metadata IPs (169.254.169.254 +
+  `metadata.google.internal`), and loopback hostnames blocked unless
+  `KEBAB_API_CONN_ALLOW_LOCAL=1` is set.
+- **Response size cap:** Tool invocations truncate response bodies at
+  512 KB (tagged `[truncated]` in the Claude-visible output).
+- **Timeouts:** Configurable per tool, capped at 60s (default 30s).
+
+### Routes
+
+- `GET/POST /api/config/api-connections`
+- `GET/PATCH/DELETE /api/config/api-connections/:id`
+- `POST /api/config/api-connections/:id/test`
+- `GET/POST /api/config/api-tools`
+- `GET/PATCH/DELETE /api/config/api-tools/:id`
+- `POST /api/config/api-tools/parse-curl`
+
+All routes are `withAdminAuth`-gated.
+
+### Infrastructure
+
+- New connector `api-connections` registered in `ALL_CONNECTOR_LOADERS`
+  with dynamic tool count. Contract test
+  `registry-metadata-consistency.test.ts` updated to skip equality for
+  this dynamic connector (same pattern as `skills`).
+- 33 new unit tests: 8 store CRUD + 9 invoke (interpolation, auth
+  header synthesis, SSRF rejection, truncation) + 16 cURL parse
+  (tokenizer, flag handling, draft extraction).
+
+### Configuration
+
+- **New env var:** `KEBAB_API_CONN_ALLOW_LOCAL` — 1/true to allow
+  private-network URLs. Default: off. Example in `.env.example`.
+
+### Known limitations (deferred)
+
+- OpenAPI spec import.
+- Response JSON-schema validation.
+- Pagination helpers.
+- Secrets-at-rest encryption (tokens currently live in KV alongside
+  other instance state; equivalent trust boundary as env vars).
+
 ## [v0.14.0] — Skills sync & governance
 
 Elevates Skills from individual Markdown payloads to reusable playbooks

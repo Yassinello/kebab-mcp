@@ -329,7 +329,7 @@ Equivalent to `git fetch upstream && git merge upstream/main`. Useful when you'r
 
 ## Connectors
 
-Kebab MCP ships **86+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
+Kebab MCP ships **86+ production-ready tools** organized in 15 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates, and **API Connections** let you turn any HTTP API into a tool (v0.15+).
 
 ### Google Workspace — 18 tools
 
