@@ -24,15 +24,36 @@ interface SkillSourceRemote {
 }
 type SkillSource = SkillSourceInline | SkillSourceRemote;
 
+interface SkillSyncState {
+  target: string;
+  lastSyncedHash: string;
+  lastSyncedAt: string;
+  lastSyncStatus: "ok" | "error";
+  lastSyncError?: string;
+}
+
 interface Skill {
   id: string;
   name: string;
   description: string;
   content: string;
   arguments: SkillArgument[];
+  toolsAllowed?: string[];
   source: SkillSource;
+  syncState?: Record<string, SkillSyncState>;
   createdAt: string;
   updatedAt: string;
+}
+
+interface SyncTarget {
+  name: string;
+  path: string;
+}
+
+interface AvailableTool {
+  name: string;
+  connector: string;
+  description: string;
 }
 
 interface DraftState {
@@ -43,6 +64,7 @@ interface DraftState {
   content: string;
   url: string;
   arguments: SkillArgument[];
+  toolsAllowed: string[];
 }
 
 const emptyDraft = (): DraftState => ({
@@ -53,6 +75,7 @@ const emptyDraft = (): DraftState => ({
   content: "",
   url: "",
   arguments: [],
+  toolsAllowed: [],
 });
 
 interface SkillVersionSummary {
@@ -78,6 +101,10 @@ export function SkillsTab() {
   const [historyData, setHistoryData] = useState<SkillVersionSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
+  const [syncTargets, setSyncTargets] = useState<SyncTarget[]>([]);
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
 
   const loadVersions = useCallback(async (skillIds: string[]) => {
     const map: Record<string, number> = {};
@@ -116,6 +143,26 @@ export function SkillsTab() {
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    // Load sync targets + available tool list once on mount.
+    fetch("/api/config/skills-sync-targets", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) setSyncTargets(d.targets || []);
+      })
+      .catch(() => {
+        /* ignore — non-critical */
+      });
+    fetch("/api/config/available-tools", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) setAvailableTools(d.tools || []);
+      })
+      .catch(() => {
+        /* ignore — non-critical */
+      });
+  }, []);
+
   const startCreate = () => {
     setDraft(emptyDraft());
     setError(null);
@@ -130,6 +177,7 @@ export function SkillsTab() {
       content: skill.content,
       url: skill.source.type === "remote" ? skill.source.url : "",
       arguments: skill.arguments.map((a) => ({ ...a })),
+      toolsAllowed: [...(skill.toolsAllowed ?? [])],
     });
     setError(null);
   };
@@ -180,6 +228,7 @@ export function SkillsTab() {
           description: a.description || "",
           required: !!a.required,
         })),
+      toolsAllowed: draft.toolsAllowed.filter((t) => t.trim().length > 0),
       source:
         draft.mode === "inline"
           ? { type: "inline" as const }
@@ -252,6 +301,78 @@ export function SkillsTab() {
 
   const exportSkill = (id: string) => {
     window.location.href = `/api/config/skills/${id}/export`;
+  };
+
+  const syncSkill = async (id: string, targetName?: string) => {
+    setSyncing(id);
+    try {
+      const res = await fetch(`/api/config/skills/${id}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(targetName ? { target: targetName } : { all: true }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setFlash(`Synced to ${data.results.map((r: { target: string }) => r.target).join(", ")}`);
+        setTimeout(() => setFlash(null), 2500);
+        await reload();
+      } else {
+        const failed = (data.results || [])
+          .filter((r: { ok: boolean }) => !r.ok)
+          .map((r: { target: string; error?: string }) => `${r.target}: ${r.error ?? "error"}`);
+        alert(failed.join("\n") || data.error || "Sync failed");
+      }
+    } catch {
+      alert("Network error");
+    }
+    setSyncing(null);
+  };
+
+  const syncAllSkills = async () => {
+    if (syncTargets.length === 0) {
+      alert("No sync targets configured. Set KEBAB_SKILLS_SYNC_TARGETS env var.");
+      return;
+    }
+    setSyncingAll(true);
+    const failed: string[] = [];
+    for (const skill of skills) {
+      try {
+        const res = await fetch(`/api/config/skills/${skill.id}/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ all: true }),
+        });
+        const data = await res.json();
+        if (!data.ok) failed.push(skill.id);
+      } catch {
+        failed.push(skill.id);
+      }
+    }
+    setSyncingAll(false);
+    if (failed.length > 0) {
+      alert(`Sync failed for: ${failed.join(", ")}`);
+    } else {
+      setFlash(`Synced ${skills.length} skills`);
+      setTimeout(() => setFlash(null), 2500);
+    }
+    await reload();
+  };
+
+  /** Compute a simple client-side drift signal: has the skill been updated
+   * after its last sync? We use updatedAt vs lastSyncedAt because the
+   * server-side hash comparison requires extra round-trips. */
+  const computeDrift = (skill: Skill): { stale: boolean; targets: string[] } => {
+    const state = skill.syncState ?? {};
+    const staleTargets: string[] = [];
+    for (const [targetName, s] of Object.entries(state)) {
+      if (s.lastSyncStatus !== "ok") continue;
+      if (new Date(skill.updatedAt).getTime() > new Date(s.lastSyncedAt).getTime()) {
+        staleTargets.push(targetName);
+      }
+    }
+    return { stale: staleTargets.length > 0, targets: staleTargets };
   };
 
   /** Client-side export to Claude Desktop .skill format (JSON). */
@@ -339,6 +460,16 @@ export function SkillsTab() {
           )}
           {!draft && !composerOpen && (
             <>
+              {syncTargets.length > 0 && skills.length > 0 && (
+                <button
+                  onClick={syncAllSkills}
+                  disabled={syncingAll}
+                  className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md disabled:opacity-60"
+                  title={`Sync all skills to ${syncTargets.map((t) => t.name).join(", ")}`}
+                >
+                  {syncingAll ? "Syncing..." : "Sync all"}
+                </button>
+              )}
               <button
                 onClick={() => setComposerOpen(true)}
                 className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
@@ -397,7 +528,28 @@ export function SkillsTab() {
           updateArg={updateDraftArg}
           addArg={addArg}
           removeArg={removeArg}
+          availableTools={availableTools}
         />
+      )}
+
+      {syncTargets.length === 0 && skills.length > 0 && (
+        <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
+          <strong>Tip:</strong> Configure sync targets by setting{" "}
+          <code>KEBAB_SKILLS_SYNC_TARGETS</code> to a JSON array. Example:{" "}
+          <code>{`[{"name":"claude-code","path":"/Users/you/.claude/skills"}]`}</code>. Skills will
+          then be syncable to Claude Code&apos;s local skills directory with one click.
+        </div>
+      )}
+
+      {syncTargets.length > 0 && (
+        <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
+          Sync targets:{" "}
+          {syncTargets.map((t) => (
+            <code key={t.name} className="mr-2">
+              {t.name} → {t.path}
+            </code>
+          ))}
+        </div>
       )}
 
       {skills.length === 0 && !draft && (
@@ -408,134 +560,174 @@ export function SkillsTab() {
         </div>
       )}
 
-      {skills.map((skill) => (
-        <div
-          key={skill.id}
-          className="border border-border rounded-lg overflow-hidden hover:border-border-light transition-colors"
-        >
-          <div className="flex items-center gap-3 px-5 py-4">
-            <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent font-bold text-sm">
-              {skill.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm">{skill.name}</p>
-                <code className="text-[11px] text-text-muted">skill_{skill.id}</code>
-                <span
-                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                    skill.source.type === "remote"
-                      ? "text-accent bg-accent/10"
-                      : "text-text-muted bg-bg-muted"
-                  }`}
-                >
-                  {skill.source.type}
-                </span>
-                {(versionMap[skill.id] ?? 0) > 0 && (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
-                    v{versionMap[skill.id]}
+      {skills.map((skill) => {
+        const drift = computeDrift(skill);
+        const syncedTargets = Object.keys(skill.syncState ?? {}).filter(
+          (t) => (skill.syncState ?? {})[t]?.lastSyncStatus === "ok"
+        );
+        return (
+          <div
+            key={skill.id}
+            className="border border-border rounded-lg overflow-hidden hover:border-border-light transition-colors"
+          >
+            <div className="flex items-center gap-3 px-5 py-4">
+              <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent font-bold text-sm">
+                {skill.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-sm">{skill.name}</p>
+                  <code className="text-[11px] text-text-muted">skill_{skill.id}</code>
+                  <span
+                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                      skill.source.type === "remote"
+                        ? "text-accent bg-accent/10"
+                        : "text-text-muted bg-bg-muted"
+                    }`}
+                  >
+                    {skill.source.type}
                   </span>
+                  {(versionMap[skill.id] ?? 0) > 0 && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
+                      v{versionMap[skill.id]}
+                    </span>
+                  )}
+                  {skill.source.type === "remote" && skill.source.lastError && (
+                    <span className="text-[11px] font-medium text-red bg-red-bg px-2 py-0.5 rounded-full">
+                      fetch error
+                    </span>
+                  )}
+                  {drift.stale && (
+                    <span
+                      className="text-[11px] font-medium text-orange bg-orange-bg px-2 py-0.5 rounded-full"
+                      title={`Edited after last sync to: ${drift.targets.join(", ")}`}
+                    >
+                      drift
+                    </span>
+                  )}
+                  {!drift.stale && syncedTargets.length > 0 && (
+                    <span
+                      className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full"
+                      title={`Synced to ${syncedTargets.join(", ")}`}
+                    >
+                      synced
+                    </span>
+                  )}
+                  {(skill.toolsAllowed?.length ?? 0) > 0 && (
+                    <span
+                      className="text-[11px] font-medium text-text-muted bg-bg-muted px-2 py-0.5 rounded-full"
+                      title={`Allowed tools: ${skill.toolsAllowed!.join(", ")}`}
+                    >
+                      {skill.toolsAllowed!.length} tool{skill.toolsAllowed!.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-text-dim mt-0.5 truncate">
+                  {skill.description || <em className="text-text-muted">no description</em>}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {skill.source.type === "remote" && (
+                  <button
+                    onClick={() => refreshSkill(skill.id)}
+                    disabled={refreshing === skill.id}
+                    className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded disabled:opacity-60"
+                    title="Re-fetch remote content"
+                  >
+                    {refreshing === skill.id ? "..." : "Refresh"}
+                  </button>
                 )}
-                {skill.source.type === "remote" && skill.source.lastError && (
-                  <span className="text-[11px] font-medium text-red bg-red-bg px-2 py-0.5 rounded-full">
-                    fetch error
-                  </span>
+                {syncTargets.length > 0 && (
+                  <button
+                    onClick={() => syncSkill(skill.id)}
+                    disabled={syncing === skill.id}
+                    className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded disabled:opacity-60"
+                    title={`Sync to ${syncTargets.map((t) => t.name).join(", ")}`}
+                  >
+                    {syncing === skill.id ? "..." : "Sync"}
+                  </button>
+                )}
+                <button
+                  onClick={() => toggleHistory(skill.id)}
+                  className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
+                  title="View version history"
+                >
+                  History
+                </button>
+                <button
+                  onClick={() => exportSkill(skill.id)}
+                  className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
+                  title="Download as Markdown (.md)"
+                >
+                  Export
+                </button>
+                <button
+                  onClick={() => exportClaudeSkill(skill)}
+                  className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
+                  title="Download as Claude Desktop Skill (.skill)"
+                >
+                  Claude
+                </button>
+                <button
+                  onClick={() => startEdit(skill)}
+                  className="text-xs text-accent hover:underline px-2 py-1 rounded"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteSkill(skill.id)}
+                  className="text-xs text-red hover:underline px-2 py-1 rounded"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+            {historyOpen === skill.id && (
+              <div className="border-t border-border px-5 py-4 bg-bg-muted/30">
+                <h4 className="text-xs font-semibold text-text-muted mb-2">Version History</h4>
+                {historyLoading ? (
+                  <p className="text-xs text-text-muted">Loading...</p>
+                ) : historyData.length === 0 ? (
+                  <p className="text-xs text-text-muted">No version history available.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...historyData].reverse().map((v) => (
+                      <div
+                        key={v.version}
+                        className="flex items-center gap-3 text-xs border border-border rounded-md px-3 py-2"
+                      >
+                        <span className="font-mono font-medium text-accent shrink-0">
+                          v{v.version}
+                        </span>
+                        <span className="text-text-muted shrink-0">
+                          {new Date(v.savedAt).toLocaleString()}
+                        </span>
+                        <span className="text-text-dim flex-1 truncate">
+                          {v.contentPreview || "(empty)"}
+                        </span>
+                        {v.version !== versionMap[skill.id] && (
+                          <button
+                            onClick={() => rollbackTo(skill.id, v.version)}
+                            disabled={rollingBack}
+                            className="text-xs text-orange hover:underline shrink-0 disabled:opacity-50"
+                          >
+                            Rollback
+                          </button>
+                        )}
+                        {v.version === versionMap[skill.id] && (
+                          <span className="text-[10px] font-medium text-green bg-green-bg px-1.5 py-0.5 rounded shrink-0">
+                            current
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-text-dim mt-0.5 truncate">
-                {skill.description || <em className="text-text-muted">no description</em>}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {skill.source.type === "remote" && (
-                <button
-                  onClick={() => refreshSkill(skill.id)}
-                  disabled={refreshing === skill.id}
-                  className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded disabled:opacity-60"
-                  title="Re-fetch remote content"
-                >
-                  {refreshing === skill.id ? "..." : "Refresh"}
-                </button>
-              )}
-              <button
-                onClick={() => toggleHistory(skill.id)}
-                className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
-                title="View version history"
-              >
-                History
-              </button>
-              <button
-                onClick={() => exportSkill(skill.id)}
-                className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
-                title="Download as Markdown (.md)"
-              >
-                Export
-              </button>
-              <button
-                onClick={() => exportClaudeSkill(skill)}
-                className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded"
-                title="Download as Claude Desktop Skill (.skill)"
-              >
-                Claude
-              </button>
-              <button
-                onClick={() => startEdit(skill)}
-                className="text-xs text-accent hover:underline px-2 py-1 rounded"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => deleteSkill(skill.id)}
-                className="text-xs text-red hover:underline px-2 py-1 rounded"
-              >
-                Delete
-              </button>
-            </div>
+            )}
           </div>
-          {historyOpen === skill.id && (
-            <div className="border-t border-border px-5 py-4 bg-bg-muted/30">
-              <h4 className="text-xs font-semibold text-text-muted mb-2">Version History</h4>
-              {historyLoading ? (
-                <p className="text-xs text-text-muted">Loading...</p>
-              ) : historyData.length === 0 ? (
-                <p className="text-xs text-text-muted">No version history available.</p>
-              ) : (
-                <div className="space-y-2">
-                  {[...historyData].reverse().map((v) => (
-                    <div
-                      key={v.version}
-                      className="flex items-center gap-3 text-xs border border-border rounded-md px-3 py-2"
-                    >
-                      <span className="font-mono font-medium text-accent shrink-0">
-                        v{v.version}
-                      </span>
-                      <span className="text-text-muted shrink-0">
-                        {new Date(v.savedAt).toLocaleString()}
-                      </span>
-                      <span className="text-text-dim flex-1 truncate">
-                        {v.contentPreview || "(empty)"}
-                      </span>
-                      {v.version !== versionMap[skill.id] && (
-                        <button
-                          onClick={() => rollbackTo(skill.id, v.version)}
-                          disabled={rollingBack}
-                          className="text-xs text-orange hover:underline shrink-0 disabled:opacity-50"
-                        >
-                          Rollback
-                        </button>
-                      )}
-                      {v.version === versionMap[skill.id] && (
-                        <span className="text-[10px] font-medium text-green bg-green-bg px-1.5 py-0.5 rounded shrink-0">
-                          current
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -550,6 +742,7 @@ function DraftForm({
   updateArg,
   addArg,
   removeArg,
+  availableTools,
 }: {
   draft: DraftState;
   setDraft: (updater: (d: DraftState | null) => DraftState | null) => void;
@@ -560,8 +753,19 @@ function DraftForm({
   updateArg: (idx: number, patch: Partial<SkillArgument>) => void;
   addArg: () => void;
   removeArg: (idx: number) => void;
+  availableTools: AvailableTool[];
 }) {
   const set = (patch: Partial<DraftState>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  const toggleTool = (name: string) => {
+    setDraft((d) => {
+      if (!d) return d;
+      const has = d.toolsAllowed.includes(name);
+      return {
+        ...d,
+        toolsAllowed: has ? d.toolsAllowed.filter((t) => t !== name) : [...d.toolsAllowed, name],
+      };
+    });
+  };
 
   return (
     <div className="border border-accent/30 rounded-lg bg-bg p-5 space-y-4">
@@ -721,6 +925,45 @@ function DraftForm({
             </div>
           ))}
         </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <label className="text-sm font-medium">Allowed tools</label>
+          <InfoTooltip
+            title="Governance — tools this skill is allowed to invoke"
+            body="Declare which MCP tools this skill may call. The list is embedded in the exported frontmatter as `tools_allowed` so Claude Code (and reviewers) can see the skill's surface before invocation. Empty = no explicit restriction — the skill inherits the ambient tool surface at runtime."
+          />
+          <span className="text-text-muted text-xs font-normal">
+            {draft.toolsAllowed.length} selected
+          </span>
+        </div>
+        {availableTools.length === 0 ? (
+          <p className="text-xs text-text-muted">No tools available yet.</p>
+        ) : (
+          <div className="max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-1 bg-bg-muted/40">
+            {availableTools.map((t) => (
+              <label
+                key={t.name}
+                className="flex items-start gap-2 text-xs px-1.5 py-1 hover:bg-bg-muted rounded cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={draft.toolsAllowed.includes(t.name)}
+                  onChange={() => toggleTool(t.name)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono text-text">{t.name}</code>
+                    <span className="text-[10px] text-text-muted">{t.connector}</span>
+                  </div>
+                  {t.description && <p className="text-text-dim truncate">{t.description}</p>}
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
