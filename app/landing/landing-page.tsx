@@ -1,6 +1,7 @@
 import LandingHeader from "./header";
 import Hero from "./hero";
 import WhyKebab from "./why-kebab";
+import Product from "./product";
 import HowItWorks from "./how-it-works";
 import Connectors from "./connectors";
 import Compatibility from "./compatibility";
@@ -15,6 +16,7 @@ export default function LandingPage() {
       <main>
         <Hero />
         <WhyKebab />
+        <Product />
         <HowItWorks />
         <Connectors />
         <Compatibility />

@@ -1,66 +1,105 @@
 interface KebabLogoProps {
   size?: number;
   className?: string;
+  /** When true, renders with an internal amber→orange gradient and a flame */
+  hot?: boolean;
 }
 
 /**
- * Kebab skewer logo — a diagonal rod running from a small handle ring
- * (bottom-left) to a sharp tip (top-right), threaded with four pieces
- * that alternate circle / diamond / circle / diamond so the silhouette
- * reads as "brochette with meat + veggies" even at 16px. The handle
- * ring differentiates the grip end from the food and gives the icon a
- * stronger "real skewer" feel than a plain line would.
+ * Kebab skewer logo — horizontal pique with three chunky pieces (round /
+ * square / round). The rod has a flat handle on the left and a sharpened
+ * tip on the right. At small sizes (16-26px) the silhouette reads as
+ * "kebab on a stick" rather than the abstract diagonal it used to be.
  *
- * Monochrome: everything uses `currentColor`, so the parent can set
- * the tone (amber for brand, white for reversed placements).
+ * Two modes:
+ * - default: monochrome via `currentColor` — drop into any header
+ * - hot: amber→orange→red gradient + tiny flame underneath, for hero/OG
  */
-export function KebabLogo({ size = 24, className = "" }: KebabLogoProps) {
+export function KebabLogo({ size = 24, className = "", hot = false }: KebabLogoProps) {
+  const gradId = `kebab-grad-${hot ? "hot" : "mono"}`;
+
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       aria-hidden="true"
     >
-      {/* Skewer rod — diagonal, round cap at tip for a "sharpened" feel */}
+      {hot && (
+        <defs>
+          <linearGradient id={gradId} x1="6" y1="16" x2="26" y2="16" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#fbbf24" />
+            <stop offset="55%" stopColor="#f97316" />
+            <stop offset="100%" stopColor="#dc2626" />
+          </linearGradient>
+        </defs>
+      )}
+
+      {/* Skewer rod — horizontal, slight upward angle, thick */}
       <line
-        x1="3.5"
-        y1="20.5"
-        x2="20.5"
-        y2="3.5"
+        x1="3"
+        y1="17.5"
+        x2="29"
+        y2="14.5"
         stroke="currentColor"
-        strokeWidth="1.2"
+        strokeWidth="2"
         strokeLinecap="round"
       />
-      {/* Handle: small hollow ring marks the grip end */}
-      <circle cx="2.8" cy="21.2" r="1.1" stroke="currentColor" strokeWidth="1" fill="none" />
-      {/* Piece 1 (near handle): small round veg — onion */}
-      <circle cx="7" cy="17" r="1.8" fill="currentColor" />
-      {/* Piece 2: diamond — meat cube */}
+
+      {/* Handle: short cross-bar on the left = grip */}
+      <line
+        x1="3"
+        y1="15"
+        x2="3"
+        y2="20"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+
+      {/* Piece 1 (left): round — onion */}
+      <circle
+        cx="9.5"
+        cy="16.7"
+        r="3.2"
+        fill={hot ? `url(#${gradId})` : "currentColor"}
+      />
+
+      {/* Piece 2 (middle): square with rounded corners — meat cube */}
       <rect
-        x="8.6"
-        y="11.6"
-        width="3.8"
-        height="3.8"
-        rx="0.5"
-        transform="rotate(45 10.5 13.5)"
+        x="13.2"
+        y="12.4"
+        width="6"
+        height="6"
+        rx="1"
+        fill={hot ? `url(#${gradId})` : "currentColor"}
+      />
+
+      {/* Piece 3 (right): round — tomato */}
+      <circle
+        cx="22.5"
+        cy="14.7"
+        r="3"
+        fill={hot ? `url(#${gradId})` : "currentColor"}
+      />
+
+      {/* Sharpened tip beyond the last piece */}
+      <path
+        d="M26 14.2 L29 14.5 L26.5 16 Z"
         fill="currentColor"
       />
-      {/* Piece 3: medium circle — tomato */}
-      <circle cx="14" cy="10" r="2.1" fill="currentColor" />
-      {/* Piece 4 (near tip): smaller diamond — pepper */}
-      <rect
-        x="15.4"
-        y="5.4"
-        width="3.2"
-        height="3.2"
-        rx="0.4"
-        transform="rotate(45 17 7)"
-        fill="currentColor"
-      />
+
+      {hot && (
+        // Flame underneath — only in hot mode
+        <path
+          d="M14 24 Q15 21 16 23 Q17 20 18 23 Q18.5 25 16 26 Q13.5 25 14 24 Z"
+          fill="#f59e0b"
+          opacity="0.85"
+        />
+      )}
     </svg>
   );
 }
