@@ -1,8 +1,8 @@
+import { REPO_URL } from "./deploy-url";
+
 const LINKS = [
-  { label: "GitHub", href: "https://github.com/Yassinello/kebab-mcp" },
-  { label: "Documentation", href: "https://github.com/Yassinello/kebab-mcp#readme" },
-  { label: "Discord", href: "https://discord.gg/mymcp" },
-  { label: "npm", href: "https://www.npmjs.com/package/mymcp" },
+  { label: "GitHub", href: REPO_URL },
+  { label: "Documentation", href: `${REPO_URL}#readme` },
 ];
 
 export default function LandingFooter() {
@@ -13,8 +13,7 @@ export default function LandingFooter() {
           <div>
             <p className="text-sm font-mono text-white font-semibold mb-1">Kebab MCP</p>
             <p className="text-xs text-slate-500">
-              The personal MCP server for developers. MIT License · Open source · Built with the
-              community
+              One backend for every AI client. MIT License · Open source · Built with the community
             </p>
           </div>
           <nav className="flex gap-6">
@@ -33,7 +32,7 @@ export default function LandingFooter() {
         </div>
         <div className="mt-8 pt-6 border-t border-slate-800/50">
           <p className="text-xs text-slate-600 text-center">
-            © 2025 Kebab MCP contributors · MIT License
+            © {new Date().getFullYear()} Kebab MCP contributors · MIT License
           </p>
         </div>
       </div>
