@@ -21,6 +21,14 @@ export interface ToolResult {
    * in memory.
    */
   stream?: AsyncIterable<string>;
+  /**
+   * Machine-readable structured output for tools that declare an outputSchema.
+   * Populated by the api-connections connector handler when the response body
+   * parses as valid JSON and result.truncated is false.
+   * Passed through to the MCP client via server.registerTool().
+   * Must be a plain JSON object to satisfy the MCP SDK CallToolResult contract.
+   */
+  structuredContent?: Record<string, unknown>;
 }
 
 /** Single tool definition — the unit of functionality.
@@ -40,6 +48,13 @@ export interface ToolDefinition {
   schema: z.ZodRawShape;
   /** Handler function */
   handler: (args: Record<string, unknown>) => Promise<ToolResult>;
+  /**
+   * Optional JSON Schema for the tool's structured output.
+   * When present, the MCP transport uses server.registerTool() instead of
+   * the legacy server.tool() — enabling structured content in ToolResult.
+   * Only applies to custom API tools (api-connections connector).
+   */
+  outputSchema?: Record<string, unknown>;
   /** Short one-line summary (optional, for docs/dashboard) */
   summary?: string;
   /** Usage example (optional, for docs/dashboard) */

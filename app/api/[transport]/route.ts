@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
@@ -97,50 +98,73 @@ async function buildHandler(
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
             : tool.description;
-          server.tool(
+
+          const loggedHandler = withLogging<Record<string, unknown>>(
             tool.name,
-            desc,
-            tool.schema,
-            withLogging(
-              tool.name,
-              async (params) => {
-                // HIGH-2: Check per-tool disable at invocation time (not
-                // registration time) so toggles take effect immediately
-                // even on long-lived sessions.
-                const currentDisabled = await getDisabledTools();
-                if (currentDisabled.has(tool.name)) {
-                  return {
-                    content: [
-                      {
-                        type: "text" as const,
-                        text: JSON.stringify({
-                          error: `Tool "${tool.name}" is currently disabled`,
-                        }),
-                      },
-                    ],
-                    isError: true,
-                  };
-                }
-                // v0.11 Phase 41: the pipeline wraps the whole request in
-                // `runWithCredentials` (hydrateCredentialsStep) and the
-                // outer / authStep's nested `requestContext.run` already
-                // carries tenantId. The AsyncLocalStorage closure covers
-                // the mcp-handler tool invocation, so no additional wrap
-                // is needed here. The extra run below is kept as a
-                // defense in depth for tool handlers that may execute
-                // outside the closure (e.g. through fire-and-forget
-                // timers), and it is idempotent — runWithCredentials
-                // merges creds, and the outer tenantId is preserved.
-                void tenantId; // silence unused (kept for signature compatibility)
-                // Kept explicit so a connector author reading this file sees
-                // the intended behavior.
-                return tool.handler(params);
-              },
-              callerTokenId,
-              pack.manifest.id,
-              requestId
-            )
+            async (params) => {
+              // HIGH-2: Check per-tool disable at invocation time (not
+              // registration time) so toggles take effect immediately
+              // even on long-lived sessions.
+              const currentDisabled = await getDisabledTools();
+              if (currentDisabled.has(tool.name)) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: JSON.stringify({
+                        error: `Tool "${tool.name}" is currently disabled`,
+                      }),
+                    },
+                  ],
+                  isError: true,
+                };
+              }
+              // v0.11 Phase 41: the pipeline wraps the whole request in
+              // `runWithCredentials` (hydrateCredentialsStep) and the
+              // outer / authStep's nested `requestContext.run` already
+              // carries tenantId. The AsyncLocalStorage closure covers
+              // the mcp-handler tool invocation, so no additional wrap
+              // is needed here. The extra run below is kept as a
+              // defense in depth for tool handlers that may execute
+              // outside the closure (e.g. through fire-and-forget
+              // timers), and it is idempotent — runWithCredentials
+              // merges creds, and the outer tenantId is preserved.
+              void tenantId; // silence unused (kept for signature compatibility)
+              // Kept explicit so a connector author reading this file sees
+              // the intended behavior.
+              return tool.handler(params);
+            },
+            callerTokenId,
+            pack.manifest.id,
+            requestId
           );
+
+          if (tool.outputSchema) {
+            // MCP SDK v1.x: use registerTool() with outputSchema so the client
+            // receives structuredContent alongside content[]. The outputSchema is
+            // stored as a plain JSON Schema; we pass z.record(z.unknown()) as the
+            // Zod-compatible outputSchema to satisfy the SDK type contract while
+            // accepting any valid JSON object. Zero impact on the 86 other tools
+            // — this branch is only entered when tool.outputSchema is truthy.
+            //
+            // Cast required: loggedHandler takes 1 arg; registerTool's ToolCallback
+            // signature includes a 2nd `extra` arg. The SDK tolerates 1-arity
+            // callbacks at runtime (extra is unused here), but TypeScript requires
+            // the cast to reconcile arity. The underlying behavior is identical.
+            server.registerTool(
+              tool.name,
+              {
+                description: desc,
+                inputSchema: tool.schema,
+                outputSchema: z.record(z.string(), z.unknown()),
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              loggedHandler as any
+            );
+          } else {
+            // Legacy path — bit-for-bit identical to previous behavior.
+            server.tool(tool.name, desc, tool.schema, loggedHandler);
+          }
         }
 
         // Non-tool primitives (MCP prompts, resources) — optional per

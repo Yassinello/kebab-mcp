@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { inferJsonSchema } from "./lib/infer-schema-client";
 
 interface ApiConnectionSummary {
   id: string;
@@ -52,12 +53,26 @@ interface Props {
 
 export function CustomToolBuilder({ onClose, onCreated }: Props) {
   const [connections, setConnections] = useState<ApiConnectionSummary[]>([]);
-  const [step, setStep] = useState<"pick-method" | "edit">("pick-method");
+  const [step, setStep] = useState<"pick-method" | "edit" | "test-schema">("pick-method");
   const [draft, setDraft] = useState<ToolDraft>(emptyDraft());
   const [curlText, setCurlText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // test-schema step state
+  const [testArgs, setTestArgs] = useState<Record<string, string>>({});
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleResult, setSampleResult] = useState<{
+    ok: boolean;
+    status: number;
+    body: string;
+    truncated: boolean;
+    url: string;
+  } | null>(null);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [outputSchemaText, setOutputSchemaText] = useState("");
+  const [schemaError, setSchemaError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/config/api-connections", { credentials: "include" })
@@ -167,14 +182,12 @@ export function CustomToolBuilder({ onClose, onCreated }: Props) {
     }));
   };
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
+  const buildPayload = (outputSchema?: Record<string, unknown>) => {
     const queryTemplate: Record<string, string> = {};
     for (const p of draft.queryPairs) {
       if (p.key.trim()) queryTemplate[p.key.trim()] = p.value;
     }
-    const payload = {
+    return {
       connectionId: draft.connectionId,
       name: draft.name.trim(),
       description: draft.description.trim(),
@@ -193,7 +206,14 @@ export function CustomToolBuilder({ onClose, onCreated }: Props) {
       readOrWrite: draft.readOrWrite,
       destructive: draft.destructive,
       timeoutMs: draft.timeoutMs,
+      ...(outputSchema !== undefined ? { outputSchema } : {}),
     };
+  };
+
+  const save = async (outputSchema?: Record<string, unknown>) => {
+    setSaving(true);
+    setError(null);
+    const payload = buildPayload(outputSchema);
     if (!payload.connectionId || !payload.name) {
       setError("Connection and tool name are required.");
       setSaving(false);
@@ -216,6 +236,89 @@ export function CustomToolBuilder({ onClose, onCreated }: Props) {
       setError("Network error");
     }
     setSaving(false);
+  };
+
+  // ── test-schema step helpers ──────────────────────────────────────────
+
+  const fetchSample = async () => {
+    setSampleLoading(true);
+    setSampleError(null);
+    setSampleResult(null);
+
+    const queryTemplate: Record<string, string> = {};
+    for (const p of draft.queryPairs) {
+      if (p.key.trim()) queryTemplate[p.key.trim()] = p.value;
+    }
+
+    try {
+      const res = await fetch("/api/config/api-tools/sample", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          connectionId: draft.connectionId,
+          toolDraft: {
+            method: draft.method,
+            pathTemplate: draft.pathTemplate,
+            arguments: draft.arguments
+              .filter((a) => a.name.trim())
+              .map((a) => ({
+                name: a.name.trim(),
+                description: a.description || "",
+                required: !!a.required,
+                type: a.type || "string",
+              })),
+            queryTemplate,
+            bodyTemplate: draft.bodyTemplate,
+            timeoutMs: draft.timeoutMs,
+          },
+          testArgs,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok && data.error) {
+        setSampleError(data.error);
+      } else {
+        setSampleResult(data);
+      }
+    } catch {
+      setSampleError("Network error");
+    }
+    setSampleLoading(false);
+  };
+
+  const inferSchema = () => {
+    setSchemaError(null);
+    if (!sampleResult?.body) {
+      setSchemaError("Fetch a sample first.");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(sampleResult.body);
+      const schema = inferJsonSchema(parsed);
+      setOutputSchemaText(JSON.stringify(schema, null, 2));
+    } catch {
+      setSchemaError("Response body is not valid JSON — cannot infer schema.");
+    }
+  };
+
+  const saveWithSchema = async () => {
+    setSchemaError(null);
+    let parsedSchema: Record<string, unknown> | undefined;
+    if (outputSchemaText.trim()) {
+      try {
+        const parsed = JSON.parse(outputSchemaText);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          setSchemaError("Output schema must be a JSON object.");
+          return;
+        }
+        parsedSchema = parsed as Record<string, unknown>;
+      } catch {
+        setSchemaError("Invalid JSON in output schema.");
+        return;
+      }
+    }
+    await save(parsedSchema);
   };
 
   if (loading) {
@@ -296,6 +399,138 @@ export function CustomToolBuilder({ onClose, onCreated }: Props) {
                 {error}
               </div>
             )}
+          </div>
+        ) : step === "test-schema" ? (
+          <div className="space-y-4">
+            <p className="text-sm text-text-dim">
+              Optionally fetch a sample response to infer an output schema. The schema is stored
+              with the tool and enables structured content in MCP responses.
+            </p>
+
+            {/* Test args */}
+            {draft.arguments.filter((a) => a.name.trim()).length > 0 && (
+              <div>
+                <label className="text-sm font-medium block mb-1.5">Test arguments</label>
+                <div className="space-y-2">
+                  {draft.arguments
+                    .filter((a) => a.name.trim())
+                    .map((a) => (
+                      <div key={a.name} className="grid grid-cols-[120px_1fr] gap-2 items-center">
+                        <span className="text-xs font-mono text-text-dim">{a.name}</span>
+                        <input
+                          type="text"
+                          value={testArgs[a.name] ?? ""}
+                          onChange={(e) =>
+                            setTestArgs((prev) => ({ ...prev, [a.name]: e.target.value }))
+                          }
+                          placeholder={`value for ${a.name}`}
+                          className="bg-bg-muted border border-border rounded-md px-2 py-1 text-xs font-mono focus:border-accent focus:outline-none"
+                        />
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fetch sample */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchSample}
+                disabled={sampleLoading}
+                className="text-xs font-medium px-3 py-1.5 bg-accent text-white rounded-md hover:bg-accent/90 disabled:opacity-50"
+              >
+                {sampleLoading ? "Fetching…" : "Fetch sample"}
+              </button>
+              {sampleResult && (
+                <span className="text-xs text-text-dim">
+                  HTTP {sampleResult.status} — {sampleResult.url}
+                  {sampleResult.truncated && " [truncated]"}
+                </span>
+              )}
+            </div>
+
+            {sampleError && (
+              <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
+                {sampleError}
+              </div>
+            )}
+
+            {/* Sample body preview */}
+            {sampleResult?.body && (
+              <div>
+                <label className="text-xs font-medium text-text-dim block mb-1">
+                  Response preview
+                </label>
+                <pre className="bg-bg-muted border border-border rounded-md px-3 py-2 text-xs font-mono overflow-auto max-h-32 whitespace-pre-wrap">
+                  {sampleResult.body.slice(0, 2000)}
+                  {sampleResult.body.length > 2000 && "\n…"}
+                </pre>
+              </div>
+            )}
+
+            {/* Infer schema */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={inferSchema}
+                disabled={!sampleResult?.body}
+                className="text-xs font-medium px-3 py-1.5 border border-border rounded-md text-text-dim hover:text-text disabled:opacity-50"
+              >
+                Infer schema
+              </button>
+              <span className="text-[11px] text-text-muted">
+                Generates JSON Schema from the sample response.
+              </span>
+            </div>
+
+            {/* Editable schema textarea */}
+            <div>
+              <label className="text-sm font-medium block mb-1.5">
+                Output schema{" "}
+                <span className="text-text-muted text-xs font-normal">(JSON Schema, editable)</span>
+              </label>
+              <textarea
+                value={outputSchemaText}
+                onChange={(e) => setOutputSchemaText(e.target.value)}
+                rows={8}
+                placeholder='{"type":"object","properties":{"id":{"type":"number"},"name":{"type":"string"}},"required":["id","name"]}'
+                className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            {schemaError && (
+              <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
+                {schemaError}
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={saveWithSchema}
+                disabled={saving}
+                className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save with schema"}
+              </button>
+              <button
+                onClick={() => save(undefined)}
+                disabled={saving}
+                className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim disabled:opacity-60"
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => setStep("edit")}
+                className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim"
+              >
+                ← Back
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -526,11 +761,10 @@ export function CustomToolBuilder({ onClose, onCreated }: Props) {
 
             <div className="flex items-center gap-3 pt-2">
               <button
-                onClick={save}
-                disabled={saving}
-                className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-60"
+                onClick={() => setStep("test-schema")}
+                className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90"
               >
-                {saving ? "Saving…" : "Create tool"}
+                Next: Test &amp; schema →
               </button>
               <button
                 onClick={() => setStep("pick-method")}

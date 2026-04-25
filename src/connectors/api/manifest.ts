@@ -37,6 +37,7 @@ export function buildApiToolDefinition(tool: ApiTool): ToolDefinition {
     description: tool.description || `Custom API tool — ${tool.name}`,
     destructive: tool.destructive,
     schema: buildSchema(tool),
+    ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
     handler: async (params): Promise<ToolResult> => {
       const connection = await getApiConnection(tool.connectionId);
       if (!connection) {
@@ -54,7 +55,23 @@ export function buildApiToolDefinition(tool: ApiTool): ToolDefinition {
         const result = await invokeApiTool(connection, tool, params ?? {});
         const header = `HTTP ${result.status}${result.ok ? " OK" : ""} ${result.url}`;
         const truncatedTag = result.truncated ? "\n[truncated — response exceeded 512 KB cap]" : "";
-        return {
+
+        // Attach structuredContent when outputSchema is declared and body is
+        // parseable JSON. Fallback is silent — no log, no escalation.
+        let structuredContent: Record<string, unknown> | undefined;
+        if (tool.outputSchema && !result.truncated) {
+          try {
+            const parsed = JSON.parse(result.body);
+            // MCP SDK requires structuredContent to be a plain object
+            if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+              structuredContent = parsed as Record<string, unknown>;
+            }
+          } catch {
+            // Non-JSON body — silently skip structuredContent
+          }
+        }
+
+        const toolResult: ToolResult = {
           isError: !result.ok,
           content: [
             {
@@ -63,6 +80,10 @@ export function buildApiToolDefinition(tool: ApiTool): ToolDefinition {
             },
           ],
         };
+        if (structuredContent !== undefined) {
+          toolResult.structuredContent = structuredContent;
+        }
+        return toolResult;
       } catch (err) {
         return {
           isError: true,

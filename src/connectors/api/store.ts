@@ -99,6 +99,9 @@ export const apiToolSchema = z.object({
   readOrWrite: z.enum(["read", "write"]).default("read"),
   destructive: z.boolean().default(false),
   timeoutMs: z.number().int().min(1000).max(60000).default(30000),
+  /** Optional JSON Schema for the tool's output — enables structuredContent
+   *  attachment in ToolResult and server.registerTool() in the MCP transport. */
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -128,6 +131,7 @@ export const apiToolUpdateSchema = z.object({
   readOrWrite: z.enum(["read", "write"]).optional(),
   destructive: z.boolean().optional(),
   timeoutMs: z.number().int().min(1000).max(60000).optional(),
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type ApiToolCreateInput = z.input<typeof apiToolCreateSchema>;
@@ -345,6 +349,7 @@ export function createApiTool(input: ApiToolCreateInput): Promise<ApiTool> {
       readOrWrite: parsed.readOrWrite ?? "read",
       destructive: parsed.destructive ?? false,
       timeoutMs: parsed.timeoutMs ?? 30000,
+      ...(parsed.outputSchema !== undefined ? { outputSchema: parsed.outputSchema } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -377,6 +382,7 @@ export function updateApiTool(id: string, patch: ApiToolUpdateInput): Promise<Ap
       readOrWrite: parsed.readOrWrite ?? prev.readOrWrite,
       destructive: parsed.destructive ?? prev.destructive,
       timeoutMs: parsed.timeoutMs ?? prev.timeoutMs,
+      ...(parsed.outputSchema !== undefined ? { outputSchema: parsed.outputSchema } : {}),
     };
     all[idx] = next;
     await writeToolsRaw(all);
