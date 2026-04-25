@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Open-source personal MCP server framework. Ships 86 pre-built tools across 14 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Apify, Paywall, GitHub, Linear, Airtable, Composio, Webhook, Skills, Admin). Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
+Open-source personal MCP server framework. Ships 86+ pre-built tools across 15 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Apify, Paywall, GitHub, Linear, Airtable, Composio, Webhook, Skills, API Connections, Admin). Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
 
 ## Architecture
 

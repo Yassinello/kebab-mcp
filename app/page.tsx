@@ -6,12 +6,13 @@ import { getConfig } from "@/core/config-facade";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Kebab MCP — Your Personal MCP Server",
+  title: "Kebab MCP — Give every AI client the same superpowers.",
   description:
-    "One Vercel deploy. 65+ tools. Your data, your keys. Kebab MCP is the open source personal MCP server that gives your AI assistant access to calendar, email, GitHub, and more.",
+    "One self-hosted backend for every AI client. 86+ tools across 15 connectors — Gmail, Calendar, Notion, GitHub, Slack and more. Deploy to Vercel in one click. MIT licensed, open source.",
   openGraph: {
-    title: "Kebab MCP — Your Personal MCP Server",
-    description: "Open source. MIT licensed. One deploy, 65+ tools, zero ongoing cost.",
+    title: "Kebab MCP — Give every AI client the same superpowers.",
+    description:
+      "One deploy. Claude, Cursor, Windsurf — every MCP client gets 86+ tools across 15 connectors. Self-hosted, MIT licensed, zero ongoing cost.",
   },
 };
 

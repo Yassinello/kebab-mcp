@@ -7,7 +7,7 @@ const STEPS: {
   {
     n: 1,
     title: "Deploy",
-    body: "One click on the Deploy to Vercel button forks this repo, provisions Upstash Redis for durable storage, and boots the instance. No CLI, no env-var wrangling.",
+    body: "One click on the Deploy button forks the repo, provisions Upstash Redis for durable storage, and boots the instance on your Vercel account. No CLI, no env-var wrangling.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -25,27 +25,8 @@ const STEPS: {
   },
   {
     n: 2,
-    title: "Configure",
-    body: "The welcome flow detects your storage, mints an auth token, and hands you a save-and-confirm UX. Three screens, zero YAML.",
-    icon: (
-      <svg
-        className="w-5 h-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-      </svg>
-    ),
-  },
-  {
-    n: 3,
     title: "Connect",
-    body: "Paste the HTTP endpoint and your token into Claude Desktop, Cursor, Windsurf, or any MCP-compatible client. One URL, every tool on it.",
+    body: "Paste the HTTP endpoint and your token into Claude Desktop, Claude Code, Cursor, Windsurf, or any MCP-compatible client. One URL, every tool on it.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -61,6 +42,44 @@ const STEPS: {
       </svg>
     ),
   },
+  {
+    n: 3,
+    title: "Serve",
+    body: "All 86+ built-in tools are live immediately. Your AI clients share one backend — same tools, same data, zero duplication.",
+    icon: (
+      <svg
+        className="w-5 h-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    ),
+  },
+  {
+    n: 4,
+    title: "Extend",
+    body: "Add new tools via API Connections (any HTTP API, no code) or Skills (prompt-driven workflows). Your backend grows with your stack.",
+    icon: (
+      <svg
+        className="w-5 h-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 4v16m8-8H4" />
+      </svg>
+    ),
+  },
 ];
 
 export default function HowItWorks() {
@@ -72,14 +91,14 @@ export default function HowItWorks() {
             How it works
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Three steps to personal MCP.
+            From zero to fully loaded in minutes.
           </h2>
           <p className="text-slate-400 text-base mt-3 max-w-xl mx-auto leading-relaxed">
             No infra, no YAML, no serverless debugging. The happy path fits in one short session.
           </p>
         </div>
 
-        <ol className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <ol className="grid grid-cols-1 md:grid-cols-4 gap-5">
           {STEPS.map((step) => (
             <li
               key={step.n}

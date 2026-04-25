@@ -12,7 +12,7 @@
  * Spec: https://vercel.com/docs/deployments/deploy-button
  * Integration slug: `upstash` · product slug: `upstash-kv` (KV / Redis).
  */
-const REPO_URL = "https://github.com/Yassinello/kebab-mcp";
+export const REPO_URL = "https://github.com/Yassinello/kebab-mcp";
 
 const STORES = [
   {
