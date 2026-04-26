@@ -26,7 +26,7 @@
 **Plans:** 3 plans
 
 Plans:
-- [ ] 061-01-PLAN.md — Backend: github-api mode detection, GET/POST handlers, token resolution, breaking-change detection
+- [x] 061-01-PLAN.md — Backend: github-api mode detection, GET/POST handlers, token resolution, breaking-change detection
 - [ ] 061-02-PLAN.md — UI: enriched overview banner (commits, breaking badge, diverged state, deploying) + Settings PAT configuration section
 - [ ] 061-03-PLAN.md — Tests: 6 unit test cases for github-api GET and POST handlers
 

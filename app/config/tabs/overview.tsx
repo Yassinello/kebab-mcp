@@ -12,19 +12,35 @@ type UpdateStatus =
   | { state: "loading" }
   | {
       state: "ready";
+      mode: "git" | "github-api";
       available: boolean;
-      behind: number;
-      remote: string;
-      latest?: string | null | undefined;
+      // git mode fields
+      behind?: number;
+      ahead?: number;
+      remote?: string;
+      latest?: string | null;
+      // github-api mode fields
+      behind_by?: number;
+      ahead_by?: number;
+      status?: "identical" | "behind" | "ahead" | "diverged";
+      breaking?: boolean;
+      breakingReasons?: string[];
+      commits?: Array<{ sha: string; message: string; url: string }>;
+      totalCommits?: number;
+      diffUrl?: string;
+      tokenConfigured?: boolean;
+      forkPrivate?: boolean;
     }
+  | { state: "no-token"; configureUrl: string }
   | { state: "disabled"; reason: string }
   | { state: "error"; error: string };
 
 type UpdateResult =
   | { state: "idle" }
   | { state: "pulling" }
-  | { state: "done"; pulled: number; note?: string }
-  | { state: "error"; reason: string };
+  | { state: "done"; pulled: number; note?: string; deployUrl?: string }
+  | { state: "deploying"; deployUrl: string; pulled: number }
+  | { state: "error"; reason: string; resolveUrl?: string };
 
 export function OverviewTab({
   baseUrl,
@@ -57,27 +73,51 @@ export function OverviewTab({
   useEffect(() => {
     fetch("/api/config/update", { credentials: "include" })
       .then((r) => r.json())
-      .then(
-        (d: {
-          available?: boolean;
-          behind?: number;
-          remote?: string;
-          latest?: string;
-          disabled?: string;
-        }) => {
-          if (d.disabled) {
-            setUpdate({ state: "disabled", reason: d.disabled });
-          } else {
-            setUpdate({
-              state: "ready",
-              available: !!d.available,
-              behind: d.behind || 0,
-              remote: d.remote || "",
-              latest: d.latest,
-            });
-          }
+      .then((d: Record<string, unknown>) => {
+        if (d.disabled) {
+          setUpdate({ state: "disabled", reason: d.disabled as string });
+          return;
         }
-      )
+        // github-api mode no-token
+        if (d.mode === "github-api" && d.reason === "no-token") {
+          setUpdate({
+            state: "no-token",
+            configureUrl: (d.configureUrl as string) || "/config?tab=settings&sub=advanced",
+          });
+          return;
+        }
+        // github-api mode
+        if (d.mode === "github-api") {
+          const diffUrl = d.diffUrl as string | undefined;
+          setUpdate({
+            state: "ready",
+            mode: "github-api",
+            available: !!d.available,
+            behind_by: (d.behind_by as number) || 0,
+            ahead_by: (d.ahead_by as number) || 0,
+            status: (d.status as "identical" | "behind" | "ahead" | "diverged") || "identical",
+            breaking: !!d.breaking,
+            breakingReasons: (d.breakingReasons as string[]) || [],
+            commits: (d.commits as Array<{ sha: string; message: string; url: string }>) || [],
+            totalCommits: (d.totalCommits as number) || 0,
+            ...(diffUrl !== undefined ? { diffUrl } : {}),
+            tokenConfigured: !!d.tokenConfigured,
+            forkPrivate: !!d.forkPrivate,
+          });
+          return;
+        }
+        // git mode (existing shape)
+        const latest = d.latest as string | null | undefined;
+        setUpdate({
+          state: "ready",
+          mode: "git",
+          available: !!d.available,
+          behind: (d.behind as number) || 0,
+          ahead: (d.ahead as number) || 0,
+          remote: (d.remote as string) || "",
+          ...(latest !== undefined ? { latest } : {}),
+        });
+      })
       .catch((err) => setUpdate({ state: "error", error: toMsg(err) }));
   }, []);
 
@@ -88,12 +128,30 @@ export function OverviewTab({
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
+      const data = (await res.json()) as Record<string, unknown>;
       if (data.ok) {
-        setResult({ state: "done", pulled: data.pulled, note: data.note });
-        setUpdate((s) => (s.state === "ready" ? { ...s, available: false, behind: 0 } : s));
+        if (data.deployUrl) {
+          // github-api mode: show deploying state
+          setResult({
+            state: "deploying",
+            deployUrl: data.deployUrl as string,
+            pulled: (data.pulled as number) || 0,
+          });
+        } else {
+          const note = data.note as string | undefined;
+          setResult({
+            state: "done",
+            pulled: (data.pulled as number) || 0,
+            ...(note !== undefined ? { note } : {}),
+          });
+        }
+        setUpdate((s) =>
+          s.state === "ready" ? { ...s, available: false, behind: 0, behind_by: 0 } : s
+        );
       } else {
-        setResult({ state: "error", reason: data.reason || "Update failed" });
+        const reason = (data.reason as string) || "Update failed";
+        const resolveUrl = data.resolveUrl as string | undefined;
+        setResult({ state: "error", reason, ...(resolveUrl !== undefined ? { resolveUrl } : {}) });
       }
     } catch (err) {
       setResult({ state: "error", reason: toMsg(err) });
@@ -167,34 +225,166 @@ export function OverviewTab({
         {cacheResult && <span className="text-xs text-text-muted">{cacheResult}</span>}
       </div>
 
-      {/* Update banner */}
-      {update.state === "ready" && update.available && result.state !== "done" && (
-        <div className="border border-orange/30 bg-orange/5 rounded-lg p-4 flex items-center gap-4">
+      {/* Update banner — no-token warning */}
+      {update.state === "no-token" && (
+        <div className="border border-yellow-500/30 bg-yellow-500/5 rounded-lg p-4 flex items-center gap-4">
           <div className="flex-1">
-            <p className="text-sm font-semibold text-orange-dark">
-              {update.behind} {update.behind === 1 ? "update" : "updates"} available
+            <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+              Update token not configured
             </p>
             <p className="text-xs text-text-dim mt-0.5">
-              New commits on {update.remote}/main
-              {update.latest ? ` (latest: ${update.latest})` : ""} — fast-forward safe.
+              Configure a GitHub PAT to enable one-click upstream sync.
             </p>
-            {result.state === "error" && (
-              <p className="text-xs text-red mt-1.5 font-mono">{result.reason}</p>
-            )}
           </div>
-          <button
-            onClick={pullUpdates}
-            disabled={result.state === "pulling"}
-            className="text-xs font-medium px-3 py-2 rounded-md bg-orange/10 text-orange-dark border border-orange/30 hover:bg-orange/20 transition-colors disabled:opacity-50"
+          <a
+            href={update.configureUrl}
+            className="text-xs font-medium px-3 py-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/20 transition-colors"
           >
-            {result.state === "pulling" ? "Updating..." : "Update now"}
-          </button>
+            Configure
+          </a>
         </div>
       )}
+
+      {/* Update banner — diverged or ahead (block update) */}
+      {update.state === "ready" &&
+        update.mode === "github-api" &&
+        (update.status === "diverged" || update.status === "ahead") && (
+          <div className="border border-yellow-500/30 bg-yellow-500/5 rounded-lg p-4">
+            <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+              Your fork has {update.ahead_by} local commit{(update.ahead_by ?? 0) !== 1 ? "s" : ""}{" "}
+              ahead of upstream
+            </p>
+            <p className="text-xs text-text-dim mt-0.5">
+              Automatic sync is disabled. Resolve divergence manually on GitHub.
+            </p>
+            {update.diffUrl && (
+              <a
+                href={update.diffUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:underline mt-1.5 inline-block"
+              >
+                View diff on GitHub →
+              </a>
+            )}
+          </div>
+        )}
+
+      {/* Update banner — updates available */}
+      {update.state === "ready" &&
+        update.available &&
+        result.state !== "done" &&
+        result.state !== "deploying" && (
+          <div className="border border-orange/30 bg-orange/5 rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-orange-dark">
+                    {update.mode === "github-api"
+                      ? `${update.behind_by} ${(update.behind_by ?? 0) === 1 ? "update" : "updates"} available`
+                      : `${update.behind} ${(update.behind ?? 0) === 1 ? "update" : "updates"} available`}
+                  </p>
+                  {update.breaking && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red/15 text-red uppercase tracking-wide">
+                      Breaking
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-text-dim mt-0.5">
+                  {update.mode === "github-api"
+                    ? `New commits on upstream/main`
+                    : `New commits on ${update.remote}/main${update.latest ? ` (latest: ${update.latest})` : ""}`}
+                </p>
+                {result.state === "error" && (
+                  <p className="text-xs text-red mt-1.5 font-mono">{result.reason}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {update.diffUrl && (
+                  <a
+                    href={update.diffUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium px-3 py-2 rounded-md bg-bg-muted text-text-dim border border-border hover:text-text transition-colors"
+                  >
+                    View diff
+                  </a>
+                )}
+                <button
+                  onClick={pullUpdates}
+                  disabled={result.state === "pulling"}
+                  className="text-xs font-medium px-3 py-2 rounded-md bg-orange/10 text-orange-dark border border-orange/30 hover:bg-orange/20 transition-colors disabled:opacity-50"
+                >
+                  {result.state === "pulling" ? "Updating..." : "Update now"}
+                </button>
+              </div>
+            </div>
+
+            {/* Commit list — up to 5 */}
+            {update.commits && update.commits.length > 0 && (
+              <div className="border border-border/50 rounded-md divide-y divide-border/30 text-xs">
+                {update.commits.map((c) => (
+                  <div key={c.sha} className="flex items-center gap-2 px-3 py-1.5">
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-text-muted hover:text-accent shrink-0"
+                    >
+                      {c.sha}
+                    </a>
+                    <span className="text-text-dim truncate">{c.message}</span>
+                  </div>
+                ))}
+                {(update.totalCommits ?? 0) > (update.commits?.length ?? 0) && (
+                  <div className="px-3 py-1.5 text-text-muted">
+                    …{(update.totalCommits ?? 0) - (update.commits?.length ?? 0)} more commits
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Breaking change details */}
+            {update.breaking && update.breakingReasons && update.breakingReasons.length > 0 && (
+              <div className="border border-red/20 rounded-md p-2.5 bg-red/5">
+                <p className="text-xs font-semibold text-red mb-1">
+                  Breaking changes detected (heuristic)
+                </p>
+                {update.breakingReasons.slice(0, 3).map((r, i) => (
+                  <p key={i} className="text-xs font-mono text-text-dim truncate">
+                    {r}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* Post-update: deploying state (github-api mode) */}
+      {result.state === "deploying" && (
+        <div className="border border-accent/30 bg-accent/5 rounded-lg p-4">
+          <p className="text-sm font-semibold text-accent">
+            Synced {result.pulled} commit{result.pulled === 1 ? "" : "s"} — deploying...
+          </p>
+          <p className="text-xs text-text-dim mt-0.5">
+            Vercel is building the updated deployment. This takes ~2 minutes.
+          </p>
+          <a
+            href={result.deployUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-accent hover:underline mt-1.5 inline-block"
+          >
+            View deployment status →
+          </a>
+        </div>
+      )}
+
+      {/* Post-update: done state (git mode) */}
       {result.state === "done" && result.pulled > 0 && (
         <div className="border border-green/30 bg-green/5 rounded-lg p-4">
           <p className="text-sm font-semibold text-green">
-            Pulled {result.pulled} commit{result.pulled === 1 ? "" : "s"} ✓
+            Pulled {result.pulled} commit{result.pulled === 1 ? "" : "s"}
           </p>
           <p className="text-xs text-text-dim mt-0.5">
             {result.note || "Restart the dev server to apply changes."}
