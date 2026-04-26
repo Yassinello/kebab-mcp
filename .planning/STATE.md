@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: — Infrastructure & performance
-status: Phase 53 closed 2026-04-23.
-stopped_at: Completed 061-03-PLAN.md — 6 unit tests for github-api mode, 1 commit on main, 1 file created
-last_updated: "2026-04-26T20:09:03.130Z"
-last_activity: 2026-04-23
+status: Phase 62 in progress (1/4 plans complete; STAB-01 closed) — Phase 53 closed 2026-04-23.
+stopped_at: Completed 062-01-PLAN.md — STAB-01 fixed (GitHub Compare URL inversion), 2 commits on main, 2 files modified
+last_updated: "2026-04-26T21:46:38.274Z"
+last_activity: 2026-04-26
 progress:
-  total_phases: 34
+  total_phases: 35
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 19
+  total_plans: 10
+  completed_plans: 20
   percent: 100
 ---
 
@@ -704,6 +704,7 @@ Exit condition for operator attention:
 - [Phase 061]: resolveMode() routes Vercel forks to github-api mode using GitHub Compare + merge-upstream APIs
 - [Phase 061]: exactOptionalPropertyTypes forces conditional spread for optional prop assignments in UpdateStatus/UpdateResult setters
 - [Phase 061-in-dashboard-updates]: Tests use vi.resetModules() + dynamic import per test to prevent module cache bleed in github-api mode tests
+- [Phase 062-stabilize-phase-61 / 062-01]: GitHub Compare API URL semantics are BASE...HEAD; for "fork's position relative to upstream" use compare/${upstream}...main (BASE=upstream, HEAD=fork), NOT compare/main...${upstream}. STAB-01 silent feature failure was caused by this inversion in route.ts:159+219.
 
 ### Phase 38 (unchanged)
 
@@ -936,5 +937,5 @@ tag can ship. This is a Phase 37b carry-over, not a Phase 40 blocker.
 
 ## Last session
 
-Stopped at: Completed 061-03-PLAN.md — 6 unit tests for github-api mode, 1 commit on main, 1 file created
-Ready for: v0.13 planning continues (Phase 54+ per ROADMAP: prompts, alerting, long-term storage). Phase 53 safety nets (metrics/upstash unit + integration + UI + 4 contract gates still green) all active. Pre-existing follow-ups unchanged: multi-host HOST-05, audit-gate.mjs lint, welcome-durability TS2540, useMintToken TS2488, T-LITFB audit. New follow-ups from Phase 53: long-term metrics storage + alerting + mobile layout + prompts-in-Requests-chart + unified Upstash /info reader.
+Stopped at: Completed 062-01-PLAN.md — STAB-01 closed (GitHub Compare API URL direction inverted in both githubApiGetHandler and githubApiPostHandler pre-merge guard). 2 commits on main: 45c9abb (RED — 5 URL-direction assertion blocks added to tests) + eef91a8 (GREEN — 2 URL swaps + 3 explanatory comment lines in route.ts). All 6 unit tests in tests/api/config-update-github.test.ts pass.
+Ready for: 062-02-PLAN.md (wire hydrateCredentialsStep into /api/config/update via explicit composeRequestPipeline — STAB-02). Phase 62 plan progress: 1/4 complete. Pre-existing follow-ups unchanged: multi-host HOST-05, audit-gate.mjs lint, welcome-durability TS2540, useMintToken TS2488 (still pre-existing in tests/ui/useMintToken.test.tsx:28), T-LITFB audit.

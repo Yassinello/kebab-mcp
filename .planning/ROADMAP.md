@@ -17,6 +17,34 @@
 
 ## Active Phase
 
+### Phase 62: Stabilize Phase 61
+
+**Goal:** Fix two confirmed bugs in the Phase 61 in-dashboard updates feature: (1) GitHub Compare API direction inverted (`main...upstream` returns wrong status semantics), (2) `withAdminAuth` does not include `hydrateCredentialsStep` so KV-saved PAT is invisible to `/api/config/update`. Validate end-to-end on a live Vercel fork before marking Phase 61 done. Correct documentation overstating implementation (e.g., "stored encrypted in KV", "major bump detection").
+
+**Requirements:** STAB-01, STAB-02, STAB-03, STAB-04
+
+**Depends on:** Phase 61
+
+**Plans:** 4 plans
+
+Plans:
+- [x] 062-01-PLAN.md — TDD: invert GitHub Compare URL direction (BASE=upstream, HEAD=fork) in route.ts:159 + :219; update 6 mock URL assertions
+- [ ] 062-02-PLAN.md — Wire hydrateCredentialsStep into /api/config/update via explicit composeRequestPipeline (replaces withAdminAuth) + 1 unit test for credential visibility
+- [ ] 062-03-PLAN.md — Env-gated live integration test against real GitHub Compare API + tests/integration/README.md env-var index
+- [ ] 062-04-PLAN.md — Documentation audit: correct "Stored encrypted in KV" copy + add 5-step smoke-test recipe to TROUBLESHOOTING.md + audit Phase 61 SUMMARY for package.json overstatement
+
+### Phase 63: Cron Update-Check
+
+**Goal:** Add a Vercel cron at `/api/cron/update-check` that runs daily, calls the GitHub Compare API, and writes the result to KV under `global:update-check`. The Overview banner reads from KV first (instant load), falls back to live call if KV is empty. Includes a manual Refresh icon (`?force=1`) and "checked Xh ago" freshness indicator.
+
+**Requirements:** CRON-01, CRON-02, CRON-03
+
+**Depends on:** Phase 62
+
+**Plans:** TBD
+
+## Completed Phases (current milestone)
+
 ### Phase 61: In-Dashboard Updates
 
 **Goal:** Extend `/api/config/update` with `github-api` mode so Vercel-deployed forks can sync upstream (Yassinello/kebab-mcp) with one click from the admin dashboard. No git CLI required.
