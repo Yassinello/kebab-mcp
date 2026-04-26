@@ -128,6 +128,14 @@ describe("github-api mode", () => {
     expect(body.breaking).toBe(false);
     expect(body.tokenConfigured).toBe(true);
     expect(body.forkPrivate).toBe(false);
+
+    // Verify Compare URL direction: BASE=upstream, HEAD=fork (D-02)
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls.length).toBeGreaterThan(0);
+    expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
+    expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
   });
 
   // ── Case 2: GET — diverged fork (ahead_by > 0) ──────────────────────
@@ -156,6 +164,14 @@ describe("github-api mode", () => {
     expect(body.available).toBe(false);
     expect(body.ahead_by).toBe(1);
     expect(body.status).toBe("diverged");
+
+    // Verify Compare URL direction: BASE=upstream, HEAD=fork (D-02)
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls.length).toBeGreaterThan(0);
+    expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
+    expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
   });
 
   // ── Case 3: GET — breaking commit detected ──────────────────────────
@@ -189,6 +205,14 @@ describe("github-api mode", () => {
     expect(body.breaking).toBe(true);
     expect(body.breakingReasons).toHaveLength(1);
     expect(body.breakingReasons[0]).toContain("feat!: drop legacy API");
+
+    // Verify Compare URL direction: BASE=upstream, HEAD=fork (D-02)
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls.length).toBeGreaterThan(0);
+    expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
+    expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
   });
 
   // ── Case 4: GET — no token configured ───────────────────────────────
@@ -243,6 +267,14 @@ describe("github-api mode", () => {
     expect(body.pulled).toBe(2);
     expect(body.merge_type).toBe("fast-forward");
     expect(body.deployUrl).toBe("https://vercel.com/testowner/testslug/deployments");
+
+    // Verify Compare URL direction: BASE=upstream, HEAD=fork (D-02)
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls.length).toBeGreaterThan(0);
+    expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
+    expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
   });
 
   // ── Case 6: POST — 409 conflict from GitHub ──────────────────────────
@@ -270,5 +302,13 @@ describe("github-api mode", () => {
     expect(res.status).toBe(409);
     expect(body.ok).toBe(false);
     expect(body.reason).toBe("conflict");
+
+    // Verify Compare URL direction: BASE=upstream, HEAD=fork (D-02)
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls.length).toBeGreaterThan(0);
+    expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
+    expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
   });
 });
