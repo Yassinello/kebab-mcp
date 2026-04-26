@@ -46,7 +46,7 @@ Plans:
 Plans:
 - [x] 063-01-PLAN.md — Extract shared computeUpdateStatus() helper + cache-first GET handler reading global:update-check + ?force=1 bypass + kv-allowlist update (CRON-02)
 - [x] 063-02-PLAN.md — Move helper to src/core/update-check.ts + new cron route at /api/cron/update-check with BOOTSTRAP_EXEMPT marker + vercel.json registration + 6 unit tests (CRON-01)
-- [ ] 063-03-PLAN.md — formatRelativeTime helper + Overview banner "checked Xh ago" indicator + Refresh icon button calling ?force=1 with 30s debounce (CRON-03)
+- [x] 063-03-PLAN.md — formatRelativeTime helper + Overview banner "checked Xh ago" indicator + Refresh icon button calling ?force=1 with 30s debounce (CRON-03)
 
 ## Completed Phases (current milestone)
 
