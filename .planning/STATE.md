@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: — Infrastructure & performance
 status: Phase 53 closed 2026-04-23.
-stopped_at: Completed 062-02-PLAN.md — STAB-02 (hydrateCredentialsStep wired into /api/config/update), 2 commits on main
-last_updated: "2026-04-26T22:03:05.641Z"
+stopped_at: Completed 062-03-PLAN.md — STAB-03 (env-gated live GitHub Compare integration test + tests/integration/README.md), 2 commits on main
+last_updated: "2026-04-26T22:13:20.039Z"
 last_activity: 2026-04-23
 progress:
   total_phases: 35
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 22
+  completed_plans: 23
   percent: 100
 ---
 
@@ -707,6 +707,7 @@ Exit condition for operator attention:
 - [Phase 062-stabilize-phase-61 / 062-01]: GitHub Compare API URL semantics are BASE...HEAD; for "fork's position relative to upstream" use compare/${upstream}...main (BASE=upstream, HEAD=fork), NOT compare/main...${upstream}. STAB-01 silent feature failure was caused by this inversion in route.ts:159+219.
 - [Phase 062]: Phase 62-04 (STAB-04): UI copy 'encrypted in KV' replaced with 'Upstash KV' (D-12); 5-step Phase-61 smoke-test recipe added to docs/TROUBLESHOOTING.md (D-14, D-15); Phase 61 SUMMARY audited — no overstatement found, audit note added (D-13).
 - [Phase 062]: STAB-02 closed: per-route composeRequestPipeline + hydrateCredentialsStep replaces withAdminAuth on /api/config/update; PAT saved via /api/config/env now visible to getCredential() through requestContext.credentials
+- [Phase 062]: STAB-03: env-gated live GitHub Compare integration test (describe.skipIf on GITHUB_TEST_TOKEN+OWNER+BEHIND+AHEAD; FORK_IDENTICAL further-gates the identical case). Sanity test always runs and asserts the gate. README.md at tests/integration/ as the env-var index.
 
 ### Phase 38 (unchanged)
 
@@ -939,5 +940,5 @@ tag can ship. This is a Phase 37b carry-over, not a Phase 40 blocker.
 
 ## Last session
 
-Stopped at: Completed 062-02-PLAN.md — STAB-02 (hydrateCredentialsStep wired into /api/config/update), 2 commits on main
+Stopped at: Completed 062-03-PLAN.md — STAB-03 (env-gated live GitHub Compare integration test + tests/integration/README.md), 2 commits on main
 Ready for: 062-02-PLAN.md (wire hydrateCredentialsStep into /api/config/update via explicit composeRequestPipeline — STAB-02). Phase 62 plan progress: 1/4 complete. Pre-existing follow-ups unchanged: multi-host HOST-05, audit-gate.mjs lint, welcome-durability TS2540, useMintToken TS2488 (still pre-existing in tests/ui/useMintToken.test.tsx:28), T-LITFB audit.

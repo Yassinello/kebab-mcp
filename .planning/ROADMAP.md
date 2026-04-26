@@ -30,7 +30,7 @@
 Plans:
 - [x] 062-01-PLAN.md — TDD: invert GitHub Compare URL direction (BASE=upstream, HEAD=fork) in route.ts:159 + :219; update 6 mock URL assertions
 - [x] 062-02-PLAN.md — Wire hydrateCredentialsStep into /api/config/update via explicit composeRequestPipeline (replaces withAdminAuth) + 1 unit test for credential visibility
-- [ ] 062-03-PLAN.md — Env-gated live integration test against real GitHub Compare API + tests/integration/README.md env-var index
+- [x] 062-03-PLAN.md — Env-gated live integration test against real GitHub Compare API + tests/integration/README.md env-var index
 - [x] 062-04-PLAN.md — Documentation audit: correct "Stored encrypted in KV" copy + add 5-step smoke-test recipe to TROUBLESHOOTING.md + audit Phase 61 SUMMARY for package.json overstatement
 
 ### Phase 63: Cron Update-Check
