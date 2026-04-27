@@ -1,4 +1,3 @@
-import { VERCEL_DEPLOY_URL } from "./deploy-url";
 import SkewerIllustration from "./skewer-illustration";
 import SocialProof from "./social-proof";
 
@@ -24,9 +23,7 @@ export default function Hero() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start items-center mb-8">
               <a
-                href={VERCEL_DEPLOY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/deploy"
                 className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-6 py-3 rounded-lg font-semibold text-sm shadow-lg shadow-amber-500/20"
               >
                 Deploy your Kebab

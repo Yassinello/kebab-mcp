@@ -1,4 +1,4 @@
-import { REPO_URL, VERCEL_DEPLOY_URL } from "./deploy-url";
+import { REPO_URL } from "./deploy-url";
 
 export default function CtaSection() {
   return (
@@ -12,9 +12,7 @@ export default function CtaSection() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a
-            href={VERCEL_DEPLOY_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/deploy"
             className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-8 py-3.5 rounded-lg font-semibold text-sm"
           >
             Deploy your Kebab

@@ -1,11 +1,12 @@
 import { KebabLogo } from "../components/kebab-logo";
 import { REPO_URL } from "./deploy-url";
+import packageJson from "../../package.json";
 
 const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "Deploy", href: "#deploy" },
+      { label: "Deploy", href: "/deploy" },
       { label: "Dashboard", href: "#product" },
       { label: "Compatibility", href: "#whats-inside" },
     ],
@@ -72,7 +73,7 @@ export default function LandingFooter() {
           <p className="text-xs text-slate-600">
             © {new Date().getFullYear()} Kebab MCP contributors · MIT License
           </p>
-          <p className="text-xs text-slate-600 font-mono">v0.15</p>
+          <p className="text-xs text-slate-600 font-mono">v{packageJson.version}</p>
         </div>
       </div>
     </footer>

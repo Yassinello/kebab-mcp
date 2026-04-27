@@ -21,7 +21,7 @@ import {
   UPDATE_CHECK_STALE_MS,
   type UpdateStatusPayload,
 } from "@/core/update-check";
-import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG, VERCEL_DEPLOY_URL } from "../../../landing/deploy-url";
+import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 const updateCheckLogger = getLogger("config.update.cache");
 
@@ -190,10 +190,11 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
       });
     }
     if (result.kind === "not-a-fork") {
-      // Deploy was created via /new/clone (snapshot) instead of /new/deploy.
-      // Cannot pull updates because the deployed repo isn't a real fork of
-      // the upstream. Surface a clear, actionable message instead of
-      // pretending everything is OK.
+      // Deploy was created from a one-click flow (e.g. legacy /new/clone)
+      // and the resulting repo is a standalone snapshot, not a real fork
+      // of upstream. The merge-upstream API will reject — surface a clear,
+      // actionable message pointing the user at the /deploy hub for the
+      // recommended fork-then-import flow.
       return NextResponse.json({
         mode: "github-api",
         available: false,
@@ -201,7 +202,7 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
         tokenConfigured: true,
         deployedRepo: result.deployedRepo,
         upstreamRepo: `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`,
-        redeployUrl: VERCEL_DEPLOY_URL,
+        redeployUrl: "/deploy",
       });
     }
     return errorResponse(new Error(`GitHub API failed: ${result.status}`), {
