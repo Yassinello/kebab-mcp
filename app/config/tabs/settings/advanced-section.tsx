@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { RateLimitsWidget } from "../rate-limits-widget";
+import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
+
+const UPSTREAM_REF = `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`;
 
 type Phase =
   | { kind: "idle" }
@@ -105,20 +108,30 @@ export function AdvancedSection() {
     setTestRunning(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/config/update", { credentials: "include" });
+      // ?force=1 bypasses the 48h KV cache so the user gets an authoritative
+      // answer when they click Test connection. Without it, a stale cache
+      // entry from before the latest upstream release would say "up to date"
+      // and confuse the user (BUG: surfaced 2026-04-27 after release-please
+      // shipped v0.1.15 while the cache still held the pre-release answer).
+      const res = await fetch("/api/config/update?force=1", { credentials: "include" });
       const data = (await res.json()) as Record<string, unknown>;
       if (data.reason === "no-token") {
         setTestResult("No token configured.");
       } else if (data.available) {
-        setTestResult(
-          `OK — ${(data.behind_by as number | undefined) ?? (data.behind as number | undefined) ?? 0} update(s) available.`
-        );
+        const behind =
+          (data.behind_by as number | undefined) ?? (data.behind as number | undefined) ?? 0;
+        const plural = behind === 1 ? "commit" : "commits";
+        setTestResult(`${behind} ${plural} behind ${UPSTREAM_REF}.`);
       } else if (data.status === "identical") {
-        setTestResult("OK — fork is up to date.");
+        setTestResult(`Up to date with ${UPSTREAM_REF}.`);
       } else if (data.status === "diverged" || data.status === "ahead") {
-        setTestResult(`Fork has ${data.ahead_by as number} commit(s) ahead of upstream.`);
+        const ahead = data.ahead_by as number;
+        const plural = ahead === 1 ? "commit" : "commits";
+        setTestResult(
+          `Your fork is ${ahead} ${plural} ahead of ${UPSTREAM_REF} — auto-sync is blocked. Resolve on GitHub.`
+        );
       } else if (data.reason === "auth") {
-        setTestResult("Auth error — token may be invalid or missing scope.");
+        setTestResult("Auth error — token is invalid, expired, or missing the required scope.");
       } else {
         setTestResult(data.disabled ? `Disabled: ${data.disabled as string}` : "Check complete.");
       }
