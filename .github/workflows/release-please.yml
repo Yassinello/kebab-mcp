@@ -1,0 +1,23 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # Locked to v0.1.x patch-only bumps. To advance the minor (0.2,
+          # 0.3, ...) edit .release-please-manifest.json directly and merge
+          # the change with a `chore: bump minor` commit; release-please
+          # will pick up the new base version on the next run.
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

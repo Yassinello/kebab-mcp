@@ -286,7 +286,7 @@ npm run test:contract   # Verify tool contracts
 npm run test:e2e        # Playwright welcome-flow E2E
 ```
 
-Pre-commit hook (Husky): `lint-staged` + contract test. Tooling configs (`cliff.toml`, `size-limit.json`, `knip.ts`) live under [`config/`](config).
+Pre-commit hook (Husky): `lint-staged` + contract test. Tooling configs (`size-limit.json`, `knip.ts`) live under [`config/`](config).
 
 ### API endpoints
 

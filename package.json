@@ -1,6 +1,6 @@
 {
   "name": "kebab-mcp",
-  "version": "0.15.0",
+  "version": "0.1.14",
   "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes. (formerly MyMCP)",
   "keywords": [
     "mcp",
