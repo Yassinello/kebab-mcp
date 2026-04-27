@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { RateLimitsWidget } from "../rate-limits-widget";
 
 type Phase =
   | { kind: "idle" }
@@ -43,6 +44,37 @@ export function AdvancedSection() {
   const [patError, setPatError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testRunning, setTestRunning] = useState(false);
+
+  // Diagnostics section state
+  const [cacheClearing, setCacheClearing] = useState(false);
+  const [cacheResult, setCacheResult] = useState<string | null>(null);
+
+  const clearCache = async () => {
+    setCacheClearing(true);
+    setCacheResult(null);
+    try {
+      const res = await fetch("/api/config/sandbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          toolName: "mcp_cache_evict",
+          args: { scope: "all" },
+          confirm: true,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (data.ok) {
+        setCacheResult("All caches cleared");
+        setTimeout(() => setCacheResult(null), 3000);
+      } else {
+        setCacheResult(data.error || "Failed to clear cache");
+      }
+    } catch (err) {
+      setCacheResult(err instanceof Error ? err.message : "Network error");
+    }
+    setCacheClearing(false);
+  };
 
   const savePat = async () => {
     if (!patValue.trim()) return;
@@ -514,6 +546,41 @@ export function AdvancedSection() {
               {testResult}
             </p>
           )}
+        </div>
+      </div>
+
+      {/* Diagnostics section */}
+      <div className="border-t border-border pt-5 mt-5">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
+          Diagnostics
+        </h3>
+        <p className="text-xs text-text-dim mb-4">
+          Inspect active rate-limit scopes and clear server-side caches. Useful when troubleshooting
+          stale state after manual env changes.
+        </p>
+
+        <div className="space-y-4">
+          {/* Rate limits */}
+          <RateLimitsWidget />
+
+          {/* Cache management */}
+          <div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={clearCache}
+                disabled={cacheClearing}
+                className="text-xs font-medium px-3 py-2 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border transition-colors disabled:opacity-50"
+              >
+                {cacheClearing ? "Clearing..." : "Clear cache"}
+              </button>
+              {cacheResult && <span className="text-xs text-text-muted">{cacheResult}</span>}
+            </div>
+            <p className="text-[11px] text-text-muted mt-1.5">
+              Evicts registry, KV-read, and log-buffer caches. Equivalent to{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">mcp_cache_evict</code> with scope{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">all</code>.
+            </p>
+          </div>
         </div>
       </div>
     </div>

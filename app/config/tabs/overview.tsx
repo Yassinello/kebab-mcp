@@ -5,7 +5,6 @@ import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
 import { HealthWidget } from "./health-widget";
 import { ConnectorHealthWidget } from "./connector-health";
-import { RateLimitsWidget } from "./rate-limits-widget";
 import { toMsg } from "@/core/error-utils";
 import { formatRelativeTime } from "@/core/relative-time";
 
@@ -70,8 +69,6 @@ export function OverviewTab({
   const [copied, setCopied] = useState<string | null>(null);
   const [update, setUpdate] = useState<UpdateStatus>({ state: "loading" });
   const [result, setResult] = useState<UpdateResult>({ state: "idle" });
-  const [cacheClearing, setCacheClearing] = useState(false);
-  const [cacheResult, setCacheResult] = useState<string | null>(null);
   // CRON-03: Refresh button state — debounce per D-13 (30s after click)
   const [refreshing, setRefreshing] = useState(false);
   const [refreshDisabledUntil, setRefreshDisabledUntil] = useState<number>(0);
@@ -229,33 +226,6 @@ export function OverviewTab({
     }
   };
 
-  const clearCache = async () => {
-    setCacheClearing(true);
-    setCacheResult(null);
-    try {
-      const res = await fetch("/api/config/sandbox", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          toolName: "mcp_cache_evict",
-          args: { scope: "all" },
-          confirm: true,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setCacheResult("All caches cleared");
-        setTimeout(() => setCacheResult(null), 3000);
-      } else {
-        setCacheResult(data.error || "Failed to clear cache");
-      }
-    } catch (err) {
-      setCacheResult(err instanceof Error ? err.message : "Network error");
-    }
-    setCacheClearing(false);
-  };
-
   const endpoint = `${baseUrl}/api/mcp`;
   const lastLog = logs[logs.length - 1];
 
@@ -280,21 +250,6 @@ export function OverviewTab({
 
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
-
-      {/* Rate limits */}
-      <RateLimitsWidget />
-
-      {/* Cache management */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={clearCache}
-          disabled={cacheClearing}
-          className="text-xs font-medium px-3 py-2 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border transition-colors disabled:opacity-50"
-        >
-          {cacheClearing ? "Clearing..." : "Clear Cache"}
-        </button>
-        {cacheResult && <span className="text-xs text-text-muted">{cacheResult}</span>}
-      </div>
 
       {/* Update banner — no-token warning */}
       {update.state === "no-token" && (
