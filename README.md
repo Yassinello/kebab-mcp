@@ -5,6 +5,8 @@
 
 <p align="center">
   <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
+  &middot;
+  <a href="https://mymcp-home.vercel.app"><strong>Live demo →</strong></a>
 </p>
 
 <p align="center">
@@ -15,46 +17,20 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#connectors">Connectors</a> &middot;
-  <a href="#architecture">Architecture</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#use-cases">Use Cases</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
-  <a href="docs/TROUBLESHOOTING.md">Troubleshooting</a> &middot;
-  <a href="docs/HOSTING.md">Hosting</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#community--roadmap">Community</a> &middot;
   <a href="docs/CONTRIBUTING.md">Contributing</a>
 </p>
 
 ---
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       Claude / ChatGPT / AI                         │
-│                      (any MCP-compatible client)                    │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ MCP (Streamable HTTP)
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              Kebab MCP on Vercel / Docker                                   │
-│                                                                                         │
-│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
-│  │  Google   │ │ Vault  │ │Browser │ │ Slack │ │ Notion │ │Composio │ │Apify │         │
-│  │ Workspace │ │Obsidian│ │  Auto  │ │       │ │        │ │ 1000+   │ │ LI + │         │
-│  │ 18 tools  │ │14 tools│ │4 tools │ │6 tools│ │5 tools │ │  apps   │ │actors│         │
-│  └──────────┘ └────────┘ └────────┘ └───────┘ └────────┘ └─────────┘ └──────┘         │
-│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
-│  │  GitHub   │ │ Linear │ │Airtable│ │Paywall│ │Webhook │ │ Skills  │ │Admin │         │
-│  │  Issues   │ │ Issues │ │ Bases  │ │Reader │ │Receiver│ │Composer │ │ Logs │         │
-│  │  6 tools  │ │6 tools │ │7 tools │ │2 tools│ │3 tools │ │ dynamic │ │5 tool│         │
-│  └──────────┘ └────────┘ └────────┘ └───────┘ └────────┘ └─────────┘ └──────┘         │
-│                                                                                         │
-│  Registry ← Connector Manifests ← Env vars (auto-activation) ← Per-tool toggles        │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-## The Story
-
-I built Kebab MCP because I wanted a single MCP server that works everywhere (Claude, ChatGPT, Cursor, Windsurf, OpenClaw, ..). It started as a simple bridge to my Obsidian vault with a few tools, and kept growing as I added Google Workspace, browser automation, Slack, Notion, and LinkedIn via Apify. At some point I realized: if it's useful to me, it might be useful to others, so I open-sourced it.
-
-A live demo lives at **[mymcp-home.vercel.app](https://mymcp-home.vercel.app)** (read-only showcase deploy). Click around to see the dashboard before committing to a deploy of your own.
+<p align="center">
+  <img src="public/screenshots/dashboard.png" alt="Kebab MCP dashboard" width="720" />
+</p>
+<p align="center"><em>The unified dashboard — connectors, tools, skills, logs, settings.</em></p>
 
 ## Why Kebab MCP?
 
@@ -62,82 +38,42 @@ Most MCP setups require running 5 separate servers, each with their own config. 
 
 Kebab MCP gives you **one server, one endpoint, 86+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
-|              | Kebab MCP                    | Separate MCP servers | Hosted platforms           |
+|              | Kebab MCP                | Separate MCP servers | Hosted platforms           |
 | ------------ | ------------------------ | -------------------- | -------------------------- |
 | **Setup**    | Fork + env vars + deploy | 5 repos, 5 configs   | Sign up + monthly fee      |
 | **Tools**    | 86+ pre-built            | Build your own       | 1000s (but vendor lock-in) |
 | **Endpoint** | 1                        | 5+                   | 1 (their server)           |
-| **Cost**     | Free (Vercel free tier)  | Free but complex     | $0-80/month                |
+| **Cost**     | Free (Vercel free tier)  | Free but complex     | $0–80/month                |
 | **Data**     | Your Vercel, your keys   | Your machines        | Their servers              |
-| **Docker**   | Yes                      | Usually yes          | N/A                        |
+
+I built Kebab MCP because I wanted a single MCP server that works everywhere (Claude, ChatGPT, Cursor, Windsurf, OpenClaw…). It started as a bridge to my Obsidian vault and kept growing — Google Workspace, browser automation, Slack, Notion, LinkedIn via Apify. If it's useful to me, it might be useful to you.
 
 ## Quick Start
 
-Two paths cover ~95% of users — Vercel for click-and-go, self-hosted for full control. The other installers are tucked away below.
+Two paths cover ~95% of users — Vercel for click-and-go, Docker for full control. The third option (npx installer) is tucked under the "more" toggle.
 
 ### Option A — Deploy on Vercel (recommended)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me)
 
 1. Click **Deploy** above — no env vars to fill in
-2. When Vercel finishes (~60s), open the deployed URL → you land on `/welcome`, mint your token, and the dashboard auto-redeploys with it pinned
+2. When Vercel finishes (~60s), open the deployed URL → you land on `/welcome`, mint your token, dashboard auto-redeploys with it pinned
 3. Add the [Upstash integration](https://vercel.com/integrations/upstash) (free tier) so saved credentials survive cold starts — see [Storage modes](content/docs/storage.md)
 
 That's it. The Welcome wizard walks you through connectors and shows the token paste-into-client snippet.
 
-#### Vercel deploy — troubleshooting FAQ
+<details>
+<summary><strong>Vercel deploy — troubleshooting FAQ</strong></summary>
 
-**"I see 'Admin auth not configured' after deploy"**
+**"I see 'Admin auth not configured' after deploy"** — You're on a cold lambda that hasn't rehydrated `MCP_AUTH_TOKEN` from Upstash. Confirm the KV integration is attached (or paste the token into the project's env vars) and reload. See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) (BUG-07, BUG-10, BUG-11).
 
-You're on a cold lambda that hasn't rehydrated `MCP_AUTH_TOKEN` from
-Upstash. Confirm the KV integration is attached (or that you pasted
-the token manually into the project's env vars) and reload. If the
-problem persists, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-— especially the BUG-07, BUG-10, BUG-11 case studies.
+**"Which Upstash env vars should I set?"** — Either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (manual setup) or `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Vercel Marketplace integration, auto-injected). If both, `UPSTASH_REDIS_REST_*` wins.
 
-**"Which Upstash env vars should I set?"**
+**"What does `MYMCP_RECOVERY_RESET=1` do?"** — Wipes persisted bootstrap state and forces a fresh welcome. **Do NOT set it permanently** — every cold lambda wipes state, so any token minted while the var is set vanishes. See [BUG-05](docs/TROUBLESHOOTING.md#bug-05--mymcp_recovery_reset1-silently-wiped-tokens-on-every-cold-lambda).
 
-Kebab MCP reads both naming variants:
+**"Welcome flow loops me back to `/welcome`"** — Usually KV not configured + `MYMCP_ALLOW_EPHEMERAL_SECRET=1` unset, cold-lambda rehydrate failing silently, or `INSTANCE_MODE=showcase` accidentally set. Full index: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` — manual Upstash setup.
-- `KV_REST_API_URL` + `KV_REST_API_TOKEN` — Vercel Marketplace Upstash KV
-  integration (auto-injected).
-
-Set either pair. If both are present, `UPSTASH_REDIS_REST_*` wins
-(explicit config over Marketplace default). See
-[BUG-09](docs/TROUBLESHOOTING.md#bug-09--middleware-didnt-read-kv_rest_api_url)
-for the regression history.
-
-**"What does `MYMCP_RECOVERY_RESET=1` do?"**
-
-It wipes persisted bootstrap state (admin token + signing secret)
-and forces a fresh welcome flow on the next request. Useful for
-"I lost the token, let me start over."
-
-**Do NOT set it permanently** — every cold lambda wipes state on
-boot, so any token minted while the var is set vanishes within
-minutes. Since v0.10 (commit `5273add`), `/api/welcome/init` refuses
-with 409 while the var is still set, so you can't accidentally mint
-a doomed token. Remove the env var after recovery. See
-[BUG-05](docs/TROUBLESHOOTING.md#bug-05--mymcp_recovery_reset1-silently-wiped-tokens-on-every-cold-lambda).
-
-**"Welcome flow loops me back to `/welcome`"**
-
-Usually one of:
-
-- KV not configured AND `MYMCP_ALLOW_EPHEMERAL_SECRET=1` unset —
-  the welcome routes refuse to mint claims on production Vercel
-  without a durable signing secret (SEC-05). Either attach Upstash
-  or add `MYMCP_ALLOW_EPHEMERAL_SECRET=1` for local-only dev.
-- Cold-lambda rehydrate failing silently — check `/api/admin/status`
-  for `bootstrap.state` and `firstRun.rehydrateCount`.
-- `INSTANCE_MODE=showcase` accidentally set — that mode treats the
-  deploy as a read-only template (no admin, no wizard).
-
-Full symptom → fix index:
-[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-
----
+</details>
 
 ### Option B — Self-hosted (Docker or local dev)
 
@@ -155,20 +91,10 @@ npm install && npm run dev
 
 Dashboard at `http://localhost:3000/config?token=<your-token>`, MCP endpoint at `http://localhost:3000/api/mcp`.
 
----
+See [`.env.example`](.env.example) for every env var. Connectors auto-activate when their credentials are present — no toggling needed.
 
 <details>
-<summary><strong>More install methods</strong></summary>
-
-### From a Claude Code conversation
-
-Just ask Claude to run the installer:
-
-> "Run `npx @yassinello/create-kebab-mcp@latest` and help me set up Kebab MCP."
-
-The installer clones the repo, picks connectors, generates your token, collects credentials, and optionally deploys to Vercel. Claude can then wire the resulting endpoint into your client config.
-
-### Interactive npx installer
+<summary><strong>Option C — npx installer (interactive CLI)</strong></summary>
 
 ```bash
 npx @yassinello/create-kebab-mcp@latest
@@ -176,490 +102,172 @@ npx @yassinello/create-kebab-mcp@latest
 
 Five-step CLI: project setup → clone → pick connectors → paste credentials → install & deploy. Leaves you with a working `.env`, installed deps, and an `upstream` remote for future `npm run update`.
 
-</details>
+You can also ask Claude in a Claude Code conversation: *"Run `npx @yassinello/create-kebab-mcp@latest` and help me set up Kebab MCP."* Claude can then wire the resulting endpoint into your client config.
 
----
+</details>
 
 ### Connect your AI client
 
-Once deployed, add Kebab MCP to your AI client's config:
-
 <details>
-<summary><strong>Claude Desktop</strong></summary>
+<summary><strong>Claude Desktop, Claude Code, Cursor, Windsurf, ChatGPT — config snippets</strong></summary>
 
-File: `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
-    "mymcp": {
+    "kebab": {
       "url": "https://your-app.vercel.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN"
-      }
+      "headers": { "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN" }
     }
   }
 }
 ```
 
-</details>
-
-<details>
-<summary><strong>Claude Code</strong></summary>
-
-File: `~/.claude.json` (global) or `.mcp.json` (per-project)
+**Claude Code** — `~/.claude.json` (global) or `.mcp.json` (per-project):
 
 ```json
 {
   "mcpServers": {
-    "mymcp": {
+    "kebab": {
       "type": "http",
       "url": "https://your-app.vercel.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN"
-      }
+      "headers": { "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN" }
     }
   }
 }
 ```
 
-</details>
+**Cursor** — `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project): same shape as Claude Desktop.
 
-<details>
-<summary><strong>Cursor</strong></summary>
+**Windsurf** — `~/.codeium/windsurf/mcp_config.json`: same shape, but the URL field is named `serverUrl`.
 
-File: `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project)
-
-```json
-{
-  "mcpServers": {
-    "mymcp": {
-      "url": "https://your-app.vercel.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN"
-      }
-    }
-  }
-}
-```
+**ChatGPT / Other MCP clients** — POST to `https://your-app.vercel.app/api/mcp` with `Authorization: Bearer YOUR_MCP_AUTH_TOKEN`.
 
 </details>
 
-<details>
-<summary><strong>Windsurf</strong></summary>
-
-File: `~/.codeium/windsurf/mcp_config.json`
-
-```json
-{
-  "mcpServers": {
-    "mymcp": {
-      "serverUrl": "https://your-app.vercel.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>ChatGPT / Other MCP clients</strong></summary>
-
-Use the Streamable HTTP endpoint:
-
-- **URL**: `https://your-app.vercel.app/api/mcp`
-- **Auth**: Bearer token (your `MCP_AUTH_TOKEN`)
-- **Method**: POST
-</details>
-
----
-
-### Staying up to date
-
-Kebab MCP is a [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository). Your copy is standalone — it won't auto-update. The right path depends on **where you run it**:
-
-| Where you run it | How updates work |
-|---|---|
-| **Vercel** (most users) | One-click sync from the dashboard via GitHub's API — no terminal needed |
-| **Local dev** (`npm run dev`) | Auto-pull on every dev server start (silent, fast-forward only) |
-| **Docker / self-hosted** | `npm run update` (or its `git fetch + merge` equivalent) |
-
-#### Vercel — one-click in-dashboard updates (recommended)
-
-> Available since v0.13. Replaces the previous "deploy = fork without updates" pattern.
-
-The dashboard runs a daily cron at 8h UTC that pre-fetches upstream status, so the Overview banner loads **instantly** without hitting GitHub on every page view.
-
-**One-time setup** (under 1 minute):
-
-1. Open your dashboard → **Settings → Advanced → Updates**.
-2. Generate a GitHub Personal Access Token (PAT):
-   - Public fork → scope `public_repo`
-   - Private fork → scope `repo`
-   - Fine-grained PAT → permission *Contents: read/write* on your fork
-3. Paste it into the **Update token** field, click **Save token**, then **Test connection** to verify it works.
-4. Open the **Overview** tab — banner shows live status.
-
-**Day-to-day:**
-
-| Banner state | Meaning | Your action |
-|---|---|---|
-| *Up to date — checked Xh ago* | Cron has run; nothing new upstream | Nothing |
-| *N updates available* + commit list | Upstream has N new commits | Click **Update now** |
-| *Possible breaking changes (heuristic)* | One of the new commits flagged `feat!:` or `BREAKING CHANGE:` | Read the linked release notes, then click **Update now** if OK |
-| *Your fork has N local commits ahead* | You committed directly on the fork — auto-sync is blocked | Resolve manually on GitHub (link provided) |
-| *GitHub authentication failed* | PAT expired, revoked, or scope insufficient | Click **Reconfigure token →** |
-
-**What "Update now" does:** calls GitHub's `merge-upstream` API → your fork's `main` fast-forwards to upstream → Vercel detects the push and redeploys automatically (~2 min). The button is disabled if your fork has diverged.
-
-**Refresh icon (↻):** force a re-check before the next cron run. 30s debounce to prevent API spam. Shows a green ✓ flash to confirm even when nothing changed.
-
-**Cache invalidation:** the dashboard's update cache is automatically purged whenever you save a new PAT in Settings, so you don't have to wait up to 48h to see the new auth state.
-
-#### Local dev — auto-pull on `npm run dev`
-
-A `predev` hook checks for upstream changes and fast-forwards your working copy silently before Next.js starts:
-
-```
-[mymcp update] up to date
-[mymcp update] pulled 3 commits from upstream/main
-[mymcp update] skipped (uncommitted changes — commit/stash first)
-```
-
-Safe by design: never rewrites local work. Skips silently on uncommitted changes, diverged commits, or no remote configured.
-
-Opt out: set `MYMCP_SKIP_UPDATE_CHECK=1` in your `.env`. Auto-skipped on Vercel + CI platforms.
-
-#### Manual — `npm run update`
-
-For Docker, self-hosted, or when you prefer the terminal:
-
-```bash
-# One-time setup (skip if you used npx @yassinello/create-kebab-mcp — already done)
-git remote add upstream https://github.com/Yassinello/kebab-mcp.git
-
-# Pull updates anytime
-npm run update
-```
-
-Equivalent to `git fetch upstream && git merge upstream/main`.
-
-#### What's safe to update
-
-**Your `.env`, `data/`, and saved credentials in Upstash KV are never touched** — all customization lives in env vars and the gitignored `data/` directory, not in tracked code. Updates are always safe to merge.
-
-**Vercel disable switch:** set `KEBAB_DISABLE_UPDATE_API=1` to fully disable the in-dashboard update feature (banner hides, route returns disabled).
-
-**Smoke test:** if you want to validate the full flow on your live deploy, follow the [smoke-test recipe](docs/TROUBLESHOOTING.md#phase-61-update-flow-smoke-test) in the troubleshooting guide.
-
-## Connectors
-
-Kebab MCP ships **86+ production-ready tools** organized in 15 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates, and **API Connections** let you turn any HTTP API into a tool (v0.15+).
-
-### Google Workspace — 18 tools
-
-| Category     | Tools                                                                                                                             |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| **Gmail**    | `gmail_inbox` `gmail_read` `gmail_send` `gmail_reply` `gmail_trash` `gmail_label` `gmail_search` `gmail_draft` `gmail_attachment` |
-| **Calendar** | `calendar_events` `calendar_create` `calendar_update` `calendar_delete` `calendar_find_free` `calendar_rsvp`                      |
-| **Contacts** | `contacts_search`                                                                                                                 |
-| **Drive**    | `drive_search` `drive_read`                                                                                                       |
-
-**Requires:** `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`
-
-### Obsidian Vault — 14 tools
-
-| Category            | Tools                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| **CRUD**            | `vault_read` `vault_write` `vault_delete` `vault_move` `vault_append` `vault_list` |
-| **Batch & Search**  | `vault_batch_read` `vault_search` `vault_recent` `vault_stats`                     |
-| **Knowledge Graph** | `vault_backlinks` `vault_due`                                                      |
-| **Web → Vault**     | `save_article`                                                                     |
-| **Context**         | `my_context`                                                                       |
-
-**Requires:** `GITHUB_PAT` + `GITHUB_REPO`
-
-### Browser Automation — 4 tools
-
-| Tool            | What it does                                                            |
-| --------------- | ----------------------------------------------------------------------- |
-| `web_browse`    | Open URL, return visible text (handles JS-rendered pages)               |
-| `web_extract`   | Extract structured data with AI (e.g., "get all prices from this page") |
-| `web_act`       | Execute actions: click, type, fill forms (natural language)             |
-| `linkedin_feed` | Read LinkedIn feed (rate-limited, persistent session)                   |
-
-**Requires:** `BROWSERBASE_API_KEY` + `BROWSERBASE_PROJECT_ID` + `OPENROUTER_API_KEY`
-
-### Slack — 6 tools
-
-| Tool             | What it does                                                 |
-| ---------------- | ------------------------------------------------------------ |
-| `slack_channels` | List channels with topic, member count                       |
-| `slack_read`     | Read recent messages from a channel                          |
-| `slack_send`     | Send a message or threaded reply                             |
-| `slack_search`   | Search messages (supports Slack operators: from:, in:, has:) |
-| `slack_thread`   | Read all replies in a thread                                 |
-| `slack_profile`  | Get user profile: name, title, email, timezone, status       |
-
-**Requires:** `SLACK_BOT_TOKEN`
-
-### Notion — 5 tools
-
-| Tool            | What it does                                 |
-| --------------- | -------------------------------------------- |
-| `notion_search` | Search pages by title or content             |
-| `notion_read`   | Read full page content as markdown           |
-| `notion_create` | Create a page in a database                  |
-| `notion_update` | Update page properties and/or append content |
-| `notion_query`  | Query a database with filters and sorting    |
-
-**Requires:** `NOTION_API_KEY`
-
-### Apify — 8 tools
-
-LinkedIn scraping and general actor execution via the Apify platform.
-
-| Tool                              | What it does                                  |
-| --------------------------------- | --------------------------------------------- |
-| `apify_linkedin_profile`          | Fetch a LinkedIn person profile               |
-| `apify_linkedin_company`          | Fetch a LinkedIn company profile              |
-| `apify_linkedin_profile_posts`    | Get recent posts from a LinkedIn profile      |
-| `apify_linkedin_company_posts`    | Get recent posts from a LinkedIn company page |
-| `apify_linkedin_post`             | Fetch a specific LinkedIn post                |
-| `apify_linkedin_company_insights` | Get company follower/employee insights        |
-| `apify_search_actors`             | Search Apify's actor marketplace              |
-| `apify_run_actor`                 | Run any Apify actor with custom input         |
-
-**Requires:** `APIFY_TOKEN`
-
-### Paywall — 2 tools
-
-| Tool                  | What it does                                 |
-| --------------------- | -------------------------------------------- |
-| `read_paywalled`      | Read paywalled articles via a reader service |
-| `read_paywalled_hard` | Hard-bypass fallback for stubborn paywalls   |
-
-No credentials required — always active.
-
-### Linear — 6 tools
-
-| Tool                   | What it does                                                               |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `linear_list_issues`   | List issues with team, project, state, and assignee filters                |
-| `linear_get_issue`     | Get full issue details by identifier (e.g. ENG-123), including comments    |
-| `linear_search_issues` | Full-text search across all issues                                         |
-| `linear_list_projects` | List projects with team filter, progress, and dates                        |
-| `linear_create_issue`  | Create an issue with name resolution for team, state, assignee, and labels |
-| `linear_update_issue`  | Update an issue with same name resolution layer                            |
-
-**Requires:** `LINEAR_API_KEY` (Settings → API → Personal API keys in Linear)
-
-### Airtable — 7 tools
-
-| Tool                      | What it does                                                      |
-| ------------------------- | ----------------------------------------------------------------- |
-| `airtable_list_bases`     | List all accessible Airtable bases with IDs and permission levels |
-| `airtable_list_tables`    | List tables in a base with fields and views                       |
-| `airtable_list_records`   | List records with optional view, filter formula, sort, and limit  |
-| `airtable_get_record`     | Get a single record by ID with all field values                   |
-| `airtable_create_record`  | Create a new record with specified field values                   |
-| `airtable_update_record`  | Partially update a record (untouched fields are preserved)        |
-| `airtable_search_records` | Case-insensitive text search on a specified field                 |
-
-**Requires:** `AIRTABLE_API_KEY` (Personal access token from https://airtable.com/create/tokens)
-
-### Composio — 2 tools + 1000s of integrations
-
-| Tool              | What it does                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| `composio_action` | Execute any action on a connected app (GitHub, Jira, HubSpot, Salesforce, Airtable, Linear, Figma...) |
-| `composio_list`   | Discover available actions for a specific app                                                         |
-
-Connect your apps in the [Composio dashboard](https://composio.dev), then use `composio_list` to discover actions and `composio_action` to execute them.
-
-**Requires:** `COMPOSIO_API_KEY`
-
-### Webhook Receiver — 3 tools
-
-| Tool              | What it does                                              |
-| ----------------- | --------------------------------------------------------- |
-| `webhook_last`    | Retrieve the most recent payload for a named webhook      |
-| `webhook_list`    | List all webhooks that have received at least one payload |
-| `webhook_history` | Retrieve the last N payloads for a named webhook          |
-
-**Requires:** `MYMCP_WEBHOOKS` (comma-separated list of webhook names, e.g. `stripe,github`)
-
-Optional per-webhook HMAC-SHA256 validation via `MYMCP_WEBHOOK_SECRET_<NAME>`.
-
-### Skills — dynamic tools
-
-User-defined prompt templates exposed as MCP tools and prompts. Create skills via the dashboard's **Skill Composer** (visual tool-wrapping wizard) or manually. Each skill becomes `skill_<name>` in your MCP client. Always active, no credentials needed.
-
-### Admin — 5 tools
-
-| Tool                | What it does                                                                |
-| ------------------- | --------------------------------------------------------------------------- |
-| `mcp_logs`          | View recent tool calls, errors, latency                                     |
-| `mcp_cache_evict`   | Clear internal caches (KV, API response, etc.)                              |
-| `mcp_backup_export` | Export skills and settings as a JSON backup                                 |
-| `mcp_backup_import` | Restore skills and settings from a backup                                   |
-| `admin_stream_test` | Streaming transport diagnostic (verifies chunked transfer works end-to-end) |
-
-Always active, no credentials needed.
-
-## Architecture
-
-```
-src/
-  core/                 ← Framework: types, registry, config, auth, logging, events, metrics
-  connectors/
-    google/             ← Google Workspace (18 tools)
-      manifest.ts       ← Connector definition (single source of truth)
-      lib/              ← Gmail, Calendar, Contacts, Drive wrappers
-      tools/            ← Individual tool handlers
-    vault/              ← Obsidian Vault (14 tools)
-    browser/            ← Browser Automation (4 tools)
-    slack/              ← Slack (6 tools)
-    notion/             ← Notion (5 tools)
-    apify/              ← Apify — LinkedIn + actors (8 tools)
-    paywall/            ← Paywall readers (2 tools)
-    composio/           ← Composio bridge (2 tools → 1000+ integrations)
-    github/             ← GitHub Issues (6 tools)
-    linear/             ← Linear Issues (6 tools)
-    airtable/           ← Airtable Bases (7 tools)
-    webhook/            ← Webhook Receiver (3 tools)
-    skills/             ← Skills — dynamic user-defined tools
-    admin/              ← Admin & Observability (5 tools)
-
-app/
-  api/mcp               ← MCP endpoint (~30 lines — reads from registry)
-  api/health            ← Public liveness + deep health checks
-  api/admin/*           ← Private: status, stats, verify, call, health-history (auth-gated)
-  api/webhook/*         ← Inbound webhook receiver
-  api/auth/google       ← OAuth consent flow
-  /                     ← Private status dashboard (redirects to /config)
-  /welcome              ← Guided onboarding with progress bar
-  /config               ← Unified dashboard (connectors, tools, skills, logs, docs, settings)
-```
-
-### How it works
-
-1. Each connector has a `manifest.ts` declaring its tools and required env vars
-2. The **registry** checks env vars → determines which connectors are active
-3. `route.ts` iterates enabled connectors, registers tools via the MCP SDK
-4. **Everything derives from manifests** — dashboard, health, admin API, playground all read from the same source
-
-### Design principles
-
-- **Env vars only** — no config files to maintain, `git pull` never conflicts
-- **Single source of truth** — connector manifests drive MCP registration, dashboard, health, docs
-- **Framework vs instance** — framework code has zero personal references; all customization is via env vars
-- **Contract-level compatibility** — same tool names, same schemas, same behavior across versions
+## Features
+
+15 connectors, 86 tools, plus dynamic Skills and API Connections. Each connector auto-activates when its credentials are in your env.
+
+| Connector              | Tools | Auth                                | Setup |
+| ---------------------- | ----- | ----------------------------------- | ----- |
+| **Google Workspace**   | 18    | OAuth                               | 5 min |
+| **Obsidian Vault**     | 14    | GitHub PAT                          | 2 min |
+| **Browser Automation** | 4     | Browserbase + OpenRouter            | 3 min |
+| **Slack**              | 6     | Bot token                           | 2 min |
+| **Notion**             | 5     | Integration token                   | 2 min |
+| **Apify (LinkedIn)**   | 8     | API token                           | 1 min |
+| **GitHub Issues**      | 6     | PAT                                 | 1 min |
+| **Linear**             | 6     | API key                             | 1 min |
+| **Airtable**           | 7     | PAT                                 | 1 min |
+| **Composio**           | 2     | API key (1000+ apps via the bridge) | 2 min |
+| **Paywall Readers**    | 2     | —                                   | 0 min |
+| **Webhook Receiver**   | 3     | Optional HMAC                       | 0 min |
+| **Skills**             | dyn.  | —                                   | 0 min |
+| **API Connections**    | dyn.  | per-API                             | 1 min |
+| **Admin & Logs**       | 5     | Admin token                         | 0 min |
+
+Per-tool details and setup instructions: [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+## Use Cases
+
+A few prompts to give you the shape of what's possible:
+
+- **Daily ops dashboard** — *"Summarize this week's calendar conflicts, group my unread Slack threads by channel, and create a Linear issue for each unresolved thread."*
+- **Inbox triage** — *"Find every email from this customer in the last 30 days, summarize the request, and draft a response — but don't send it."*
+- **Research → notes** — *"Search LinkedIn for product managers in the seed-stage SaaS space, extract their last 3 posts, and append the digest to my Obsidian daily note."*
 
 ## Configuration
 
-All configuration is via environment variables. See [`.env.example`](.env.example) for the full list.
+All configuration is via environment variables. Full reference: [`.env.example`](.env.example).
 
 ### Auth
 
 | Variable           | Required | Description                                                      |
 | ------------------ | -------- | ---------------------------------------------------------------- |
 | `MCP_AUTH_TOKEN`   | Yes      | Bearer token(s) for MCP endpoint — supports comma-separated list |
-| `ADMIN_AUTH_TOKEN` | No       | Separate token for dashboard (falls back to MCP_AUTH_TOKEN)      |
+| `ADMIN_AUTH_TOKEN` | No       | Separate token for dashboard (falls back to `MCP_AUTH_TOKEN`)    |
 
-#### Multi-token authentication
+`MCP_AUTH_TOKEN` accepts a comma-separated list of tokens, one per MCP client. Each token must be ≥ 16 characters. An 8-character SHA-256 hash prefix is stored with every log entry so you can identify which client made each call — without logging the token itself.
 
-`MCP_AUTH_TOKEN` accepts a comma-separated list of tokens, one per MCP client:
+### Instance settings
 
-```env
-MCP_AUTH_TOKEN=token-for-claude-desktop,token-for-chatgpt,token-for-cursor
-```
+v0.12 renamed the env-var prefix from `MYMCP_*` to `KEBAB_*`. Both are accepted during the 2-release transition; the operator sees one boot-time deprecation warning per legacy variable. See [CHANGELOG § v0.12 migration guide](docs/CHANGELOG.md).
 
-Each token must be at least 16 characters. An 8-character SHA-256 hash prefix of the matched token is stored with every log entry so you can identify which client made each call — without logging the token itself. `ADMIN_AUTH_TOKEN` remains single-token.
+| Variable                  | Legacy                    | Default             | Description                       |
+| ------------------------- | ------------------------- | ------------------- | --------------------------------- |
+| `KEBAB_TIMEZONE`          | `MYMCP_TIMEZONE`          | `UTC`               | Timezone for date formatting      |
+| `KEBAB_LOCALE`            | `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting |
+| `KEBAB_DISPLAY_NAME`      | `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard         |
+| `KEBAB_CONTEXT_PATH`      | `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault     |
+| `KEBAB_TOOL_TIMEOUT`      | `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                |
+| `KEBAB_ERROR_WEBHOOK_URL` | `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts          |
 
-### Instance Settings
-
-v0.12 renamed the env-var prefix from `MYMCP_*` to `KEBAB_*`. Both
-are accepted during the 2-release transition; the operator sees one
-boot-time deprecation warning per legacy variable. See
-[CHANGELOG § v0.12 migration guide](docs/CHANGELOG.md).
-
-| Variable                  | Legacy name               | Default             | Description                                 |
-| ------------------------- | ------------------------- | ------------------- | ------------------------------------------- |
-| `KEBAB_TIMEZONE`          | `MYMCP_TIMEZONE`          | `UTC`               | Timezone for date formatting                |
-| `KEBAB_LOCALE`            | `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting           |
-| `KEBAB_DISPLAY_NAME`      | `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard                   |
-| `KEBAB_CONTEXT_PATH`      | `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault               |
-| `GITHUB_BRANCH`           | —                         | `main`              | Default branch for vault repo               |
-| `KEBAB_TOOL_TIMEOUT`      | `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                          |
-| `KEBAB_ERROR_WEBHOOK_URL` | `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts (Slack-compatible) |
-
-### Connector Control
+### Connector control
 
 Connectors activate automatically when their credentials are present. Override with:
 
 ```bash
-MYMCP_DISABLE_GOOGLE=true          # Force-disable even with credentials (legacy; KEBAB_* equivalent accepted)
-KEBAB_ENABLED_PACKS=vault,admin    # Only listed connectors are considered (MYMCP_ENABLED_PACKS accepted)
+KEBAB_DISABLE_GOOGLE=true          # Force-disable even with credentials
+KEBAB_ENABLED_PACKS=vault,admin    # Only listed connectors are considered
 ```
 
-## What's New
+## Architecture
 
-### v0.2 — Storage UX v3 (Phase 32)
+```
+src/
+  core/                ← Framework: types, registry, config, auth, logging, events
+  connectors/
+    google/            ← Google Workspace (18 tools)
+      manifest.ts      ← Connector definition (single source of truth)
+      lib/             ← Gmail, Calendar, Contacts, Drive wrappers
+      tools/           ← Individual tool handlers
+    vault/             ← Obsidian Vault (14 tools)
+    browser/ slack/ notion/ apify/ paywall/ composio/
+    github/ linear/ airtable/ webhook/ skills/ admin/
 
-- **Ephemeral `/tmp` detection** — Vercel deploys without Upstash now flip the storage badge to `Filesystem (temporary) ⚠` instead of silently writing to disposable storage
-- **Three-card Welcome wizard** — explicit choice between Upstash setup, env-vars-only mode, or proceeding with the warning, instead of a hidden silent fallback
-- **Storage mode badge** — sidebar + Storage tab show `Upstash Redis ✓`, `Filesystem ✓`, `Filesystem (temporary) ⚠`, `Static ⚠`, or `KV unreachable ✗` at a glance
-- **KV-degraded recovery** — unreachable Upstash refuses to save (no silent fallback) and surfaces a one-click recheck flow
+app/
+  api/mcp              ← MCP endpoint (~30 lines — reads from registry)
+  api/health           ← Public liveness + deep health checks
+  api/admin/*          ← Private: status, stats, verify, call (auth-gated)
+  api/webhook/*        ← Inbound webhook receiver
+  /welcome             ← Guided onboarding
+  /config              ← Unified dashboard
+```
 
-### v0.1.x — Stabilization
+**How it works:** each connector has a `manifest.ts` declaring its tools and required env vars. The **registry** checks env vars and determines which connectors are active. `route.ts` iterates enabled connectors and registers tools via the MCP SDK. Everything — dashboard, health, admin API — derives from the same manifests.
 
-- **OTel auto-bootstrap** — set `OTEL_SERVICE_NAME=mymcp` and spans flow to your collector, zero config
-- **API Playground** — test any tool from the dashboard with a mini-chat UI
-- **Skill Composer** — visual tool-wrapping wizard: pick tool, configure args, preview YAML, save
-- **Skill versioning** — edits create new versions, rollback supported from dashboard
-- **Health dashboard** — connector SLA sparklines, instance health widget, version display
-- **Per-tool toggle** — disable individual tools without removing connectors
-- **Multi-tenant auth** — per-tenant tokens with `x-mymcp-tenant` header routing
-- **Webhook connector** — receive and query external payloads (Stripe, GitHub, etc.)
-- **Backup/restore** — export and import skills + settings as JSON via `mcp_backup_export` / `mcp_backup_import`
-- **Deep health checks** — `GET /api/health?deep=1` runs connector `diagnose()`, with history tracked over time
-- **Durable observability** — opt-in persistent tool logs via KV store
-- **Per-token rate limiting** — configurable RPM cap per auth token
-- **GitHub Issues / Linear / Airtable connectors** — 6 / 6 / 7 tools respectively
-- **Request ID propagation** — `x-request-id` on every response, propagated to logs and OTel spans
+**Design principles:** env vars only (no config files, `git pull` never conflicts) · single source of truth (manifests drive registration, dashboard, docs) · framework vs instance separation (zero personal references in code) · contract-level compatibility (same tool names and schemas across versions).
 
-See [CHANGELOG.md](docs/CHANGELOG.md) for the per-patch detail.
+## Development
 
-## Dashboard & Tools
+```bash
+npm run dev             # Start dev server
+npm run build           # Production build
+npm run lint            # ESLint
+npm run format          # Prettier
+npm run test:contract   # Verify tool contracts
+npm run test:e2e        # Playwright welcome-flow E2E
+```
 
-| Page       | Auth     | Description                                                           |
-| ---------- | -------- | --------------------------------------------------------------------- |
-| `/`        | Admin    | Redirects to `/config`                                                |
-| `/welcome` | Public\* | Guided onboarding — first-run token minting, OAuth, credential checks |
-| `/config`  | Admin    | Unified dashboard — connectors, tools, skills, logs, docs, settings   |
+Pre-commit hook (Husky): `lint-staged` + contract test. Tooling configs (`cliff.toml`, `size-limit.json`, `knip.ts`) live under [`config/`](config).
 
-\* `/welcome` is only accessible during first-run mode before a token is minted.
-
-## API Endpoints
+### API endpoints
 
 | Endpoint                        | Auth           | Description                                                 |
 | ------------------------------- | -------------- | ----------------------------------------------------------- |
 | `POST /api/mcp`                 | MCP_AUTH_TOKEN | MCP Streamable HTTP                                         |
 | `GET /api/health`               | Public         | `{ ok, version }` — add `?deep=1` for connector diagnostics |
 | `GET /api/admin/status`         | Admin          | Connector diagnostics + diagnose() results                  |
-| `GET /api/admin/stats`          | Admin          | Tool usage analytics (ephemeral)                            |
-| `GET /api/admin/verify`         | Admin          | Live credential verification                                |
+| `GET /api/admin/stats`          | Admin          | Tool usage analytics                                        |
 | `POST /api/admin/call`          | Admin          | Invoke any tool (playground API)                            |
-| `GET /api/admin/health-history` | Admin          | Historical deep health check results                        |
 | `POST /api/webhook/:name`       | Webhook secret | Inbound webhook receiver                                    |
-| `GET /api/auth/google`          | Admin          | Google OAuth redirect                                       |
 | `GET /api/cron/health`          | Cron           | Scheduled health check + webhook alert                      |
 
-## Security
+Full reference: [docs/API.md](docs/API.md).
+
+### Security
 
 | Layer             | Protection                                                               |
 | ----------------- | ------------------------------------------------------------------------ |
@@ -672,40 +280,52 @@ See [CHANGELOG.md](docs/CHANGELOG.md) for the per-patch detail.
 | **Webhooks**      | HMAC-SHA256 signature validation (opt-in per webhook)                    |
 | **CI**            | ESLint (no-any enforced), Prettier, Vitest, contract tests, build checks |
 
-## Development
+## Updates & durability
 
-```bash
-npm run dev             # Start dev server
-npm run build           # Production build
-npm run lint            # ESLint
-npm run format          # Prettier
-npm run test:contract   # Verify tool contracts
-npm run test:e2e        # Playwright welcome-flow E2E (runs against a live dev server)
-npm run test:e2e:legacy # Pre-v0.10 Stateful HTTP smoke (tools/list)
-```
+Kebab MCP is a [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository). Your copy is standalone — it won't auto-update. The right path depends on **where you run it**:
 
-Pre-commit hook (via Husky): `lint-staged` + `contract test`
+| Where you run it          | How updates work                                                       |
+| ------------------------- | ---------------------------------------------------------------------- |
+| **Vercel** (most users)   | One-click sync from the dashboard via GitHub's API — no terminal needed |
+| **Local dev**             | Auto-pull on every dev server start (silent, fast-forward only)         |
+| **Docker / self-hosted**  | `npm run update` (or `git fetch upstream && git merge upstream/main`)   |
+
+The Vercel dashboard runs a daily cron at 8h UTC that pre-fetches upstream status, so the Overview banner loads instantly. **Your `.env`, `data/`, and saved credentials in Upstash KV are never touched** — all customization lives in env vars.
+
+Disable the in-dashboard update feature with `KEBAB_DISABLE_UPDATE_API=1`. Smoke-test recipe: [docs/TROUBLESHOOTING.md § Phase 61 update flow](docs/TROUBLESHOOTING.md#phase-61-update-flow-smoke-test).
+
+## Community & Roadmap
+
+- **GitHub Discussions** — questions, ideas, feedback: [github.com/Yassinello/kebab-mcp/discussions](https://github.com/Yassinello/kebab-mcp/discussions)
+- **GitHub Issues** — bugs and feature requests: [github.com/Yassinello/kebab-mcp/issues](https://github.com/Yassinello/kebab-mcp/issues)
+
+**Roadmap (subject to change):**
+
+- [ ] Cloudflare Workers deploy target
+- [ ] Stripe + Plaid connectors
+- [ ] Web UI for Skills authoring
+- [ ] Multi-tenant mode (single deploy, multiple users)
+
+Shipped releases: [docs/CHANGELOG.md](docs/CHANGELOG.md).
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to add tools, connectors, and custom extensions. **Quick version:** create a file in `src/connectors/<connector>/tools/`, add it to the connector's `manifest.ts`. Done.
 
 ## Documentation
 
 Ordered by reader journey — discover, deploy, use, author, contribute.
 
-- [docs/API.md](docs/API.md) — route-by-route API reference (all 42 endpoints) (new in v0.12 Phase 50)
+- [docs/API.md](docs/API.md) — route-by-route API reference (all 42 endpoints)
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — per-connector setup and env var reference
-- [docs/CONNECTOR-AUTHORING.md](docs/CONNECTOR-AUTHORING.md) — zero-to-live authoring walkthrough (new in v0.12 Phase 50)
+- [docs/CONNECTOR-AUTHORING.md](docs/CONNECTOR-AUTHORING.md) — zero-to-live authoring walkthrough
 - [docs/HOSTING.md](docs/HOSTING.md) — host compatibility matrix (Vercel, Docker, Fly, Render, Cloud Run, bare-metal) + degraded-mode contract
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — symptom → fix index for every shipped bug + security finding
 - [docs/SECURITY-ADVISORIES.md](docs/SECURITY-ADVISORIES.md) — published advisory index
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — contribution guide + coverage philosophy
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — version history
+- [docs/SECURITY.md](docs/SECURITY.md) — vulnerability reporting
 - [CLAUDE.md](CLAUDE.md) — developer / fork-maintainer guide (durable bootstrap pattern, conventions)
-- [CONTRIBUTING.md](docs/CONTRIBUTING.md) — contribution guide + coverage philosophy
-- [CHANGELOG.md](docs/CHANGELOG.md) — version history
-- [SECURITY.md](docs/SECURITY.md) — vulnerability reporting
-
-## Contributing
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to add tools, connectors, and custom extensions.
-
-**Quick version:** Create a file in `src/connectors/<connector>/tools/`, add it to the connector's `manifest.ts`. Done.
 
 ## Tech Stack
 
