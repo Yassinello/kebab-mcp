@@ -119,7 +119,13 @@ describe("github-api mode", () => {
     setupPat("ghp_test");
 
     // /repos/testowner/testslug — fork visibility
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
 
     // /repos/testowner/testslug/compare/main...Yassinello:kebab-mcp:main
     fetchMock.mockResolvedValueOnce(
@@ -172,7 +178,13 @@ describe("github-api mode", () => {
     setupVercelEnv("testowner", "testslug");
     setupPat("ghp_test");
 
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJsonResponse({
         status: "diverged",
@@ -213,7 +225,13 @@ describe("github-api mode", () => {
     setupVercelEnv("testowner", "testslug");
     setupPat("ghp_test");
 
-    fetchMock.mockResolvedValueOnce(mockJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJsonResponse({
         status: "behind",
@@ -353,5 +371,69 @@ describe("github-api mode", () => {
     expect(compareCalls.length).toBeGreaterThan(0);
     expect(compareCalls[0]![0]).toContain("/compare/Yassinello:kebab-mcp:main...main");
     expect(compareCalls[0]![0]).not.toContain("/compare/main...Yassinello");
+  });
+
+  // ── Case 7: GET — deployed repo is not a fork of upstream ──────────────
+  //
+  // Reproduces the kebab-mcp-yass bug (2026-04-28). Vercel's /new/clone
+  // creates a standalone snapshot, NOT a real GitHub fork. The repo lookup
+  // returns `fork: false, parent: null`. The route must short-circuit with
+  // `reason: "not-a-fork"` instead of running the Compare API (which would
+  // misleadingly return "identical" for a snapshot, telling the user
+  // "everything is up to date" when in reality they will never receive
+  // any update.
+
+  it("Case 7: GET returns reason=not-a-fork when deployed repo lacks an upstream parent", async () => {
+    setupVercelEnv("someone", "kebab-mcp-clone");
+    setupPat("ghp_test");
+
+    // /repos/<owner>/<slug> — the snapshot is a standalone repo.
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({ private: false, fork: false, parent: null })
+    );
+
+    const mod = await import("../../app/api/config/update/route");
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
+    const body = await res.json();
+
+    expect(body.mode).toBe("github-api");
+    expect(body.available).toBe(false);
+    expect(body.reason).toBe("not-a-fork");
+    expect(body.deployedRepo).toBe("someone/kebab-mcp-clone");
+    expect(body.upstreamRepo).toBe("Yassinello/kebab-mcp");
+    expect(body.redeployUrl).toContain("vercel.com/new/deploy");
+
+    // Verify the Compare API was NEVER called — the short-circuit happens
+    // before the second fetch.
+    const compareCalls = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    );
+    expect(compareCalls).toHaveLength(0);
+  });
+
+  // ── Case 8: GET — fork's parent points elsewhere ───────────────────────
+
+  it("Case 8: GET returns reason=not-a-fork when fork.parent != upstream", async () => {
+    setupVercelEnv("someone", "their-fork");
+    setupPat("ghp_test");
+
+    // Real GitHub fork, but of a DIFFERENT upstream — merge-upstream would
+    // pull from the wrong place. Treat as not-a-fork from our POV.
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "OtherOrg/other-project" },
+      })
+    );
+
+    const mod = await import("../../app/api/config/update/route");
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
+    const body = await res.json();
+
+    expect(body.reason).toBe("not-a-fork");
+    expect(body.deployedRepo).toBe("someone/their-fork");
   });
 });

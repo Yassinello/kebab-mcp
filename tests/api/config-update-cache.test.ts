@@ -109,7 +109,9 @@ describe("CRON-02: cache-first GET", () => {
   it("calls fetch and writes KV when cache is empty", async () => {
     kvGet.mockResolvedValueOnce(null);
     kvSet.mockResolvedValueOnce(undefined);
-    fetchMock.mockResolvedValueOnce(mockJson({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJson({ private: false, fork: true, parent: { full_name: "Yassinello/kebab-mcp" } })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJson({
         status: "behind",
@@ -129,7 +131,9 @@ describe("CRON-02: cache-first GET", () => {
 
   it("bypasses cache when ?force=1 is set", async () => {
     kvSet.mockResolvedValueOnce(undefined);
-    fetchMock.mockResolvedValueOnce(mockJson({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJson({ private: false, fork: true, parent: { full_name: "Yassinello/kebab-mcp" } })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJson({
         status: "behind",
@@ -153,7 +157,9 @@ describe("CRON-02: cache-first GET", () => {
   it("falls through to live call when KV read throws", async () => {
     kvGet.mockRejectedValueOnce(new Error("KV unreachable"));
     kvSet.mockResolvedValueOnce(undefined);
-    fetchMock.mockResolvedValueOnce(mockJson({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJson({ private: false, fork: true, parent: { full_name: "Yassinello/kebab-mcp" } })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJson({
         status: "identical",
@@ -189,7 +195,9 @@ describe("CRON-02: cache-first GET", () => {
     };
     kvGet.mockResolvedValueOnce(JSON.stringify(stale));
     kvSet.mockResolvedValueOnce(undefined);
-    fetchMock.mockResolvedValueOnce(mockJson({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJson({ private: false, fork: true, parent: { full_name: "Yassinello/kebab-mcp" } })
+    );
     fetchMock.mockResolvedValueOnce(
       mockJson({
         status: "behind",

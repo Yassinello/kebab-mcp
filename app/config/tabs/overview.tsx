@@ -34,6 +34,12 @@ type UpdateStatus =
       reason?: string; // optional: "auth" when PAT is invalid/insufficient scope
     }
   | { state: "no-token"; configureUrl: string }
+  | {
+      state: "not-a-fork";
+      deployedRepo: string;
+      upstreamRepo: string;
+      redeployUrl: string;
+    }
   | { state: "disabled"; reason: string }
   | { state: "error"; error: string };
 
@@ -100,6 +106,16 @@ export function OverviewTab({
           });
           return;
         }
+        // github-api mode standalone-clone (not a real fork of upstream)
+        if (d.mode === "github-api" && d.reason === "not-a-fork") {
+          setUpdate({
+            state: "not-a-fork",
+            deployedRepo: (d.deployedRepo as string) || "",
+            upstreamRepo: (d.upstreamRepo as string) || "",
+            redeployUrl: (d.redeployUrl as string) || "https://vercel.com/new",
+          });
+          return;
+        }
         // github-api mode
         if (d.mode === "github-api") {
           const diffUrl = d.diffUrl as string | undefined;
@@ -155,6 +171,13 @@ export function OverviewTab({
         setUpdate({
           state: "no-token",
           configureUrl: (d.configureUrl as string) || "/config?tab=settings&sub=advanced",
+        });
+      } else if (d.mode === "github-api" && d.reason === "not-a-fork") {
+        setUpdate({
+          state: "not-a-fork",
+          deployedRepo: (d.deployedRepo as string) || "",
+          upstreamRepo: (d.upstreamRepo as string) || "",
+          redeployUrl: (d.redeployUrl as string) || "https://vercel.com/new",
         });
       } else if (d.mode === "github-api") {
         const diffUrl = d.diffUrl as string | undefined;
@@ -250,6 +273,39 @@ export function OverviewTab({
 
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
+
+      {/* Update banner — standalone clone (not a fork of upstream) */}
+      {update.state === "not-a-fork" && (
+        <div className="border border-red/40 bg-red/5 rounded-lg p-4 flex items-start gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-red">
+              This deployment can&apos;t receive updates
+            </p>
+            <p className="text-xs text-text-dim mt-1">
+              Your deployment is connected to{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">{update.deployedRepo}</code>,
+              which is a standalone snapshot of{" "}
+              <code className="font-mono bg-bg-muted px-1 rounded">{update.upstreamRepo}</code> —
+              not a real GitHub fork. The dashboard&apos;s update flow uses GitHub&apos;s
+              merge-upstream API, which only works on forks. As-is, you will never receive upstream
+              fixes.
+            </p>
+            <p className="text-xs text-text-dim mt-2">
+              <strong>Fix:</strong> redeploy from the upstream Deploy button (links direct to
+              upstream, no copy). Your existing data in Upstash KV survives if you reattach the same
+              integration.
+            </p>
+          </div>
+          <a
+            href={update.redeployUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 text-xs font-medium px-3 py-2 rounded-md bg-red/10 text-red border border-red/40 hover:bg-red/20 transition-colors"
+          >
+            Redeploy →
+          </a>
+        </div>
+      )}
 
       {/* Update banner — no-token warning */}
       {update.state === "no-token" && (
@@ -501,7 +557,20 @@ export function OverviewTab({
 
       {/* Version info */}
       <Section title="Version">
-        <Row label="Version" value={version} />
+        <Row
+          label="Version"
+          value={version}
+          action={
+            <button
+              onClick={refreshUpdate}
+              disabled={refreshing || Date.now() < refreshDisabledUntil}
+              className="text-xs text-accent hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Force a fresh upstream check, bypassing the 48h cache"
+            >
+              {refreshing ? "Checking…" : justRefreshed ? "Checked ✓" : "Check for updates"}
+            </button>
+          }
+        />
         {commitSha && <Row label="Commit" value={commitSha} />}
       </Section>
 

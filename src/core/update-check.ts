@@ -128,7 +128,8 @@ export type UpdateStatusPayload = {
 export type UpdateStatusResult =
   | { ok: true; payload: UpdateStatusPayload }
   | { ok: false; kind: "auth" }
-  | { ok: false; kind: "fetch"; status: number };
+  | { ok: false; kind: "fetch"; status: number }
+  | { ok: false; kind: "not-a-fork"; deployedRepo: string };
 
 /**
  * Compute the upstream-vs-fork status using GitHub Compare API.
@@ -154,7 +155,13 @@ export async function computeUpdateStatus(
 ): Promise<UpdateStatusResult> {
   const upstream = `${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`;
 
-  // Fetch fork visibility
+  // Fetch repo metadata. We need: visibility (public/private), fork status,
+  // and the parent repo if any. A deploy that came from `/new/clone` will
+  // have `fork: false` and `parent: null` even though the files match
+  // upstream — those repos have no shared git history with upstream and
+  // CANNOT receive merge-upstream pulls. We detect this and short-circuit
+  // with a clear error so the user sees an actionable message instead of
+  // a stale "up to date" banner.
   const repoRes = await ghFetch(`/repos/${owner}/${slug}`, token);
   if (!repoRes.ok) {
     if (repoRes.status === 401 || repoRes.status === 403) {
@@ -162,8 +169,27 @@ export async function computeUpdateStatus(
     }
     return { ok: false, kind: "fetch", status: repoRes.status };
   }
-  const repoData = repoRes.data as { private: boolean };
+  const repoData = repoRes.data as {
+    private: boolean;
+    fork: boolean;
+    parent: { full_name: string } | null;
+  };
   const forkPrivate = repoData.private ?? false;
+
+  // Detect the "standalone clone" failure mode: deployed repo isn't a fork,
+  // OR is a fork but its parent points somewhere other than our upstream.
+  // Either way, the merge-upstream API will not work and the Compare API
+  // results are misleading (it compares file trees, not history, and
+  // returns "identical" for snapshots even when the user is a year behind).
+  const upstreamFullName = `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`;
+  const isUpstreamFork = repoData.fork === true && repoData.parent?.full_name === upstreamFullName;
+  if (!isUpstreamFork) {
+    return {
+      ok: false,
+      kind: "not-a-fork",
+      deployedRepo: `${owner}/${slug}`,
+    };
+  }
 
   // Compare fork HEAD with upstream
   // BASE=upstream, HEAD=fork → response describes fork's position relative to upstream

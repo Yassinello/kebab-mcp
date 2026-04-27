@@ -21,7 +21,7 @@ import {
   UPDATE_CHECK_STALE_MS,
   type UpdateStatusPayload,
 } from "@/core/update-check";
-import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
+import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG, VERCEL_DEPLOY_URL } from "../../../landing/deploy-url";
 
 const updateCheckLogger = getLogger("config.update.cache");
 
@@ -187,6 +187,21 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
         available: false,
         reason: "auth",
         tokenConfigured: true,
+      });
+    }
+    if (result.kind === "not-a-fork") {
+      // Deploy was created via /new/clone (snapshot) instead of /new/deploy.
+      // Cannot pull updates because the deployed repo isn't a real fork of
+      // the upstream. Surface a clear, actionable message instead of
+      // pretending everything is OK.
+      return NextResponse.json({
+        mode: "github-api",
+        available: false,
+        reason: "not-a-fork",
+        tokenConfigured: true,
+        deployedRepo: result.deployedRepo,
+        upstreamRepo: `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`,
+        redeployUrl: VERCEL_DEPLOY_URL,
       });
     }
     return errorResponse(new Error(`GitHub API failed: ${result.status}`), {

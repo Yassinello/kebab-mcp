@@ -93,7 +93,9 @@ function mockJson(body: unknown, status = 200): Response {
 describe("STAB-02: hydrateCredentialsStep wiring", () => {
   it("makes KEBAB_UPDATE_PAT from KV visible to githubApiGetHandler via runWithCredentials", async () => {
     // /repos/testowner/testslug
-    fetchMock.mockResolvedValueOnce(mockJson({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      mockJson({ private: false, fork: true, parent: { full_name: "Yassinello/kebab-mcp" } })
+    );
     // /compare/Yassinello:kebab-mcp:main...main
     fetchMock.mockResolvedValueOnce(
       mockJson({

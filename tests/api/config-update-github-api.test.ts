@@ -188,7 +188,13 @@ describe("GET github-api — behind upstream (update available)", () => {
     });
 
     // First fetch: /repos/<owner>/<slug> — visibility
-    fetchMock.mockResolvedValueOnce(makeJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
 
     // Second fetch: /repos/.../compare/...
     fetchMock.mockResolvedValueOnce(
@@ -233,7 +239,13 @@ describe("GET github-api — ahead of upstream", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
-    fetchMock.mockResolvedValueOnce(makeJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({
         status: "ahead",
@@ -264,7 +276,13 @@ describe("GET github-api — breaking change detection", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
-    fetchMock.mockResolvedValueOnce(makeJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({
         status: "behind",
@@ -297,7 +315,13 @@ describe("GET github-api — breaking change detection", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
-    fetchMock.mockResolvedValueOnce(makeJsonResponse({ private: false }));
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({
         status: "behind",

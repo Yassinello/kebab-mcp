@@ -132,7 +132,15 @@ describe("CRON-01: /api/cron/update-check handler body", () => {
   it("calls computeUpdateStatus and writes KV on success", async () => {
     setEnv();
     // /repos lookup
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ private: false })));
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          private: false,
+          fork: true,
+          parent: { full_name: "Yassinello/kebab-mcp" },
+        })
+      )
+    );
     // /compare lookup
     fetchMock.mockResolvedValueOnce(
       new Response(
