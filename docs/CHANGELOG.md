@@ -2,6 +2,25 @@
 
 All notable changes to Kebab MCP.
 
+## [0.1.16](https://github.com/Yassinello/kebab-mcp/compare/v0.1.15...v0.1.16) (2026-04-28)
+
+
+### Features
+
+* **deploy:** /deploy hub page with fork-first recommended flow ([df87c6d](https://github.com/Yassinello/kebab-mcp/commit/df87c6db70dbcef110c407f2d47f08db5527475a))
+
+
+### Bug Fixes
+
+* **connectors:** hide redundant API Connections card, signpost the section ([c807f3c](https://github.com/Yassinello/kebab-mcp/commit/c807f3cf0e59e1442783c10ceec8f3724e8cbe44))
+* **connectors:** reload after save so connector toggle reflects new credentials ([8d23b75](https://github.com/Yassinello/kebab-mcp/commit/8d23b7530d2217bcb325c290ccfae02e8c8e4c7e))
+* **deploy:** clarify Upstash is post-deploy, not during import ([fdddf59](https://github.com/Yassinello/kebab-mcp/commit/fdddf594bfb71b577881b84e15bfcc0430596619))
+* **deploy:** switch Deploy button from /new/clone to /new/deploy ([62024a5](https://github.com/Yassinello/kebab-mcp/commit/62024a515ab48b25a5319711db12868550cbe54d))
+* **routing:** default fresh deploys to /welcome instead of marketing landing ([fa2908f](https://github.com/Yassinello/kebab-mcp/commit/fa2908f18414110dfb9613cce49b8c2d5dd9e7b1))
+* **routing:** rehydrate bootstrap before root-route token check ([8a88a90](https://github.com/Yassinello/kebab-mcp/commit/8a88a90c5507d8c190ddc286bc0879d0b4d29230))
+* **updates:** detect non-fork deployments + Check-now button on Version ([6d9fdd7](https://github.com/Yassinello/kebab-mcp/commit/6d9fdd72c6e16a3aab6e060efd360c01e195cb3e))
+* **updates:** force-bypass cache + clearer wording on Test connection ([34cd2cd](https://github.com/Yassinello/kebab-mcp/commit/34cd2cd401adde8ed59388dd70a92ba2d70b9e1c))
+
 ## [0.1.15](https://github.com/Yassinello/kebab-mcp/compare/v0.1.14...v0.1.15) (2026-04-27)
 
 
