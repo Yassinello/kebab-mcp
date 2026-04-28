@@ -357,18 +357,31 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-sm">{pack.label}</p>
-                  <span
-                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      pack.enabled
-                        ? "text-green bg-green-bg"
-                        : isConfigured
-                          ? "text-text-muted bg-bg-muted"
-                          : "text-accent bg-accent/10"
-                    }`}
-                  >
-                    {pack.enabled ? "Active" : isConfigured ? "Inactive" : "Setup needed"}
-                  </span>
-                  <span className="text-[11px] text-text-muted">{pack.toolCount} tools</span>
+                  {/* Status badge: only shown when there is a meaningful state
+                      to communicate. We deliberately drop the "Setup needed"
+                      badge that used to render on every fresh-install card —
+                      it added noise to the 12+ disabled connectors a brand
+                      new user sees on first open. Now:
+                        - Active   (green)  — pack is enabled
+                        - Inactive (muted)  — credentials saved, manually off
+                        - (no badge)        — never configured, off
+                      so the user's eye lands on cards with actual signal. */}
+                  {pack.enabled && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-green bg-green-bg">
+                      Active
+                    </span>
+                  )}
+                  {!pack.enabled && isConfigured && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
+                      Inactive
+                    </span>
+                  )}
+                  {/* Tool count: only meaningful when the pack is actually
+                      contributing tools to the registry. "0 tools" on every
+                      disabled card was visual noise. */}
+                  {pack.enabled && (
+                    <span className="text-[11px] text-text-muted">{pack.toolCount} tools</span>
+                  )}
                   {savedFlash === pack.id && (
                     <span
                       className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${

@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { isClaimer } from "@/core/first-run";
+import { isClaimer, isFirstRunMode } from "@/core/first-run";
 import { checkAdminAuth } from "@/core/auth";
 import { isLoopbackRequest, getClientIP } from "@/core/request-utils";
 import { checkRateLimit } from "@/core/rate-limit";
 import { loadConnectorManifest } from "@/core/registry";
 import { withTimeout } from "@/core/timeout";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
-import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/setup/test
@@ -25,8 +24,15 @@ const TEST_TIMEOUT_MS = 8_000;
 async function postHandler(ctx: PipelineContext) {
   const request = ctx.request;
   // Post-setup: accept admin auth (cookie or token) so the Connectors
-  // tab can test credentials from the dashboard.
-  if (getConfig("MCP_AUTH_TOKEN")) {
+  // tab can test credentials from the dashboard. The auth check uses
+  // !isFirstRunMode() instead of getConfig("MCP_AUTH_TOKEN") because the
+  // token may live in the bootstrap cache (rehydrated from Upstash KV)
+  // rather than process.env on Vercel cold lambdas. Reading the env
+  // directly returned undefined and shunted authenticated dashboard
+  // users into the first-run-only path, where they predictably failed
+  // the claimer check with "Unauthorized — claim this instance via
+  // /welcome first" (caught on Obsidian Test connection, 2026-04-28).
+  if (!isFirstRunMode()) {
     const authError = await checkAdminAuth(request);
     if (authError) return authError;
   } else {
