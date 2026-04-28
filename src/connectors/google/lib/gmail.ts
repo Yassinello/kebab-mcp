@@ -184,17 +184,64 @@ export async function readEmail(messageId: string): Promise<EmailFull> {
   };
 }
 
-// --- Search emails (with full body) ---
+// --- Search emails ---
+//
+// PERF-A-01: searchEmails accepts a `bodyMode` to control payload weight.
+// `full` (default for back-compat) fetches every message body.
+// `metadata` fetches only headers + snippet (no body decode), cutting
+// per-message payload from ~10–50KB to ~1–2KB and avoiding base64+HTML
+// strip work. Use `metadata` when the caller only needs to triage the
+// hit list and will follow up with `readEmail` on selected items.
+//
+// Both modes still issue N concurrent fetches via Promise.all — Gmail's
+// REST API has no list-with-bodies endpoint, and the Batch API requires
+// multipart/mixed which the runtime fetcher doesn't support. The win
+// here is per-message payload size + JSON parse cost, not roundtrip
+// count.
+
+export type SearchBodyMode = "full" | "metadata";
 
 export async function searchEmails(opts: {
   query: string;
   maxResults?: number | undefined;
+  bodyMode?: SearchBodyMode | undefined;
 }): Promise<EmailFull[]> {
   const maxResults = Math.min(opts.maxResults || 5, 10);
+  const bodyMode: SearchBodyMode = opts.bodyMode || "full";
   const listData = await googleFetchJSON<GmailMessageList>(
     `${GMAIL}/messages?maxResults=${maxResults}&q=${encodeURIComponent(opts.query)}`
   );
   if (!listData.messages || listData.messages.length === 0) return [];
+
+  if (bodyMode === "metadata") {
+    return Promise.all(
+      listData.messages.map(async (msg: { id: string }) => {
+        const m = await googleFetchJSON<GmailMessage>(
+          `${GMAIL}/messages/${msg.id}?format=metadata` +
+            `&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc` +
+            `&metadataHeaders=Bcc&metadataHeaders=Subject&metadataHeaders=Date` +
+            `&metadataHeaders=Message-ID`
+        );
+        const headers = m.payload?.headers || [];
+        return {
+          id: m.id,
+          threadId: m.threadId,
+          from: getHeader(headers, "From"),
+          to: getHeader(headers, "To"),
+          cc: getHeader(headers, "Cc"),
+          bcc: getHeader(headers, "Bcc"),
+          subject: getHeader(headers, "Subject"),
+          date: getHeader(headers, "Date"),
+          messageId: getHeader(headers, "Message-ID"),
+          unread: (m.labelIds || []).includes("UNREAD"),
+          snippet: m.snippet || "",
+          body: "",
+          labels: m.labelIds || [],
+          attachments: [],
+        };
+      })
+    );
+  }
 
   return Promise.all(listData.messages.map(async (msg: { id: string }) => readEmail(msg.id)));
 }

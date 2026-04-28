@@ -388,6 +388,7 @@
     "name": "gmail_search",
     "pack": "google",
     "schemaKeys": [
+      "body_mode",
       "max_results",
       "query"
     ],

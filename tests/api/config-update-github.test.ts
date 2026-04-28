@@ -402,7 +402,9 @@ describe("github-api mode", () => {
     expect(body.reason).toBe("not-a-fork");
     expect(body.deployedRepo).toBe("someone/kebab-mcp-clone");
     expect(body.upstreamRepo).toBe("Yassinello/kebab-mcp");
-    expect(body.redeployUrl).toContain("vercel.com/new/deploy");
+    // Updated 2026-04-28: redeployUrl now points at the in-app /deploy
+    // hub (df87c6d) instead of the legacy vercel.com/new/deploy link.
+    expect(body.redeployUrl).toBe("/deploy");
 
     // Verify the Compare API was NEVER called — the short-circuit happens
     // before the second fetch.

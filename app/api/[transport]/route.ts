@@ -41,8 +41,47 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
       void logRegistryState().catch((err) =>
         console.info(`[Kebab MCP] logRegistryState on env.changed failed: ${toMsg(err)}`)
       );
+      // PERF-A-03: env edit may have changed the connector list and any
+      // tool-store contents; force the next transport request to re-prime.
+      lastPrimeAt = 0;
     });
   }
+}
+
+// PERF-A-03 — manifest.refresh() cache.
+// Each connector's refresh() typically does at least one KV roundtrip
+// (Skills + API Connections both load user-defined tool lists from the
+// store). On a warm lambda serving sequential MCP requests, repeating
+// these on every call wastes 10–30ms per request. Cache for 30s; events
+// (env.changed, skill/tool CRUD) reset the cache to keep dashboard
+// edits visible on the next request.
+const PRIME_CACHE_TTL_MS = 30_000;
+let lastPrimeAt = 0;
+let lastPrimePromise: Promise<void> | null = null;
+
+async function primeDynamicCaches(
+  packs: { manifest: { refresh?: () => Promise<void> } }[]
+): Promise<void> {
+  const now = Date.now();
+  if (lastPrimePromise && now - lastPrimeAt < PRIME_CACHE_TTL_MS) {
+    return lastPrimePromise;
+  }
+  lastPrimeAt = now;
+  lastPrimePromise = Promise.all(
+    packs.map((p) =>
+      p.manifest.refresh?.().catch(() => {
+        // refresh failure should not block transport startup; the connector
+        // will simply expose whatever the cached sync view sees (possibly []).
+      })
+    )
+  ).then(() => undefined);
+  return lastPrimePromise;
+}
+
+/** Test-only: reset the prime cache. */
+export function __resetPrimeCacheForTests(): void {
+  lastPrimeAt = 0;
+  lastPrimePromise = null;
 }
 
 /**
@@ -82,14 +121,11 @@ async function buildHandler(
   // back `tools` with a KV-persisted store return [] on cold lambdas — they
   // cannot await inside the synchronous `tools` getter. See
   // ConnectorManifest.refresh in src/core/types.ts.
-  await Promise.all(
-    enabledPacks.map((p) =>
-      p.manifest.refresh?.().catch(() => {
-        // refresh failure should not block transport startup; the connector
-        // will simply expose whatever the cached sync view sees (possibly []).
-      })
-    )
-  );
+  //
+  // PERF-A-03: cache the refresh result for 30s per process so warm lambdas
+  // skip the KV roundtrip on every transport request. Skills/API edits emit
+  // env.changed which already invalidates the cache below.
+  await primeDynamicCaches(enabledPacks);
 
   return createMcpHandler(
     (server) => {

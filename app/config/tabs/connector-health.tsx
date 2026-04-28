@@ -147,6 +147,7 @@ export function ConnectorHealthWidget() {
   useEffect(() => {
     if (state.kind === "empty" && !autoChecked) {
       setAutoChecked(true);
+      // fire-and-forget OK: auto-trigger deep check on first empty render; result lands in state via setter
       void runDeepCheck();
     }
   }, [state.kind, autoChecked, runDeepCheck]);
