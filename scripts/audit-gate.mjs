@@ -19,6 +19,12 @@ const ALLOWLIST = [
       "Transitive via @langchain/core → langsmith (SSRF + prototype pollution + output redaction bypass, 3 moderate advisories). Mitigation: Stagehand 3.2.x is the only installed path and its default call surface does not exercise the vulnerable langsmith code. Allowlist remains until Stagehand upstream ships a clean langchain peer.",
     reviewBy: "2026-10-22",
   },
+  {
+    pkg: "next",
+    reason:
+      "Moderate advisory inherited via postcss <8.5.10 (XSS via unescaped </style> in CSS Stringify). Next.js 16.x ships postcss 8.5.6 internally; the vulnerable path requires server-rendered CSS-in-JS with attacker-controlled style strings, which Kebab MCP does not expose (all styles are static Tailwind/PostCSS at build time, never user-controlled). Allowlist until Next.js bumps its bundled postcss; npm audit fix --force would downgrade Next.js to 9.3.3 which would break the entire app.",
+    reviewBy: "2026-07-31",
+  },
 ];
 
 function runAudit() {
