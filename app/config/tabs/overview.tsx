@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
-import { HealthWidget } from "./health-widget";
 import { ConnectorHealthWidget } from "./connector-health";
 import { toMsg } from "@/core/error-utils";
 import { formatRelativeTime } from "@/core/relative-time";
@@ -268,9 +267,6 @@ export function OverviewTab({
         </div>
       )}
 
-      {/* Instance health widget */}
-      <HealthWidget />
-
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
 
@@ -303,29 +299,6 @@ export function OverviewTab({
             className="shrink-0 text-xs font-medium px-3 py-2 rounded-md bg-red/10 text-red border border-red/40 hover:bg-red/20 transition-colors"
           >
             Redeploy →
-          </a>
-        </div>
-      )}
-
-      {/* Update banner — no-token warning */}
-      {update.state === "no-token" && (
-        <div className="border border-yellow-500/30 bg-yellow-500/5 rounded-lg p-4 flex items-center gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-              Update token not configured
-            </p>
-            <p className="text-xs text-text-dim mt-0.5">
-              Add a GitHub Personal Access Token to enable one-click upstream sync from this
-              dashboard. Scope <code className="font-mono">public_repo</code> (or{" "}
-              <code className="font-mono">repo</code> for private forks). Once saved, a daily cron
-              keeps this banner up to date automatically.
-            </p>
-          </div>
-          <a
-            href={update.configureUrl}
-            className="text-xs font-medium px-3 py-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/20 transition-colors"
-          >
-            Configure
           </a>
         </div>
       )}
@@ -572,6 +545,16 @@ export function OverviewTab({
           }
         />
         {commitSha && <Row label="Commit" value={commitSha} />}
+        {update.state === "no-token" && (
+          <p className="text-[11px] text-text-muted px-3 pt-2">
+            Updates land via GitHub&apos;s <em>Sync fork</em> button. For one-click sync from this
+            dashboard,{" "}
+            <a href={update.configureUrl} className="text-accent hover:underline">
+              configure a GitHub PAT
+            </a>{" "}
+            (optional).
+          </p>
+        )}
       </Section>
 
       {/* Endpoint */}

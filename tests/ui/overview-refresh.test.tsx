@@ -12,10 +12,12 @@
  * 30s debounce assertion is deterministic — only the Date constructor
  * is faked, microtasks (used by RTL waitFor) stay real.
  *
- * URL-based fetch mock pattern: OverviewTab renders HealthWidget,
- * ConnectorHealthWidget, RateLimitsWidget — each fires its own fetch.
- * We route every URL to a stub response and only count/assert on
- * /api/config/update calls.
+ * URL-based fetch mock pattern: OverviewTab now renders only
+ * ConnectorHealthWidget alongside the update widget — each fires its
+ * own fetch. We route every URL to a stub response and only count
+ * and assert on /api/config/update calls. ConnectorHealthWidget also
+ * auto-triggers a deep health check on first empty state, so its
+ * /api/health?deep=1 endpoint is stubbed too.
  */
 /// <reference lib="dom" />
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -72,31 +74,18 @@ function mockFetchRouter(updateBodies: unknown[], options?: { hangSecondCall?: b
 
     // Widget endpoints — return permissive empty bodies that match
     // each widget's expected shape so the widgets settle without errors.
-    if (url.includes("/api/config/health")) {
-      // HealthWidget shape
-      return Promise.resolve(
-        jsonResponse({
-          ok: true,
-          tokenStatus: "pinned",
-          isVercel: false,
-          vercelAutoMagicAvailable: false,
-          instanceUrl: "http://localhost",
-        })
-      );
-    }
     if (url.includes("/api/admin/health-history")) {
       // ConnectorHealthWidget shape — empty array → "empty" state
       return Promise.resolve(jsonResponse([]));
     }
-    if (url.includes("/api/admin/rate-limits")) {
-      // RateLimitsWidget shape
-      return Promise.resolve(jsonResponse({ scopes: [] }));
-    }
     if (url.includes("/api/health")) {
+      // /api/health?deep=1 fired by ConnectorHealthWidget's auto-check
+      // on first empty state. Body shape doesn't matter for these tests
+      // — we just need it to resolve so the widget stops "checking".
       return Promise.resolve(
         jsonResponse({
           ok: true,
-          version: "0.15.0",
+          version: "0.1.15",
           bootstrap: { state: "active" },
           kv: { reachable: true, lastRehydrateAt: null },
         })

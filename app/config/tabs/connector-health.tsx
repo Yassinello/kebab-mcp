@@ -101,6 +101,12 @@ function Badge({
 export function ConnectorHealthWidget() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [checking, setChecking] = useState(false);
+  // Auto-trigger a single deep check on first empty state — avoids the
+  // "you have to click Check Now to see anything" UX trap on fresh
+  // deploys. We only auto-run once per mount; subsequent polls populate
+  // history naturally, and the "Check Now" button stays available for
+  // manual refreshes from the ready state.
+  const [autoChecked, setAutoChecked] = useState(false);
 
   const fetchHistory = useCallback(() => {
     fetch("/api/admin/health-history", { credentials: "include" })
@@ -121,7 +127,7 @@ export function ConnectorHealthWidget() {
     return () => clearInterval(id);
   }, [fetchHistory]);
 
-  const runDeepCheck = async () => {
+  const runDeepCheck = useCallback(async () => {
     setChecking(true);
     try {
       await fetch("/api/health?deep=1", { credentials: "include" });
@@ -132,7 +138,18 @@ export function ConnectorHealthWidget() {
     } finally {
       setChecking(false);
     }
-  };
+  }, [fetchHistory]);
+
+  // First-paint auto-check: trigger one deep health check when we land
+  // on the empty state, so the user sees actual data without manual
+  // intervention. Guarded by autoChecked so a transient empty re-render
+  // doesn't fire a second time.
+  useEffect(() => {
+    if (state.kind === "empty" && !autoChecked) {
+      setAutoChecked(true);
+      void runDeepCheck();
+    }
+  }, [state.kind, autoChecked, runDeepCheck]);
 
   if (state.kind === "error") return null;
 
@@ -148,15 +165,16 @@ export function ConnectorHealthWidget() {
         {state.kind === "empty" && (
           <div className="flex items-center gap-4">
             <p className="text-xs text-text-muted flex-1">
-              No health data — run a deep health check first.
+              {checking ? "Running first health check…" : "No health data yet."}
             </p>
-            <button
-              onClick={runDeepCheck}
-              disabled={checking}
-              className="text-xs font-medium px-3 py-1.5 rounded-md bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20 transition-colors disabled:opacity-50"
-            >
-              {checking ? "Checking..." : "Check Now"}
-            </button>
+            {!checking && (
+              <button
+                onClick={runDeepCheck}
+                className="text-xs font-medium px-3 py-1.5 rounded-md bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20 transition-colors"
+              >
+                Check now
+              </button>
+            )}
           </div>
         )}
         {state.kind === "ready" && <ConnectorGrid samples={state.samples} />}
