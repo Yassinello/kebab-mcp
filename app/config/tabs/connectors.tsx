@@ -157,6 +157,21 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
           setSavedFlash(null);
           setSavedBackend(null);
         }, 3000);
+        // After a successful save, the server-side registry will see the
+        // new env vars and flip `enabled: true` for connectors whose
+        // required vars are now all present. The client still holds the
+        // pre-save server snapshot, so the toggle would still show OFF
+        // and the "Setup needed" badge would persist until the next page
+        // load. Force a reload after a brief delay so the user sees the
+        // "Saved" toast first, then lands on the freshly-gated state.
+        // Skipped in ephemeral mode (no point reloading — the var won't
+        // survive the next cold start anyway and the user has bigger
+        // problems to read in the amber banner).
+        if (!data.ephemeral) {
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+        }
         // Sync ephemeral flag — if the save landed in ephemeral storage
         // but state still said non-ephemeral (e.g. race between detect
         // cache and actual save), update so the banner appears.
