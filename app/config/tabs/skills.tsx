@@ -105,6 +105,28 @@ export function SkillsTab() {
   const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("kebab.skills.helpOpen");
+      if (saved !== null) setHelpOpen(saved === "1");
+    } catch {
+      /* localStorage unavailable — keep default */
+    }
+  }, []);
+
+  const toggleHelp = () => {
+    setHelpOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("kebab.skills.helpOpen", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const loadVersions = useCallback(async (skillIds: string[]) => {
     const map: Record<string, number> = {};
@@ -449,9 +471,7 @@ export function SkillsTab() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-text-dim">
-          Author reusable skills (prompts + templates) — exposed as MCP tools and prompts.
-        </p>
+        <h2 className="text-sm font-semibold text-text">Skills</h2>
         <div className="flex items-center gap-2">
           {flash && (
             <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
@@ -491,6 +511,95 @@ export function SkillsTab() {
             </>
           )}
         </div>
+      </div>
+
+      <div className="border border-border rounded-lg overflow-hidden bg-bg-muted/20">
+        <button
+          type="button"
+          onClick={toggleHelp}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-muted/40 transition-colors"
+          aria-expanded={helpOpen}
+        >
+          <div
+            className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center text-xs font-bold shrink-0"
+            aria-hidden="true"
+          >
+            ?
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text">How to use skills</p>
+            <p className="text-xs text-text-dim mt-0.5">
+              {helpOpen
+                ? "Click to collapse."
+                : "What skills are, how clients see them, and when to reach for one."}
+            </p>
+          </div>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            aria-hidden="true"
+            className={`text-text-muted shrink-0 transition-transform ${helpOpen ? "rotate-180" : ""}`}
+          >
+            <path
+              d="M3.5 5.25L7 8.75L10.5 5.25"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        {helpOpen && (
+          <div className="border-t border-border px-4 py-4 text-sm text-text-dim space-y-3 bg-bg/40">
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+                What is a skill?
+              </h4>
+              <p>
+                A reusable prompt template (markdown) bundled with optional typed{" "}
+                <strong>arguments</strong> and a list of MCP <strong>tools</strong> it&apos;s
+                allowed to call. Think of it as a small recipe your AI client can run on demand.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+                How clients see it
+              </h4>
+              <p>
+                Each skill is exposed to MCP clients (Claude, Cursor, Windsurf, ChatGPT) as a tool
+                named <code className="text-text">skill_&lt;name&gt;</code> — and as a prompt in
+                clients that support both. The <strong>description</strong> is what the LLM reads
+                when picking which tool to call, so make it precise.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+                When to use a skill (vs a direct prompt)
+              </h4>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <strong>Use a skill</strong> when you repeat the same prompt shape often (status
+                  reports, brief drafts, code reviews) — the LLM picks it for you and arguments
+                  enforce the structure.
+                </li>
+                <li>
+                  <strong>Use a direct prompt</strong> for one-shot, exploratory questions where the
+                  structure isn&apos;t reusable.
+                </li>
+                <li>
+                  Bundle a skill with <code className="text-text">toolsAllowed</code> when you want
+                  to constrain which integrations it touches (governance + reviewability).
+                </li>
+              </ul>
+            </div>
+            <div className="text-xs text-text-muted pt-1 border-t border-border/60">
+              Tip: use <strong className="text-text-dim">{`{{argument}}`}</strong> placeholders in
+              the body to inject typed inputs from the caller.
+            </div>
+          </div>
+        )}
       </div>
 
       {importOpen && (
