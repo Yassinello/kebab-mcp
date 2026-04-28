@@ -68,3 +68,9 @@ jobs:
         run: npm run test:integration
         env:
           MCP_AUTH_TOKEN: test-token-ci
+          # SEC-A-03 (v0.16 Phase 64): in production, admin auth refuses to
+          # fall back to MCP_AUTH_TOKEN unless the operator opts in. The
+          # integration test reuses the same token for both surfaces, which
+          # is fine for CI but blocked in prod by default — opt in here so
+          # the deep-health endpoint stays reachable with the bearer token.
+          KEBAB_ADMIN_TOKEN_FALLBACK: "1"
