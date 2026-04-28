@@ -33,7 +33,9 @@ describe("useStoragePolling", () => {
 
     await waitFor(() => expect(result.current.storageStatus?.mode).toBe("kv"));
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url] = vi.mocked(globalThis.fetch).mock.calls[0];
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(call).toBeDefined();
+    const [url] = call!;
     expect(String(url)).toMatch(/\/api\/storage\/status/);
   });
 
