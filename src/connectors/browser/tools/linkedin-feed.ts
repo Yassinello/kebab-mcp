@@ -2,7 +2,7 @@ import { z } from "zod";
 import { handleWebExtract } from "./web-extract";
 import { checkAndIncrementDailyLimit } from "../lib/browserbase";
 
-const LINKEDIN_DAILY_LIMIT = 3;
+const LINKEDIN_DAILY_LIMIT = 5;
 
 export const linkedinFeedSchema = {
   max_posts: z.number().optional().describe("Max posts to return (default: 20, max: 30)"),

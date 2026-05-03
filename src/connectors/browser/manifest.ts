@@ -117,7 +117,7 @@ Two accounts:
     defineTool({
       name: "linkedin_feed",
       description:
-        "Read your LinkedIn feed. Returns recent posts with author, content text, engagement metrics (likes, comments), and relative date. Automatically uses saved LinkedIn session. Rate limited to 3 calls per day.",
+        "Read your LinkedIn feed. Returns recent posts with author, content text, engagement metrics (likes, comments), and relative date. Automatically uses saved LinkedIn session. Rate limited to 5 calls per day.",
       schema: linkedinFeedSchema,
       handler: async (args) => {
         const { handleLinkedinFeed } = await import("./tools/linkedin-feed");
