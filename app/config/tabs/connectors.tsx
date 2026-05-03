@@ -7,6 +7,7 @@ import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
 import { EnvStubBlock } from "./env-stub-block";
 import { ApiConnectionsSection } from "./api-connections-section";
+import { LinkedinConnectButton } from "./linkedin-connect-button";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
@@ -612,6 +613,14 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         </span>
                       )}
                     </div>
+                    {pack.id === "browser" && pack.enabled && (
+                      <LinkedinConnectButton
+                        currentContextId={getValue("BROWSERBASE_CONTEXT_LINKEDIN")}
+                        onSaved={(id) => {
+                          setEnvVars((p) => ({ ...p, BROWSERBASE_CONTEXT_LINKEDIN: id }));
+                        }}
+                      />
+                    )}
                     {storageMode === "static" && (
                       <EnvStubBlock
                         packId={pack.id}

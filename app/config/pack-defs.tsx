@@ -174,6 +174,13 @@ export const PACKS: ConnectorDef[] = [
         placeholder: "sk-or-v1-...",
         sensitive: true,
       },
+      {
+        key: "BROWSERBASE_CONTEXT_LINKEDIN",
+        label: "LinkedIn Context ID",
+        help: "Persistent Browserbase context that holds your LinkedIn session cookies. Auto-filled by the 'Connect LinkedIn' button below.",
+        placeholder: "auto-created on first connect",
+        optional: true,
+      },
     ],
   },
   {
