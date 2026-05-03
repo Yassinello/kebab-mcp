@@ -197,14 +197,21 @@ export async function saveInstanceConfig(
   emit("env.changed");
 }
 
-/** Default tool timeout in ms. Override via MYMCP_TOOL_TIMEOUT env var. */
+/** Default tool timeout in ms. Override via KEBAB_TOOL_TIMEOUT env var. */
 export function getToolTimeout(): number {
   const raw = getConfig("KEBAB_TOOL_TIMEOUT");
   if (raw) {
     const n = parseInt(raw, 10);
     if (!isNaN(n) && n > 0) return n;
   }
-  return 30_000; // 30s default
+  // 80s default — sized for the slowest legitimate tools (Browser pack:
+  // linkedin_feed, web_extract, web_agent boot a remote Stagehand session,
+  // navigate, scroll, then run an LLM extract). Sits 10s under the
+  // transport route's maxDuration: 90 so KEBAB_TOOL_TIMEOUT fires first,
+  // surfacing a clean ToolTimeoutError instead of an opaque Vercel 504.
+  // Tools that finish in <1s pay nothing — the timeout only fires when
+  // a handler genuinely hangs, so a longer cap is purely defensive.
+  return 80_000;
 }
 
 /** Webhook URL for error notifications. If set, POST is sent on tool failure. */

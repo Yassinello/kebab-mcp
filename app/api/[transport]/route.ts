@@ -257,7 +257,7 @@ async function buildHandler(
     },
     {
       basePath: "/api",
-      maxDuration: 60,
+      maxDuration: 90,
     }
   );
 }
@@ -294,3 +294,12 @@ const pipeline = composeRequestPipeline(
 );
 
 export { pipeline as GET, pipeline as POST, pipeline as DELETE };
+
+// Vercel Pro lambdas default to 10s, max 300s. Some tools (linkedin_feed,
+// web_extract on heavy pages, web_agent) routinely need >30s because they
+// boot a remote Stagehand session, navigate, scroll, and run an LLM extract
+// over the result. 90s gives those tools comfortable headroom while still
+// failing fast for genuinely stuck handlers (the in-process
+// KEBAB_TOOL_TIMEOUT cap should fire before this hard ceiling).
+// Hobby plans cap at 60s — this declaration is silently clamped there.
+export const maxDuration = 90;
