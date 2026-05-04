@@ -402,4 +402,4 @@ Next.js 16 · TypeScript 6 · Zod 4 · MCP SDK · Vercel Serverless · Arctic (O
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0-only](LICENSE)
