@@ -102,8 +102,13 @@ async function postHandler(ctx: PipelineContext) {
     return NextResponse.json({ ok: true, tool }, { status: 201 });
   } catch (err) {
     const msg = toMsg(err);
-    // Duplicate id inside the Custom Tools store → 409; everything else → 500.
-    const status = /already exists/i.test(msg) ? 409 : 500;
+    // Duplicate id inside the Custom Tools store → 409;
+    // template / toolName validation failures → 400 (author error);
+    // everything else → 500.
+    let status: number;
+    if (/already exists/i.test(msg)) status = 409;
+    else if (/template invalid|does not exist or is not callable/i.test(msg)) status = 400;
+    else status = 500;
     return NextResponse.json({ ok: false, error: msg }, { status });
   }
 }

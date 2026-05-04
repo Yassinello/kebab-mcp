@@ -6,6 +6,8 @@ import {
   type CustomToolWriteInput,
 } from "./types";
 import { validateTemplate } from "./expression";
+import { resolveRegistryAsync, ALL_CONNECTOR_LOADERS } from "@/core/registry";
+import { CALLABLE_FROM_CUSTOM_TOOLS } from "./runner";
 
 /**
  * Custom Tools store.
@@ -94,6 +96,63 @@ function validateAllTemplates(tool: CustomToolWriteInput): void {
   }
 }
 
+/**
+ * HI-02 — Validate every `toolName` referenced by a `tool` step against
+ * the live registry AND the CALLABLE_FROM_CUSTOM_TOOLS allowlist. Run at
+ * write time so the author sees a precise error on save instead of at
+ * the first invocation (which, for a 5-step tool with a typo in step 4,
+ * means running 3 unrelated steps before the error surfaces).
+ *
+ * We enumerate the FULL surface (enabled + disabled connectors) so a
+ * Custom Tool that references a Slack tool while Slack is disabled
+ * still passes — Slack tools become callable the moment Slack is
+ * enabled, and refusing the write would force authors to enable
+ * connectors they don't yet need.
+ *
+ * Errors are thrown as plain `Error` so the route handler maps them to
+ * the standard 400 with the toolName in the message.
+ */
+async function validateAllToolNames(steps: CustomToolWriteInput["steps"]): Promise<void> {
+  const toolStepNames = new Set<string>();
+  for (const step of steps) {
+    if (step.kind === "tool") toolStepNames.add(step.toolName);
+  }
+  if (toolStepNames.size === 0) return;
+
+  // Gather all known tool names + their owning pack id from every
+  // connector (enabled + disabled). Mirrors the collision check in
+  // app/api/admin/custom-tools/route.ts.
+  const knownTools = new Map<string, string>();
+  const states = await resolveRegistryAsync();
+  for (const s of states) {
+    if (s.enabled) {
+      for (const t of s.manifest.tools) knownTools.set(t.name, s.manifest.id);
+      continue;
+    }
+    const entry = ALL_CONNECTOR_LOADERS.find((e) => e.id === s.manifest.id);
+    if (!entry) continue;
+    try {
+      const loaded = await entry.loader();
+      for (const t of loaded.tools) knownTools.set(t.name, loaded.id);
+    } catch {
+      // Loader failure is non-fatal — over-allow on validation rather
+      // than block writes on an unrelated import error.
+    }
+  }
+
+  for (const name of toolStepNames) {
+    const packId = knownTools.get(name);
+    if (!packId) {
+      throw new Error(`tool "${name}" does not exist or is not callable from custom tools`);
+    }
+    if (!CALLABLE_FROM_CUSTOM_TOOLS.has(packId)) {
+      throw new Error(
+        `tool "${name}" does not exist or is not callable from custom tools (pack "${packId}" is not in allowlist)`
+      );
+    }
+  }
+}
+
 function walkStrings(v: unknown, visit: (s: string, path: string) => void, path = ""): void {
   if (v === null || v === undefined) return;
   if (typeof v === "string") {
@@ -126,6 +185,7 @@ export function createCustomTool(input: CustomToolWriteInput): Promise<CustomToo
   return enqueueWrite(async () => {
     const parsed = customToolWriteSchema.parse(input);
     validateAllTemplates(parsed);
+    await validateAllToolNames(parsed.steps);
     const all = await readRaw();
     if (all.some((t) => t.id === parsed.id)) {
       throw new Error(`a Custom Tool with id "${parsed.id}" already exists`);
@@ -151,6 +211,7 @@ export function updateCustomTool(
   return enqueueWrite(async () => {
     const parsed = customToolWriteSchema.parse(patch);
     validateAllTemplates(parsed);
+    await validateAllToolNames(parsed.steps);
     const all = await readRaw();
     const idx = all.findIndex((t) => t.id === id);
     if (idx === -1) return null;
