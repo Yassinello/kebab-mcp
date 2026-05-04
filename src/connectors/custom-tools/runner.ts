@@ -5,6 +5,7 @@ import { toMsg } from "@/core/error-utils";
 import type { ToolDefinition, ToolResult } from "@/core/types";
 import type { CustomTool, CustomToolStep, RunResult, StepRunResult } from "./types";
 import { expandArgs, renderTemplate } from "./expression";
+import { getActiveCustomToolIds, runWithActiveCustomToolIds } from "./context";
 
 /**
  * Custom Tool runner.
@@ -23,10 +24,11 @@ import { expandArgs, renderTemplate } from "./expression";
  * result. Per-step results are returned alongside so the dashboard can
  * show a stack-trace-style breakdown.
  *
- * Recursion guard: a Custom Tool can call other Custom Tools, but never
- * itself (direct or transitive). The active tool ids are tracked through
- * AsyncLocalStorage-friendly threading via the `activeIds` set passed to
- * the inner invocation.
+ * Recursion guard (CR-01): a Custom Tool can call other Custom Tools,
+ * but never itself (direct or transitive). The set of active tool ids
+ * is carried through an AsyncLocalStorage (`./context`) so transitive
+ * calls (A→B→A) see the full call-stack regardless of how the inner
+ * invocation is triggered (manifest wrapper, direct runner call, …).
  */
 
 const MAX_STEPS = 32;
@@ -123,35 +125,40 @@ function buildInitialContext(
   return ctx;
 }
 
-interface RunOptions {
-  /** Tool ids currently on the call stack — used for recursion detection. */
-  activeIds?: Set<string>;
-}
-
 /**
  * Run a custom tool. Throws only on programmer errors (unknown step
  * kind, internal invariants); all author-facing errors are folded into
  * the returned `RunResult` with `ok: false`.
+ *
+ * The recursion guard relies on an AsyncLocalStorage-backed set of
+ * active ids (`./context`). When the manifest wrapper invokes
+ * `runCustomTool` for tool B from inside A's step, B inherits the set
+ * of active ids from the outer A context automatically — so A→B→A is
+ * caught at the second `tool_a` lookup, not after a stack overflow.
  */
 export async function runCustomTool(
   tool: CustomTool,
-  inputs: Record<string, unknown>,
-  options: RunOptions = {}
+  inputs: Record<string, unknown>
 ): Promise<RunResult> {
   const startedAt = Date.now();
   const stepResults: StepRunResult[] = [];
 
-  // Recursion guard — direct or transitive.
-  const activeIds = new Set(options.activeIds ?? []);
-  if (activeIds.has(tool.id)) {
+  // Recursion guard — direct or transitive. Read the set already on the
+  // call stack (empty Set if we're the outermost invocation), reject if
+  // the current tool is in it, then push our own id and propagate the
+  // extended set to nested invocations via the ALS.
+  const previousActive = getActiveCustomToolIds();
+  if (previousActive.has(tool.id)) {
+    const chain = [...previousActive, tool.id].join(" → ");
     return {
       ok: false,
       result: "",
       stepResults,
       totalDurationMs: 0,
-      error: `recursion detected: Custom Tool "${tool.id}" is already on the call stack`,
+      error: `recursion detected: ${chain}`,
     };
   }
+  const activeIds = new Set(previousActive);
   activeIds.add(tool.id);
 
   if (tool.steps.length > MAX_STEPS) {
@@ -188,43 +195,45 @@ export async function runCustomTool(
   let lastError: string | undefined;
   let lastFinalText = "";
 
-  await runWithCredentials(credSnapshot, async () => {
-    for (let i = 0; i < tool.steps.length; i++) {
-      const step = tool.steps[i]!;
-      const stepStarted = Date.now();
-      const label = step.kind === "tool" ? step.toolName : "<transform>";
-      try {
-        const { saved, finalText } = await runStep(step, context, activeIds);
-        if (step.kind === "tool" && step.saveAs) {
-          context[step.saveAs] = saved;
-        } else if (step.kind === "transform") {
-          context[step.saveAs] = saved;
+  await runWithCredentials(credSnapshot, () =>
+    runWithActiveCustomToolIds(activeIds, async () => {
+      for (let i = 0; i < tool.steps.length; i++) {
+        const step = tool.steps[i]!;
+        const stepStarted = Date.now();
+        const label = step.kind === "tool" ? step.toolName : "<transform>";
+        try {
+          const { saved, finalText } = await runStep(step, context, activeIds);
+          if (step.kind === "tool" && step.saveAs) {
+            context[step.saveAs] = saved;
+          } else if (step.kind === "transform") {
+            context[step.saveAs] = saved;
+          }
+          lastSaved = String(saved ?? "");
+          lastFinalText = finalText;
+          stepResults.push({
+            index: i,
+            kind: step.kind,
+            label,
+            ok: true,
+            durationMs: Date.now() - stepStarted,
+            preview: previewOf(saved),
+          });
+        } catch (err) {
+          const msg = toMsg(err);
+          lastError = `step[${i}] (${label}): ${msg}`;
+          stepResults.push({
+            index: i,
+            kind: step.kind,
+            label,
+            ok: false,
+            durationMs: Date.now() - stepStarted,
+            error: msg,
+          });
+          return; // abort on first error — explicit, no continue-on-error
         }
-        lastSaved = String(saved ?? "");
-        lastFinalText = finalText;
-        stepResults.push({
-          index: i,
-          kind: step.kind,
-          label,
-          ok: true,
-          durationMs: Date.now() - stepStarted,
-          preview: previewOf(saved),
-        });
-      } catch (err) {
-        const msg = toMsg(err);
-        lastError = `step[${i}] (${label}): ${msg}`;
-        stepResults.push({
-          index: i,
-          kind: step.kind,
-          label,
-          ok: false,
-          durationMs: Date.now() - stepStarted,
-          error: msg,
-        });
-        return; // abort on first error — explicit, no continue-on-error
       }
-    }
-  });
+    })
+  );
 
   const totalDurationMs = Date.now() - startedAt;
   if (lastError) {
@@ -255,10 +264,12 @@ async function runStep(
   }
 
   // tool step
-  // Recursion guard at the lookup site too — even if a malicious author
-  // bypassed the runner-level guard via custom-tool composition.
+  // Recursion guard at the lookup site too — defense in depth in case a
+  // future code path bypasses the ALS-based guard above (e.g. a manifest
+  // wrapper that doesn't go through runWithActiveCustomToolIds).
   if (activeIds.has(step.toolName)) {
-    throw new Error(`recursion detected: tool "${step.toolName}" is already on the call stack`);
+    const chain = [...activeIds, step.toolName].join(" → ");
+    throw new Error(`recursion detected: ${chain}`);
   }
   const lookup = await findToolByName(step.toolName);
   if (!lookup) {
