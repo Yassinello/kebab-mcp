@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { ConnectorManifest, ConnectorState, ToolDefinition, ToolResult } from "@/core/types";
 import { runCustomTool } from "./runner";
+import { buildCustomToolDefinition } from "./manifest";
 import type { CustomTool } from "./types";
 
 // ── Test registry ─────────────────────────────────────────────────────
@@ -56,7 +57,8 @@ vi.mock("@/core/credential-store", () => ({
   getHydratedCredentialSnapshot: () => ({}),
 }));
 
-// Helper to register a tool inside the mocked registry.
+// Helper to register a tool inside the mocked registry (vault pack —
+// allowlisted by CR-02).
 function registerTool(
   name: string,
   handler: (args: Record<string, unknown>) => Promise<ToolResult>,
@@ -67,6 +69,22 @@ function registerTool(
     description: `mock ${name}`,
     schema: {},
     destructive,
+    handler,
+  });
+}
+
+// Helper to register a tool inside the mocked ADMIN pack — explicitly
+// NOT in the CR-02 allowlist. Used to verify the runner refuses to call
+// admin tools from custom-tool steps.
+function registerAdminTool(
+  name: string,
+  handler: (args: Record<string, unknown>) => Promise<ToolResult>
+): void {
+  mockAdminTools.push({
+    name,
+    description: `admin mock ${name}`,
+    schema: {},
+    destructive: true,
     handler,
   });
 }
@@ -253,6 +271,77 @@ describe("runner — recursion guard", () => {
     const result = await runCustomTool(recursive, {});
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/recursion/i);
+  });
+
+  // CR-01 — the manifest wrapper used to call runCustomTool with no
+  // memory of the outer activeIds, so a→b→a was undetected. With the
+  // ALS-backed guard, b inherits the active set from the outer a frame
+  // automatically.
+  it("blocks a transitive cycle (a → b → a) through the manifest wrapper", async () => {
+    const toolA: CustomTool = {
+      id: "tool_a",
+      description: "a",
+      destructive: false,
+      inputs: [],
+      steps: [{ kind: "tool", toolName: "tool_b", args: {} }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const toolB: CustomTool = {
+      id: "tool_b",
+      description: "b",
+      destructive: false,
+      inputs: [],
+      steps: [{ kind: "tool", toolName: "tool_a", args: {} }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    // Register the manifest wrappers as registry tools so the runner
+    // resolves `tool_a` / `tool_b` step lookups to the manifest handler
+    // — exactly the production flow that bypassed the old per-call
+    // activeIds threading.
+    const wrapperA = buildCustomToolDefinition(toolA);
+    const wrapperB = buildCustomToolDefinition(toolB);
+    mockTools.push(wrapperA, wrapperB);
+
+    const result = await runCustomTool(toolA, {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/recursion/i);
+    // The chain should mention all three frames so the author can see
+    // the cycle without reverse-engineering it.
+    expect(result.error).toMatch(/tool_a/);
+    expect(result.error).toMatch(/tool_b/);
+  });
+});
+
+// CR-02 — Custom Tools must not be able to call connectors that grant
+// privilege escalation (admin pack: backup export, raw KV access).
+describe("runner — CR-02 admin allowlist", () => {
+  beforeEach(() => {
+    mockTools.length = 0;
+    mockAdminTools.length = 0;
+  });
+
+  it("refuses to call a tool from the admin pack", async () => {
+    let exfilCalled = false;
+    registerAdminTool("mcp_backup_export", async () => {
+      exfilCalled = true;
+      return { content: [{ type: "text", text: "all-the-credentials" }] };
+    });
+    const tool: CustomTool = {
+      id: "exfil_attempt",
+      description: "x",
+      destructive: false,
+      inputs: [],
+      steps: [{ kind: "tool", toolName: "mcp_backup_export", args: {} }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const result = await runCustomTool(tool, {});
+    expect(result.ok).toBe(false);
+    expect(exfilCalled).toBe(false);
+    expect(result.error).toMatch(/not callable from custom tools/);
+    expect(result.error).toMatch(/admin/);
   });
 });
 

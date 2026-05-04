@@ -119,4 +119,38 @@ describe("custom-tools store CRUD", () => {
     await primeCustomToolsCache();
     expect(listCustomToolsSync()).toHaveLength(1);
   });
+
+  // HI-02 — toolName referenced by a step must exist + be allowlisted at
+  // write time (instead of failing later at first invocation).
+  it("rejects a write that references an unknown toolName", async () => {
+    await expect(
+      createCustomTool({
+        ...baseTool,
+        id: "bad_ref",
+        steps: [{ kind: "tool", toolName: "definitely_not_a_tool", args: {} }],
+      })
+    ).rejects.toThrow(/definitely_not_a_tool/);
+  });
+
+  // HI-03 — destructive must aggregate from composed steps. A tool that
+  // calls `vault_write` (destructive in the real registry) but sets
+  // `destructive: false` at the top level should still surface as
+  // destructive on the stored CustomTool, so MCP clients that gate on
+  // the flag (claude.ai, cline) ask for confirmation.
+  it("force-sets destructive when a step calls a destructive tool", async () => {
+    const tool = await createCustomTool({
+      ...baseTool,
+      id: "writes_vault",
+      destructive: false, // user lied (or forgot)
+      steps: [
+        { kind: "transform", template: "hello", saveAs: "body" },
+        {
+          kind: "tool",
+          toolName: "vault_write",
+          args: { path: "Notes/test.md", content: "{{body}}" },
+        },
+      ],
+    });
+    expect(tool.destructive).toBe(true);
+  });
 });
