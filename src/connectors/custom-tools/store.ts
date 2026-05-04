@@ -21,11 +21,40 @@ import { on } from "@/core/events";
  * The KV layer is the same `getContextKVStore()` used by every other
  * connector — Upstash on Vercel, filesystem locally, tenant-scoped on
  * multi-tenant deploys.
+ *
+ * ── HI-04 — Concurrency limitation (acknowledged) ─────────────────────
+ *
+ * The `writeQueue` below is process-local. On Vercel with multiple warm
+ * lambdas, two concurrent writes from different lambda instances can
+ * both pass the duplicate-id check (read-modify-write is non-atomic on
+ * Upstash) and the second write silently overwrites the first.
+ *
+ * Probability is low for this feature — Custom Tool writes are admin
+ * actions performed from the dashboard, so concurrent writes mean an
+ * operator was clicking Save twice at the same time across two browser
+ * tabs against two warm lambdas. Real-world traffic does not justify
+ * the complexity of a versioned compare-and-swap (separate
+ * `custom-tools:version` key + atomic check + 409 conflict UX in the
+ * drawer).
+ *
+ * TODO: replace with compare-and-swap when multi-process traffic
+ * justifies it. The simplest path is a `custom-tools:rev` key bumped on
+ * every write; the writer reads the rev before modifying and aborts if
+ * it changed by the time it goes to write back. Sketch:
+ *   1. read `:rev`  → r0
+ *   2. read `:all`, compute new array
+ *   3. write `:rev` → r0+1 via setIfNotExists(:rev, r0+1) — only the
+ *      first writer to bump wins; the loser refetches and retries (or
+ *      surfaces a 409 to the dashboard).
  */
 
 const KV_KEY = "custom-tools:all";
 
 // ── Write queue ───────────────────────────────────────────────────────
+//
+// Process-local serialization — mitigates intra-lambda races (two
+// requests on the same warm lambda) but does NOT cover inter-lambda
+// races (see HI-04 in the file header).
 
 let writeQueue: Promise<void> = Promise.resolve();
 
