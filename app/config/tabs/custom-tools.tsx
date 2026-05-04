@@ -386,7 +386,13 @@ function CustomToolDrawer({
         const data = (await res.json()) as RunResult;
         setTestResult(data);
       } else {
-        const tempId = `__test__${id.slice(0, 32)}_${Date.now().toString(36)}`;
+        // HI-01 — tempId must start with [a-z] to satisfy
+        // customToolIdPattern (`/^[a-z][a-z0-9_]{0,63}$/`). The `t__test_`
+        // prefix gives us a deterministic-looking marker (`t__test_*`)
+        // while still parsing as a valid id. Length budget: 7 (prefix) +
+        // 32 (id slice) + 1 (underscore) + 13 (Date.now base36, e.g.
+        // `lpr5w8q1a4`) = 53 chars, comfortably under the 64-char cap.
+        const tempId = `t__test_${id.slice(0, 32)}_${Date.now().toString(36)}`;
         const tempPayload = { ...(parsed.value as Record<string, unknown>), id: tempId };
         const create = await fetch("/api/admin/custom-tools", {
           method: "POST",
