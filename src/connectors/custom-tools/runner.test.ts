@@ -10,23 +10,45 @@ import type { CustomTool } from "./types";
 // no real Slack / Vault / etc. handlers. Tests can mutate `mockTools`
 // before each scenario.
 
-const mockTools: ToolDefinition[] = [];
+// vi.mock factory bodies are hoisted, so any state they close over must
+// be hoisted alongside via vi.hoisted (regular `const` would TDZ on the
+// hoisted factory call).
+const { mockTools, mockAdminTools } = vi.hoisted(() => ({
+  mockTools: [] as ToolDefinition[],
+  mockAdminTools: [] as ToolDefinition[],
+}));
 
+// We pose as an allowlisted connector ("vault") so the runner's CR-02
+// gate doesn't reject our mock tools. The CR-02 test below explicitly
+// uses a non-allowlisted pack ("admin") to verify the gate.
 vi.mock("@/core/registry", () => {
   const buildManifest = (): ConnectorManifest => ({
-    id: "test-connector",
+    id: "vault",
     label: "Test Connector",
     description: "test",
     requiredEnvVars: [],
     tools: mockTools,
+  });
+  const buildAdminManifest = (): ConnectorManifest => ({
+    id: "admin",
+    label: "Admin",
+    description: "admin",
+    requiredEnvVars: [],
+    tools: mockAdminTools,
+    core: true,
   });
   const buildState = (): ConnectorState => ({
     manifest: buildManifest(),
     enabled: true,
     reason: "active",
   });
+  const buildAdminState = (): ConnectorState => ({
+    manifest: buildAdminManifest(),
+    enabled: true,
+    reason: "active",
+  });
   return {
-    getEnabledPacksLazy: async () => [buildState()],
+    getEnabledPacksLazy: async () => [buildState(), buildAdminState()],
   };
 });
 
@@ -94,6 +116,7 @@ function buildKanbanTool(): CustomTool {
 describe("runner — happy path (todo_add → 3 steps)", () => {
   beforeEach(() => {
     mockTools.length = 0;
+    mockAdminTools.length = 0;
   });
 
   it("reads + transforms + writes, propagates the rendered content", async () => {
@@ -164,6 +187,7 @@ describe("runner — happy path (todo_add → 3 steps)", () => {
 describe("runner — error surfaces", () => {
   beforeEach(() => {
     mockTools.length = 0;
+    mockAdminTools.length = 0;
   });
 
   it("returns a clear error when a step references an unknown tool", async () => {
@@ -206,6 +230,7 @@ describe("runner — error surfaces", () => {
 describe("runner — recursion guard", () => {
   beforeEach(() => {
     mockTools.length = 0;
+    mockAdminTools.length = 0;
   });
 
   it("blocks a Custom Tool from invoking itself directly", async () => {
@@ -234,6 +259,7 @@ describe("runner — recursion guard", () => {
 describe("runner — performance overhead", () => {
   beforeEach(() => {
     mockTools.length = 0;
+    mockAdminTools.length = 0;
   });
 
   it("transform-only step adds < 100ms overhead", async () => {

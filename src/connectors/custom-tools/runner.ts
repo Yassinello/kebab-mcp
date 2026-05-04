@@ -33,19 +33,65 @@ const MAX_STEPS = 32;
 const PREVIEW_LIMIT = 240;
 
 /**
- * Look up a tool in the merged registry. Excludes the Custom Tools
- * connector itself when the caller wants a recursion-protected lookup
- * (the `runner` already enforces that — but keeping the option here
- * documents the trust boundary).
+ * CR-02 — Allowlist of connectors callable from Custom Tools.
+ *
+ * Custom Tools run inside an admin-authored definition but are exposed
+ * to *any* MCP client (Claude.ai, Cline, …). A Custom Tool that calls
+ * `mcp_backup_export` would dump every KV key — including credentials —
+ * back through the standard MCP channel, escalating an LLM client to
+ * effective admin. We therefore restrict the callable surface to the
+ * connectors whose tools are designed for MCP-client consumption.
+ *
+ * Excluded explicitly:
+ *  - `admin`       — privilege escalation (backup export, raw KV access).
+ *  - `skills`      — prompt injection vector; skills are LLM-rendered
+ *                    instructions, not deterministic operations.
+ *  - `custom-tools` — recursion vector handled by activeIds, but kept
+ *                    out of the lookup here as a defense-in-depth: an
+ *                    enabled Custom Tool can still be referenced; the
+ *                    activeIds guard catches A→B→A cycles regardless.
  */
-async function findToolByName(name: string): Promise<ToolDefinition | null> {
+const CALLABLE_FROM_CUSTOM_TOOLS = new Set([
+  "google",
+  "vault",
+  "slack",
+  "notion",
+  "composio",
+  "api-connections",
+  "apify",
+  "github",
+  "linear",
+  "airtable",
+  "paywall",
+  "webhook",
+  "browser",
+  "custom-tools",
+]);
+
+/**
+ * Look up a tool in the merged registry, refusing any tool whose owning
+ * pack is not in CALLABLE_FROM_CUSTOM_TOOLS.
+ *
+ * Returns `{ tool, packId }` on hit so the caller can surface a clear
+ * "pack X is not in allowlist" message when the lookup matched a tool
+ * but the pack was filtered.
+ */
+async function findToolByName(
+  name: string
+): Promise<{ tool: ToolDefinition; packId: string } | { blockedPackId: string } | null> {
   const packs = await getEnabledPacksLazy();
   for (const p of packs) {
     const found = p.manifest.tools.find((t) => t.name === name);
-    if (found) return found;
+    if (!found) continue;
+    if (!CALLABLE_FROM_CUSTOM_TOOLS.has(p.manifest.id)) {
+      return { blockedPackId: p.manifest.id };
+    }
+    return { tool: found, packId: p.manifest.id };
   }
   return null;
 }
+
+export { CALLABLE_FROM_CUSTOM_TOOLS };
 
 /**
  * Build the input bag the runner exposes to Mustache. Optional inputs
@@ -214,13 +260,18 @@ async function runStep(
   if (activeIds.has(step.toolName)) {
     throw new Error(`recursion detected: tool "${step.toolName}" is already on the call stack`);
   }
-  const tool = await findToolByName(step.toolName);
-  if (!tool) {
+  const lookup = await findToolByName(step.toolName);
+  if (!lookup) {
     throw new Error(`tool "${step.toolName}" is not registered or its connector is disabled`);
+  }
+  if ("blockedPackId" in lookup) {
+    throw new Error(
+      `tool "${step.toolName}" is not callable from custom tools (pack "${lookup.blockedPackId}" is not in allowlist)`
+    );
   }
   const expanded = expandArgs(step.args, context);
   const argsObj = (expanded ?? {}) as Record<string, unknown>;
-  const result: ToolResult = await tool.handler(argsObj);
+  const result: ToolResult = await lookup.tool.handler(argsObj);
 
   if (result.isError) {
     const errText = toolResultToText(result) || "tool returned isError without a text payload";

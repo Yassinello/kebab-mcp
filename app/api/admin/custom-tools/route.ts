@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listCustomTools, createCustomTool } from "@/connectors/custom-tools/store";
 import { customToolWriteSchema } from "@/connectors/custom-tools/types";
-import { getEnabledPacksLazy } from "@/core/registry";
+import { resolveRegistryAsync, ALL_CONNECTOR_LOADERS } from "@/core/registry";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { emit } from "@/core/events";
@@ -54,20 +54,46 @@ async function postHandler(ctx: PipelineContext) {
     );
   }
 
-  // Reject collisions with any tool already exposed by another connector.
-  // We check ALL enabled connectors except `custom-tools` itself — duplicate
-  // ids inside the store are caught by createCustomTool().
-  for (const p of await getEnabledPacksLazy()) {
-    if (p.manifest.id === "custom-tools") continue;
-    if (p.manifest.tools.some((t) => t.name === parsed.data.id)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `Tool name "${parsed.data.id}" is already registered by connector "${p.manifest.id}". Pick a different id.`,
-        },
-        { status: 409 }
-      );
+  // CR-03 — Reject collisions with any tool registered by another
+  // connector, including connectors that are *currently disabled*.
+  // Otherwise an author could create a Custom Tool named e.g.
+  // `slack_send_message` while Slack is disabled, then the day Slack is
+  // enabled either (a) the registry exposes two tools with the same
+  // name (silent shadowing — Custom Tool wins because it appears later
+  // in the loader order) or (b) the colliding name simply leaks into the
+  // surface. We force-load every manifest to enumerate the full tool
+  // surface, not only the gated subset.
+  const allCollisions = new Set<string>();
+  // Start from `resolveRegistryAsync()` to leverage the cache when it's
+  // warm — it returns enabled packs with full manifests, disabled with
+  // stub manifests (empty tools array). For disabled stubs we then load
+  // the real manifest to read its tools[].
+  const states = await resolveRegistryAsync();
+  for (const s of states) {
+    if (s.manifest.id === "custom-tools") continue;
+    if (s.enabled) {
+      for (const t of s.manifest.tools) allCollisions.add(t.name);
+      continue;
     }
+    // Disabled — stub manifest has no tools; force-load to inspect.
+    const entry = ALL_CONNECTOR_LOADERS.find((e) => e.id === s.manifest.id);
+    if (!entry) continue;
+    try {
+      const loaded = await entry.loader();
+      for (const t of loaded.tools) allCollisions.add(t.name);
+    } catch {
+      // Loader failure is non-fatal for the collision check — we'd
+      // rather over-allow than block writes on an unrelated import error.
+    }
+  }
+  if (allCollisions.has(parsed.data.id)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Tool name "${parsed.data.id}" is already registered by another connector (enabled or disabled). Pick a different id.`,
+      },
+      { status: 409 }
+    );
   }
 
   try {
