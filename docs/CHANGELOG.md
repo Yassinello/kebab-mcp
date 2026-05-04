@@ -2,6 +2,60 @@
 
 All notable changes to Kebab MCP.
 
+## [0.1.16](https://github.com/Yassinello/kebab-mcp/compare/v0.1.15...v0.1.16) (2026-05-04)
+
+
+### Features
+
+* **apify:** add docs search/fetch tools matching mcp.apify.com helpers ([cc174e3](https://github.com/Yassinello/kebab-mcp/commit/cc174e37db8edc5dca7178f26521e981f60e3a1b))
+* **brand:** redesign logo as vertical inverted cone + add favicon ([860127f](https://github.com/Yassinello/kebab-mcp/commit/860127f672cd9b958778a148d23dc8f4b76176b9))
+* **browser:** bump linkedin_feed daily rate limit from 3 to 5 ([520c50b](https://github.com/Yassinello/kebab-mcp/commit/520c50b7a612f701d98032f5df8475d81b93048e))
+* **browser:** LinkedIn context connect button via Browserbase Live View ([d615098](https://github.com/Yassinello/kebab-mcp/commit/d61509852d2a80f22a0b5b48e542137142df83a7))
+* **browser:** schema-driven extract + observe/agent/extract_links tools ([70d8c49](https://github.com/Yassinello/kebab-mcp/commit/70d8c4928b7e61c80993be9dfaca97ce7bdec9ee))
+* **connectors:** add Credential guide for Webhook + render guide for form-less packs ([10989db](https://github.com/Yassinello/kebab-mcp/commit/10989db4f277576baae9bb662cf1a30db5312d64))
+* **deploy:** /deploy hub page with fork-first recommended flow ([df87c6d](https://github.com/Yassinello/kebab-mcp/commit/df87c6db70dbcef110c407f2d47f08db5527475a))
+* **docs:** widen layout, sticky TOC + refresh content for current dashboard ([d9c1a89](https://github.com/Yassinello/kebab-mcp/commit/d9c1a899be755c4bc293e3bdcef7ace9ad52480a))
+* **dx:** pre-commit typecheck + Linux-native-binary lock contract test ([eef28fc](https://github.com/Yassinello/kebab-mcp/commit/eef28fc38489df8eb7d97fdf51d2581926fbfba6))
+* **dx:** v0.16 phase 66 — fetchWithValidation, typecheck CI gate, scaffold:connector ([cf5ce85](https://github.com/Yassinello/kebab-mcp/commit/cf5ce856fc59de71a1a2680c22cbfecfd3b3330c))
+* **landing:** pivot hero to sovereignty-first pitch ([79b9cb4](https://github.com/Yassinello/kebab-mcp/commit/79b9cb4f7c72e97eea69c28256c72c14ccf4a9ee))
+* **security:** v0.16 phase 64 — HMAC skills, prod-safe SSRF flag, admin token isolation ([5bddcb0](https://github.com/Yassinello/kebab-mcp/commit/5bddcb094e685dfcb6e15e8e35ad156127097e2d))
+* **skills:** add breadcrumb + clearer H1 to skill draft form ([ad9f513](https://github.com/Yassinello/kebab-mcp/commit/ad9f513033b866d6b1f28ca20f4eeb1029dd2e96))
+* **skills:** collapse card actions into a dropdown + click-to-edit ([bcd57a0](https://github.com/Yassinello/kebab-mcp/commit/bcd57a03d76caf2132116086c70725a5d75a12e5))
+* **skills:** collapsible "How to use skills" banner ([be2b66e](https://github.com/Yassinello/kebab-mcp/commit/be2b66e2cd9f8aab0ce909a44f1cd49644e17904))
+* **skills:** dedicated edit page with breadcrumb + tabbed layout ([5e37c80](https://github.com/Yassinello/kebab-mcp/commit/5e37c805ebf04c1b19ea83703125ad328cb4eccf))
+* **tools:** redesign tools tab with connector banners + per-tool toggles ([e3097b8](https://github.com/Yassinello/kebab-mcp/commit/e3097b8756280d97d0683090caaa0dbe4c96ea6e))
+
+
+### Bug Fixes
+
+* **browser:** real Browserbase + OpenRouter pings in testConnection ([7839488](https://github.com/Yassinello/kebab-mcp/commit/7839488ecbba52fc0e290aee334948acf5104ceb))
+* **ci:** add @tailwindcss/oxide-linux-x64-gnu to optionalDeps for CI build ([fb57d37](https://github.com/Yassinello/kebab-mcp/commit/fb57d371f4e1bd71201e722cbe60da026ffe1d4a))
+* **ci:** npm ci --include=optional for lightningcss native binary ([a0f3f4c](https://github.com/Yassinello/kebab-mcp/commit/a0f3f4cc73cb767829874d21a48479f711328c65))
+* **ci:** opt into admin-token fallback in integration test env ([b658377](https://github.com/Yassinello/kebab-mcp/commit/b658377a16f769745d34bcc8cde3784a817699fb))
+* **ci:** pin linux native binaries for lightningcss + next-swc ([90feca2](https://github.com/Yassinello/kebab-mcp/commit/90feca2dd71b29553a066225a6afb2e288a8f214))
+* **ci:** unblock knip on @composio/json-schema-to-zod transitive ([6c60050](https://github.com/Yassinello/kebab-mcp/commit/6c60050ff92dc0edeb8207188351f35457f34023))
+* **config:** overlay KV credentials in GET /api/config/env ([e5007f1](https://github.com/Yassinello/kebab-mcp/commit/e5007f16fdbaf262daf3c0d890cee25a26d9a528))
+* **connectors:** hide redundant API Connections card, signpost the section ([c807f3c](https://github.com/Yassinello/kebab-mcp/commit/c807f3cf0e59e1442783c10ceec8f3724e8cbe44))
+* **connectors:** kill 3 bugs hit when adding Obsidian via the dashboard ([2718209](https://github.com/Yassinello/kebab-mcp/commit/27182092045bf5a2c4e6d80622a839a12e26de1a))
+* **connectors:** reload after save so connector toggle reflects new credentials ([8d23b75](https://github.com/Yassinello/kebab-mcp/commit/8d23b7530d2217bcb325c290ccfae02e8c8e4c7e))
+* **connectors:** Save button gives clear feedback instead of silently no-op'ing ([05c4a20](https://github.com/Yassinello/kebab-mcp/commit/05c4a20d414e7df61cb5b405d9e305999e48ab24))
+* **connectors:** Test connection works on already-saved credentials ([848b983](https://github.com/Yassinello/kebab-mcp/commit/848b983f6f329d81ec1b4ae70c931dc5c7d43f57))
+* **connectors:** unblock Test connection + drop noisy badges/counts ([f2a6ce2](https://github.com/Yassinello/kebab-mcp/commit/f2a6ce2d7166808a937da7967df0917f99e328f3))
+* **deploy:** clarify Upstash is post-deploy, not during import ([fdddf59](https://github.com/Yassinello/kebab-mcp/commit/fdddf594bfb71b577881b84e15bfcc0430596619))
+* **deploy:** switch Deploy button from /new/clone to /new/deploy ([62024a5](https://github.com/Yassinello/kebab-mcp/commit/62024a515ab48b25a5319711db12868550cbe54d))
+* in the route, after rehydrating from KV, fill in any required-env-var that the caller did NOT supply from the credential snapshot, falling back to getConfig() for boot env vars (same precedence as the registry gate). User-typed values still take precedence so re-testing fresh credentials before saving still works as expected. ([848b983](https://github.com/Yassinello/kebab-mcp/commit/848b983f6f329d81ec1b4ae70c931dc5c7d43f57))
+* **routing:** default fresh deploys to /welcome instead of marketing landing ([fa2908f](https://github.com/Yassinello/kebab-mcp/commit/fa2908f18414110dfb9613cce49b8c2d5dd9e7b1))
+* **routing:** rehydrate bootstrap before root-route token check ([8a88a90](https://github.com/Yassinello/kebab-mcp/commit/8a88a90c5507d8c190ddc286bc0879d0b4d29230))
+* **test:** typecheck-safe destructure in useStoragePolling test ([065dc10](https://github.com/Yassinello/kebab-mcp/commit/065dc10a94298f20158c006c76ef600cb84dd104))
+* **updates:** detect non-fork deployments + Check-now button on Version ([6d9fdd7](https://github.com/Yassinello/kebab-mcp/commit/6d9fdd72c6e16a3aab6e060efd360c01e195cb3e))
+* **updates:** force-bypass cache + clearer wording on Test connection ([34cd2cd](https://github.com/Yassinello/kebab-mcp/commit/34cd2cd401adde8ed59388dd70a92ba2d70b9e1c))
+* **v0.16:** code review hardening for phases 64-66 ([d43b884](https://github.com/Yassinello/kebab-mcp/commit/d43b884d6f255eb0c7106d94661a4b407eb7c6b8))
+
+
+### Performance Improvements
+
+* **transport+google:** v0.16 phase 65 — Gmail metadata mode, OAuth KV cache, manifest refresh cache ([e5f6a57](https://github.com/Yassinello/kebab-mcp/commit/e5f6a57b269932827ddfc56b670eb85b304da066))
+
 ## [0.1.15](https://github.com/Yassinello/kebab-mcp/compare/v0.1.14...v0.1.15) (2026-04-27)
 
 
