@@ -14,8 +14,12 @@ const config: KnipConfig = {
     "postcss",
     // Tailwind v4 loaded via CSS @import, not a JS import
     "tailwindcss",
+    // @composio/json-schema-to-zod is a transitive dep of @composio/core that
+    // we import directly in src/connectors/browser/tools/web-extract.ts.
+    // Composio re-exports it as a peer-style sub-package; pinning our own
+    // version would risk drift from what @composio/core actually ships.
+    "@composio/json-schema-to-zod",
     // Testing libs used in test files (excluded from entry points by knip's defaults)
-    "@testing-library/jest-dom",
     "@testing-library/user-event",
     // lint-staged is invoked by .husky/pre-commit — knip can't see shell-invoked binaries.
     // Category B (false-positive): legitimate dev-dep used by Husky hooks.
