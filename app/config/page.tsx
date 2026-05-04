@@ -19,6 +19,10 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   connectors: { title: "Connectors", subtitle: "Enable, configure, and test your connectors." },
   tools: { title: "Tools", subtitle: "Browse and run any registered tool." },
   skills: { title: "Skills", subtitle: "Create and manage user-defined skills." },
+  "custom-tools": {
+    title: "Custom Tools",
+    subtitle: "Compose existing tools into new MCP tools — declarative JSON, no code.",
+  },
   playground: { title: "Playground", subtitle: "Try tools interactively." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
   documentation: { title: "Documentation", subtitle: "Guides and reference for Kebab MCP." },

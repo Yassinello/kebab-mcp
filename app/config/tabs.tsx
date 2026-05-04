@@ -45,6 +45,10 @@ const SkillsTab = dynamic(() => import("./tabs/skills").then((m) => ({ default: 
   ssr: true,
   loading: () => <TabLoadingSkeleton label="Skills" />,
 });
+const CustomToolsTab = dynamic(
+  () => import("./tabs/custom-tools").then((m) => ({ default: m.CustomToolsTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Custom Tools" /> }
+);
 const PlaygroundTab = dynamic(
   () => import("./tabs/playground").then((m) => ({ default: m.PlaygroundTab })),
   // ssr: false — playground uses browser-only APIs (fetch loops, client state).
@@ -147,6 +151,10 @@ export function ConfigTabs({
     case "skills":
       section = "Skills";
       tab = <SkillsTab />;
+      break;
+    case "custom-tools":
+      section = "Custom Tools";
+      tab = <CustomToolsTab />;
       break;
     case "playground":
       section = "Playground";
