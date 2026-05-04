@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toMsg } from "@/core/error-utils";
 
 /**
  * Custom Tools dashboard tab.
@@ -287,7 +288,7 @@ function CustomToolDrawer({
     } catch (err) {
       return {
         ok: false,
-        err: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+        err: `Invalid JSON: ${toMsg(err)}`,
       };
     }
   };
@@ -355,7 +356,7 @@ function CustomToolDrawer({
         }
         inputs = parsedInputs as Record<string, unknown>;
       } catch (err) {
-        setError(`Invalid test inputs JSON: ${err instanceof Error ? err.message : String(err)}`);
+        setError(`Invalid test inputs JSON: ${toMsg(err)}`);
         return;
       }
     }
@@ -418,7 +419,7 @@ function CustomToolDrawer({
         }
       }
     } catch (err) {
-      setError(`Network error: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Network error: ${toMsg(err)}`);
     }
     setTesting(false);
   };
