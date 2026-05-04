@@ -125,6 +125,15 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     loader: () => import("@/connectors/api/manifest").then((m) => m.apiConnectionsConnector),
   },
   {
+    id: "custom-tools",
+    label: "Custom Tools",
+    description:
+      "User-defined tools composed from existing Kebab MCP tools via a declarative JSON spec. Build them in /config → Custom Tools.",
+    requiredEnvVars: [],
+    toolCount: 0, // dynamic — count loaded from KV at refresh time.
+    loader: () => import("@/connectors/custom-tools/manifest").then((m) => m.customToolsConnector),
+  },
+  {
     id: "paywall",
     label: "Paywall Readers",
     description:

@@ -60,7 +60,7 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
     // is a stub; the actual manifest reports whatever is in the current
     // store. We skip the equality check for these dynamic connectors to
     // avoid making the contract test dependent on local disk state.
-    const DYNAMIC_TOOL_COUNT = new Set(["skills", "api-connections"]);
+    const DYNAMIC_TOOL_COUNT = new Set(["skills", "api-connections", "custom-tools"]);
     for (const entry of ALL_CONNECTOR_LOADERS) {
       if (DYNAMIC_TOOL_COUNT.has(entry.id)) continue;
       const manifest = await entry.loader();
