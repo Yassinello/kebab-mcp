@@ -46,6 +46,10 @@ export function buildCustomToolDefinition(tool: CustomTool): ToolDefinition {
   return {
     name: tool.id,
     description: tool.description || `Custom Tool — ${tool.id}`,
+    // HI-03 — `tool.destructive` is the AGGREGATED flag, force-set true
+    // at write time when any composed step calls a destructive tool. The
+    // author can still opt-IN to destructive without composing destructive
+    // steps; they just can't opt-OUT when the composition demands it.
     destructive: tool.destructive,
     schema: buildSchema(tool),
     handler: async (params): Promise<ToolResult> => {

@@ -11,6 +11,7 @@ import {
   primeCustomToolsCache,
   listCustomToolsSync,
   _resetCustomToolsCacheForTests,
+  _resetKnownToolFactsCacheForTests,
 } from "./store";
 import { resetKVStoreCache } from "@/core/kv-store";
 
@@ -23,6 +24,7 @@ describe("custom-tools store CRUD", () => {
     process.env["MYMCP_KV_PATH"] = path.join(tmp, "kv.json");
     resetKVStoreCache();
     _resetCustomToolsCacheForTests();
+    _resetKnownToolFactsCacheForTests();
   });
 
   afterEach(async () => {
@@ -30,6 +32,7 @@ describe("custom-tools store CRUD", () => {
     else process.env["MYMCP_KV_PATH"] = prevKv;
     resetKVStoreCache();
     _resetCustomToolsCacheForTests();
+    _resetKnownToolFactsCacheForTests();
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
