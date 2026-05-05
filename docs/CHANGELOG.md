@@ -2,6 +2,26 @@
 
 All notable changes to Kebab MCP.
 
+## [0.1.17](https://github.com/Yassinello/kebab-mcp/compare/v0.1.16...v0.1.17) (2026-05-05)
+
+
+### Features
+
+* **custom-tools:** admin API routes (CRUD + test runner) ([7b434eb](https://github.com/Yassinello/kebab-mcp/commit/7b434eb095758f78376cc93a1e4654415ae77a64))
+* **custom-tools:** dashboard UI tab with paste JSON + test runner ([b9e19fc](https://github.com/Yassinello/kebab-mcp/commit/b9e19fce52af03f4598ad423cdf98a50fdb10f78))
+* **custom-tools:** scaffold connector + types + store + runner + expression ([a50faa0](https://github.com/Yassinello/kebab-mcp/commit/a50faa00f132aeda11adde6b2c203139d5ecf421))
+
+
+### Bug Fixes
+
+* **auth:** replace dead-end 401 with proper sign-in page on /config ([90729b8](https://github.com/Yassinello/kebab-mcp/commit/90729b88735bb5cb4bd089941629fcfb87b70c5e))
+* **custom-tools:** CR-01 recursion guard via AsyncLocalStorage ([456c81c](https://github.com/Yassinello/kebab-mcp/commit/456c81c5d9331ceed087e8bfac9a937918b5eaf3))
+* **custom-tools:** CR-02 allowlist callable connectors + CR-03 collision check covers disabled ([8dcf166](https://github.com/Yassinello/kebab-mcp/commit/8dcf16611fbbd24e56fb7b54b1a780b0a6fb03b8))
+* **custom-tools:** HI-01 fix tempId prefix to comply with id regex ([e443c16](https://github.com/Yassinello/kebab-mcp/commit/e443c16136f37ab86e77819dee3823a05e12ee95))
+* **custom-tools:** HI-02 validate toolName at write-time ([ba31e88](https://github.com/Yassinello/kebab-mcp/commit/ba31e885b3a309aa62a43c8337771cb0ff6ec8ae))
+* **custom-tools:** HI-03 aggregate destructive flag from steps ([5a66621](https://github.com/Yassinello/kebab-mcp/commit/5a666214f9c29f097813c1d71909de7b8fe885f1))
+* **custom-tools:** use toMsg() instead of legacy err ternary ([ba31ce2](https://github.com/Yassinello/kebab-mcp/commit/ba31ce2bd70ff9ec16d01eb0508d78604703258a))
+
 ## [0.1.16](https://github.com/Yassinello/kebab-mcp/compare/v0.1.15...v0.1.16) (2026-05-04)
 
 
