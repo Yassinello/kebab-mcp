@@ -89,6 +89,150 @@ function safeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
+/**
+ * HTML-escape a string for safe interpolation inside the sign-in page.
+ * Keep tiny — only the characters we might render (no full sanitizer).
+ */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Render a self-contained sign-in page when an unauthenticated browser
+ * lands on /config or /config/*. Replaces the prior text/plain 401 that
+ * left users stranded with no recoverable action.
+ *
+ * Keeps the response status at 401 so clients (curl, fetch) still see
+ * the auth gate, but humans get a usable form. Style is inline so we
+ * stay edge-runtime-friendly (no asset pipeline, no React).
+ *
+ * The form GETs back to the same path with `?token=...` — the existing
+ * auth handler downstream picks it up, sets the cookie, redirects to a
+ * clean URL.
+ */
+function renderSignInPage(returnPath: string): string {
+  const safeReturn = escHtml(returnPath);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Kebab MCP</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --fg: #1c1c1c;
+    --muted: #6b7280;
+    --border: #e5e5e0;
+    --accent: #d97706;
+    --accent-hover: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0c0c0c; --fg: #f5f5f0; --muted: #9ca3af; --border: #2a2a26; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+  }
+  .logo { font-size: 32px; line-height: 1; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0 0 8px; font-weight: 600; }
+  p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+  }
+  input[type="password"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
+  }
+  button {
+    margin-top: 16px;
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--accent);
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  details { margin-top: 24px; font-size: 13px; color: var(--muted); }
+  summary { cursor: pointer; font-weight: 500; color: var(--fg); }
+  details ul { padding-left: 20px; margin: 8px 0 0; }
+  details li { margin-bottom: 4px; }
+  details a { color: var(--accent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo">🥙</div>
+  <h1>Sign in to Kebab MCP</h1>
+  <p>Paste your admin token to access the dashboard.</p>
+  <form method="get" action="${safeReturn}" autocomplete="off">
+    <label for="token">Admin token</label>
+    <input
+      id="token"
+      name="token"
+      type="password"
+      placeholder="kebab-mcp_..."
+      required
+      autofocus
+      spellcheck="false"
+      autocapitalize="none"
+    >
+    <button type="submit">Sign in</button>
+  </form>
+  <details>
+    <summary>Lost your token?</summary>
+    <ul>
+      <li>Check your Vercel project → <em>Settings → Environment Variables</em> for <code>ADMIN_AUTH_TOKEN</code> or <code>MCP_AUTH_TOKEN</code>.</li>
+      <li>If this is a fresh install, go to <a href="/welcome">/welcome</a> to mint a new token.</li>
+      <li>If you set up Upstash KV, your token is also stored there under <code>bootstrap:auth-token</code>.</li>
+    </ul>
+  </details>
+</main>
+</body>
+</html>`;
+}
+
 function isAuthorized(request: NextRequest, adminToken: string): boolean {
   const queryToken = request.nextUrl.searchParams.get("token")?.trim() || "";
   const authHeader = request.headers.get("authorization");
@@ -205,11 +349,29 @@ export async function proxy(request: NextRequest) {
 
   if (adminGated && adminToken) {
     if (!isAuthorized(request, adminToken)) {
+      // For browser-facing dashboard paths, render an HTML sign-in page so
+      // the user has a recoverable action instead of a dead-end 401. JSON
+      // API consumers (curl, fetch, MCP clients hitting /api/config/*)
+      // still get a machine-friendly text response so they fail loudly.
+      const isApiPath = pathname.startsWith("/api/");
+      if (isApiPath) {
+        return finalize(
+          new NextResponse(
+            "Unauthorized — use Authorization header or ?token= to access the dashboard",
+            { status: 401, headers: { "Content-Type": "text/plain" } }
+          )
+        );
+      }
+      // Strip any existing `?token=` from the return path — the form
+      // submits a fresh value and we don't want to leak the bad one back.
+      const returnUrl = new URL(request.url);
+      returnUrl.searchParams.delete("token");
+      const returnPath = returnUrl.pathname + returnUrl.search;
       return finalize(
-        new NextResponse(
-          "Unauthorized — use Authorization header or ?token= to access the dashboard",
-          { status: 401, headers: { "Content-Type": "text/plain" } }
-        )
+        new NextResponse(renderSignInPage(returnPath), {
+          status: 401,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        })
       );
     }
 
