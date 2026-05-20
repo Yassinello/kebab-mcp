@@ -95,7 +95,7 @@ If you just want a single MCP integration, you don't need this — pick the offi
 |              | Kebab MCP                | Separate MCP servers | Hosted platforms           |
 | ------------ | ------------------------ | -------------------- | -------------------------- |
 | **Setup**    | Fork + env vars + deploy | 5 repos, 5 configs   | Sign up + monthly fee      |
-| **Tools**    | 86+ pre-built            | Build your own       | 1000s (but vendor lock-in) |
+| **Tools**    | 97+ pre-built            | Build your own       | 1000s (but vendor lock-in) |
 | **Endpoint** | 1                        | 5+                   | 1 (their server)           |
 | **Cost**     | Free (Vercel free tier)  | Free but complex     | $0–80/month                |
 | **Data**     | Your Vercel, your keys   | Your machines        | Their servers              |
@@ -203,7 +203,7 @@ You can also ask Claude in a Claude Code conversation: *"Run `npx @yassinello/cr
 
 Five families of capability. Each connector auto-activates when its credentials are in your env.
 
-### 🔌 Connectors — 14 built-in integrations
+### 🔌 Connectors — 17 built-in integrations
 
 Google Workspace, Obsidian Vault, Slack, Notion, GitHub, Linear, Airtable, Browser Automation, Apify (LinkedIn reads), Unipile (LinkedIn + WhatsApp), Composio (1000+ apps via bridge), Paywall Readers, Webhooks. **97+ production-ready tools** total. Setup is one env var per connector.
 
@@ -234,14 +234,16 @@ Self-hosted by design. Timing-safe token comparison, multi-tenant auth, per-toke
 | **Slack**              | 6     | Bot token                           | 2 min |
 | **Notion**             | 5     | Integration token                   | 2 min |
 | **Apify (LinkedIn)**   | 10    | API token                           | 1 min |
+| **Unipile (LinkedIn + WhatsApp)** | 10 | DSN + token              | 3 min |
 | **GitHub Issues**      | 6     | PAT                                 | 1 min |
 | **Linear**             | 6     | API key                             | 1 min |
 | **Airtable**           | 7     | PAT                                 | 1 min |
 | **Composio**           | 2     | API key (1000+ apps via the bridge) | 2 min |
-| **Paywall Readers**    | 2     | —                                   | 0 min |
+| **Paywall Readers**    | 1 (+1 w/ Browser) | —                       | 0 min |
 | **Webhook Receiver**   | 3     | Optional HMAC                       | 0 min |
 | **Skills**             | dyn.  | —                                   | 0 min |
 | **API Connections**    | dyn.  | per-API                             | 1 min |
+| **Custom Tools**       | dyn.  | —                                   | 1 min |
 | **Admin & Logs**       | 5     | Admin token                         | 0 min |
 
 Per-tool details and env vars: [docs/CONNECTORS.md](docs/CONNECTORS.md).

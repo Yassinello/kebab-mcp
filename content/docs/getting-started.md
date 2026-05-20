@@ -6,7 +6,7 @@ order: 10
 
 ## What Kebab MCP gives you
 
-A single Vercel deploy that exposes 86+ tools across 17 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation, Unipile LinkedIn writes, and bring-your-own HTTP APIs) behind one MCP endpoint. Plus user-defined Skills and Custom Tools that compose existing tools into new ones — no code, no deploy. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
+A single Vercel deploy that exposes 97+ tools across 17 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation, Unipile LinkedIn writes, and bring-your-own HTTP APIs) behind one MCP endpoint. Plus user-defined Skills and Custom Tools that compose existing tools into new ones — no code, no deploy. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
 
 ## Five-minute deploy
 
@@ -50,7 +50,7 @@ If you deployed on Vercel, you can sync your fork with upstream Kebab MCP (`Yass
 
 **Disable entirely:** set `KEBAB_DISABLE_UPDATE_API=1` in your Vercel env vars.
 
-**Local dev / Docker:** updates work differently — `npm run dev` auto-pulls upstream on start, and `npm run update` is the manual equivalent. See the [README "Staying up to date"](https://github.com/Yassinello/kebab-mcp#staying-up-to-date) section for the full matrix.
+**Local dev / Docker:** updates work differently — `npm run dev` auto-pulls upstream on start, and `npm run update` is the manual equivalent. See the [README "Updates & durability"](https://github.com/Yassinello/kebab-mcp#updates--durability) section for the full matrix.
 
 ## Local development
 

@@ -51,9 +51,9 @@ The vault connector treats a GitHub repo as the storage backend for your Obsidia
 
 ## Apify
 
-Required: `APIFY_API_TOKEN`. Find it under [Apify Console → Account → Integrations](https://console.apify.com/account/integrations).
+Required: `APIFY_TOKEN`. Find it under [Apify Console → Account → Integrations](https://console.apify.com/account/integrations).
 
-The Apify connector ships native wrappers for 6 LinkedIn actors (profile, company, posts, etc.) plus a generic actor runner protected by an allowlist. To allowlist additional actors, set `APIFY_ALLOWED_ACTORS` to a comma-separated list of `username/actor-name` strings.
+The Apify connector ships native wrappers for 6 LinkedIn actors (profile, company, posts, etc.) plus a generic actor runner protected by an allowlist. To allowlist additional actors, set `APIFY_ACTORS` to a comma-separated list of `username/actor-name` strings.
 
 ## Unipile (LinkedIn + WhatsApp)
 
@@ -100,7 +100,7 @@ Set `MYMCP_WEBHOOKS` to a comma-separated list of webhook names (e.g. `stripe,gi
 
 Optional HMAC-SHA256 validation: set `MYMCP_WEBHOOK_SECRET_<NAME>` per webhook (e.g. `MYMCP_WEBHOOK_SECRET_STRIPE=whsec_...`). The receiver validates the `x-webhook-signature` header against the payload.
 
-Two MCP tools: `webhook_last` retrieves the most recent payload, `webhook_list` shows all active webhooks.
+Three MCP tools: `webhook_last` retrieves the most recent payload, `webhook_list` shows all active webhooks, and `webhook_history` returns the recent payload history for a named webhook.
 
 ## Composio
 

@@ -1,6 +1,6 @@
 # Unipile Connector
 
-LinkedIn write actions (connect, DM, InMail) + WhatsApp messaging via the [Unipile](https://www.unipile.com) hosted-browser API.
+LinkedIn write actions (connect, DM, InMail, engage) + LinkedIn & WhatsApp inbox reading via the [Unipile](https://www.unipile.com) hosted-browser API. WhatsApp support is read-only (inbox listing + message reading); there is no WhatsApp send tool.
 
 **Status:** Shipped v0.17 (2026-05-18).
 **Decision:** Chosen over Browserbase/LinkedAPI per [ADR 0001](../adr/0001-unipile-as-linkedin-whatsapp-write-provider.md).
@@ -26,9 +26,9 @@ npx tsx --env-file=.env scripts/smoke-unipile.ts \
 
 If `get_relationship_status` returns `{degree: 1, connection_status: "FIRST_DEGREE"}` you're live.
 
-## Tools (6)
+## Tools (10)
 
-All tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**.
+Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**. Read tools have no quota or kill-switch gate.
 
 | Tool | Type | Description |
 |---|---|---|
@@ -38,6 +38,10 @@ All tools enforce: **kill-switch check → halt-flag check → dedup → rate-li
 | `linkedin_send_inmail` | WRITE | Explicit (`allow_inmail: true` required). Returns `credits_used + credits_remaining` via balance bracketing. Cap default 15/day. Refuses if no Premium/Sales Nav. |
 | `linkedin_engage` | WRITE | Super-tool: routes to `send_message` (1st), `send_connection` (2nd/3rd), or `send_inmail` (OON + opt-in). `dry_run: true` previews without sending. |
 | `linkedin_list_pending` | READ | Lists pending sent invitations with `{invitation_id, recipient_profile_url, sent_at, age_days, has_note}`. Cursor pagination. Default limit 100, max 500. |
+| `linkedin_list_inbox` | READ | Lists LinkedIn conversations (chats) with last-message preview + unread state. Cursor pagination. No quota. |
+| `linkedin_read_messages` | READ | Reads messages from a LinkedIn chat by `chat_id`. No quota. |
+| `whatsapp_list_inbox` | READ | Lists WhatsApp conversations with `conversation_type` (single/group/channel) + last-message preview. Cursor pagination. No quota. |
+| `whatsapp_read_messages` | READ | Reads messages from a WhatsApp chat by `chat_id`. No quota. |
 
 Tool envelope (write tools):
 

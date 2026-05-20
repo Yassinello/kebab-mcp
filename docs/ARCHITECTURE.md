@@ -6,11 +6,11 @@ Reading this if you want to: add a connector, add a tool, change auth/registry, 
 
 ## Project Overview
 
-Open-source personal MCP server framework. Ships 86+ pre-built tools across 15 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Apify, Paywall, GitHub, Linear, Airtable, Composio, Webhook, Skills, API Connections, Admin). Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
+Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Composio, Skills, API Connections, Custom Tools, Paywall, Apify, Unipile (LinkedIn + WhatsApp), GitHub, Linear, Airtable, Webhook, Admin) — plus dynamic, user-defined tools via the Skills, API Connections, and Custom Tools connectors. Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
 
 ## Architecture
 
-- **Runtime**: Next.js on Vercel (serverless, 60s timeout)
+- **Runtime**: Next.js on Vercel (serverless). The MCP transport route declares `maxDuration = 90` (90s); Vercel Hobby plans silently clamp this to 60s, Pro allows up to 300s
 - **MCP SDK**: `mcp-handler` wraps `@modelcontextprotocol/sdk` for Streamable HTTP
 - **Registry**: Static manifests in `src/connectors/*/manifest.ts` — single source of truth
 - **Config**: All via env vars (no config files). See `src/core/config.ts`
@@ -20,21 +20,23 @@ Open-source personal MCP server framework. Ships 86+ pre-built tools across 15 c
 
 ```
 src/core/                        — Framework: types, registry, config, auth, logging, events, tracing
-src/connectors/google/manifest.ts     — Google Workspace connector (18 tools)
-src/connectors/vault/manifest.ts      — Obsidian Vault connector (14 tools)
-src/connectors/browser/manifest.ts    — Browser Automation connector (4 tools)
-src/connectors/slack/manifest.ts      — Slack connector (6 tools)
-src/connectors/notion/manifest.ts     — Notion connector (5 tools)
-src/connectors/apify/manifest.ts      — Apify / LinkedIn connector (8 tools)
-src/connectors/github/manifest.ts     — GitHub Issues connector (6 tools)
-src/connectors/linear/manifest.ts     — Linear Issues connector (6 tools)
-src/connectors/airtable/manifest.ts   — Airtable connector (7 tools)
-src/connectors/composio/manifest.ts   — Composio bridge (2 tools)
-src/connectors/paywall/manifest.ts    — Paywall readers (2 tools)
-src/connectors/webhook/manifest.ts    — Webhook receiver (3 tools)
-src/connectors/skills/manifest.ts     — Skills — dynamic user-defined tools
-src/connectors/api/manifest.ts        — API Connections — user-defined HTTP tools (v0.15+)
-src/connectors/admin/manifest.ts      — Admin connector (5 tools)
+src/connectors/google/manifest.ts        — Google Workspace connector (18 tools)
+src/connectors/vault/manifest.ts          — Obsidian Vault connector (14 tools)
+src/connectors/browser/manifest.ts        — Browser Automation connector (7 tools)
+src/connectors/slack/manifest.ts          — Slack connector (6 tools)
+src/connectors/notion/manifest.ts         — Notion connector (5 tools)
+src/connectors/apify/manifest.ts          — Apify / LinkedIn scraping connector (10 tools)
+src/connectors/unipile/manifest.ts        — Unipile LinkedIn + WhatsApp connector (10 tools)
+src/connectors/github/manifest.ts         — GitHub Issues connector (6 tools)
+src/connectors/linear/manifest.ts         — Linear Issues connector (6 tools)
+src/connectors/airtable/manifest.ts       — Airtable connector (7 tools)
+src/connectors/composio/manifest.ts       — Composio bridge (2 tools)
+src/connectors/paywall/manifest.ts        — Paywall readers (1 tool, +1 conditional on Browser)
+src/connectors/webhook/manifest.ts        — Webhook receiver (3 tools)
+src/connectors/skills/manifest.ts         — Skills — dynamic user-defined tools
+src/connectors/api/manifest.ts            — API Connections — user-defined HTTP tools (v0.15+)
+src/connectors/custom-tools/manifest.ts   — Custom Tools — composed from existing tools via JSON spec
+src/connectors/admin/manifest.ts          — Admin connector (5 tools)
 src/connectors/*/tools/               — Individual tool handlers
 src/connectors/*/lib/                 — API wrappers and helpers
 app/api/[transport]/route.ts     — MCP endpoint (~30 lines, reads from registry)
@@ -48,7 +50,7 @@ app/config/                      — Unified dashboard (connectors, tools, skill
 
 ## How the Registry Works
 
-1. `src/core/registry.ts` imports all 14 connector manifests
+1. `src/core/registry.ts` holds `ALL_CONNECTOR_LOADERS` — one lazy loader entry per connector (17 today)
 2. For each connector, checks if all `requiredEnvVars` are present
 3. Returns `ConnectorState[]` with enabled/disabled + reason
 4. `route.ts` iterates enabled connectors, registers tools via `server.tool()`
@@ -228,6 +230,15 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 | `LINEAR_API_KEY` | Linear connector | Linear personal API key |
 | `AIRTABLE_API_KEY` | Airtable connector | Airtable personal access token |
 | `COMPOSIO_API_KEY` | Composio connector | Composio API key |
+| `UNIPILE_DSN` | Unipile connector | Unipile API DSN (e.g. `https://apiXX.unipile.com:NNNNN`) |
+| `UNIPILE_TOKEN` | Unipile connector | Unipile API token |
+| `UNIPILE_WEBHOOK_SECRET` | No | Shared static secret for verifying inbound Unipile webhooks at `/api/unipile/webhook` |
+| `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` | No | Global kill switch — set to `true` to halt all LinkedIn write tools (connect, DM, InMail, engage) |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_CONNECT_CAP` | No | Max LinkedIn connection requests per day (default: 25) |
+| `KEBAB_UNIPILE_LINKEDIN_WEEKLY_CONNECT_CAP` | No | Max LinkedIn connection requests per week (default: 100) |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_DM_CAP` | No | Max LinkedIn DMs per day (default: 50) |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_INMAIL_CAP` | No | Max LinkedIn InMails per day (default: 15) |
+| `KEBAB_UNIPILE_RATELIMIT_FAIL_MODE` | No | `closed` (default — refuse on quota-store error) or `open` (allow) |
 | `MYMCP_WEBHOOKS` | Webhook connector | Comma-separated webhook names |
 | `INSTANCE_MODE` | No | Set to `showcase` to render the marketing landing on `/`. Otherwise `/` redirects to `/welcome` (no token) or `/config` (token present). |
 | `MYMCP_TOOL_TIMEOUT` | No | Tool timeout in ms (default: 30000) |
