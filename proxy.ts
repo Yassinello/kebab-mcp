@@ -233,7 +233,40 @@ function renderSignInPage(returnPath: string): string {
 </html>`;
 }
 
+/**
+ * Split a comma-separated token env value into individual tokens.
+ * Mirrors `parseTokens()` in src/core/auth.ts — duplicated here because
+ * the Edge runtime cannot import the Node auth module's dependency graph.
+ */
+function parseTokensEdge(envValue: string): string[] {
+  return envValue
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Constant-time membership check: returns true if `provided` matches any
+ * token in `candidates`. Always walks every candidate (no early return)
+ * so timing does not leak which token matched or how many exist.
+ */
+function safeEqualAny(provided: string, candidates: string[]): boolean {
+  let matched = false;
+  for (const c of candidates) {
+    if (safeEqual(provided, c)) matched = true;
+  }
+  return matched;
+}
+
 function isAuthorized(request: NextRequest, adminToken: string): boolean {
+  // HIGH-3: MCP_AUTH_TOKEN / ADMIN_AUTH_TOKEN may be a comma-separated list
+  // (multi-client / multi-device deploys — see src/core/devices.ts). The
+  // Node auth layer splits via parseTokens(); the Edge middleware previously
+  // compared against the whole raw string, so a device holding ONE valid
+  // token was denied at /config. Split here too so every listed token works.
+  const tokens = parseTokensEdge(adminToken);
+  if (tokens.length === 0) return false;
+
   const queryToken = request.nextUrl.searchParams.get("token")?.trim() || "";
   const authHeader = request.headers.get("authorization");
   const bearer = authHeader?.replace(/^Bearer\s+/i, "").trim() || "";
@@ -242,10 +275,10 @@ function isAuthorized(request: NextRequest, adminToken: string): boolean {
   const kebabCookie = request.cookies.get("kebab_admin_token")?.value || "";
   const legacyCookie = request.cookies.get("mymcp_admin_token")?.value || "";
   return (
-    safeEqual(bearer, adminToken) ||
-    safeEqual(queryToken, adminToken) ||
-    safeEqual(kebabCookie, adminToken) ||
-    safeEqual(legacyCookie, adminToken)
+    (bearer !== "" && safeEqualAny(bearer, tokens)) ||
+    (queryToken !== "" && safeEqualAny(queryToken, tokens)) ||
+    (kebabCookie !== "" && safeEqualAny(kebabCookie, tokens)) ||
+    (legacyCookie !== "" && safeEqualAny(legacyCookie, tokens))
   );
 }
 

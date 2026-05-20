@@ -157,6 +157,30 @@ describe("Phase 50 / COV-03 — proxy.ts middleware behavioral coverage", () => 
     expect(res.status).toBe(200);
   });
 
+  it("HIGH-3 — multi-token list authorizes a device holding any one token", async () => {
+    // Comma-separated multi-device deploy. A device that holds only the
+    // SECOND token must still get into /config — the pre-fix middleware
+    // compared against the whole raw "tok1,tok2" string and denied it.
+    process.env.MCP_AUTH_TOKEN = "device-a-token, device-b-token";
+    const { proxy } = await import("@/../proxy");
+
+    const reqB = makeReq("https://example.test/config", {
+      cookies: { kebab_admin_token: "device-b-token" },
+    });
+    expect((await proxy(reqB)).status).toBe(200);
+
+    const reqA = makeReq("https://example.test/config", {
+      cookies: { kebab_admin_token: "device-a-token" },
+    });
+    expect((await proxy(reqA)).status).toBe(200);
+
+    // A token NOT in the list is still rejected.
+    const reqBad = makeReq("https://example.test/config", {
+      cookies: { kebab_admin_token: "device-c-token" },
+    });
+    expect((await proxy(reqBad)).status).toBe(401);
+  });
+
   it("first-time setup — missing MCP_AUTH_TOKEN redirects /config → /welcome", async () => {
     // No MCP_AUTH_TOKEN and no INSTANCE_MODE — first-run path.
     const { proxy } = await import("@/../proxy");
