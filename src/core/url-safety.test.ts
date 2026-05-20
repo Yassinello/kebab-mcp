@@ -274,33 +274,37 @@ describe("url-safety: isPublicUrl (async, with DNS option)", () => {
 });
 
 describe("url-safety: migration compatibility — browserbase.validatePublicUrl", () => {
-  it("still throws on private IP", async () => {
+  // MEDIUM SSRF fix: validatePublicUrl is now async + DNS-resolving. The IP
+  // literals below are validated synchronously (no DNS), so these stay fast
+  // and deterministic; the public case uses a literal IP to avoid a real
+  // DNS lookup in CI.
+  it("still rejects private IP", async () => {
     vi.resetModules();
     const { validatePublicUrl } = await import("@/connectors/browser/lib/browserbase");
-    expect(() => validatePublicUrl("http://10.0.0.1/")).toThrow();
+    await expect(validatePublicUrl("http://10.0.0.1/")).rejects.toThrow();
   });
 
-  it("still throws on loopback", async () => {
+  it("still rejects loopback", async () => {
     vi.resetModules();
     const { validatePublicUrl } = await import("@/connectors/browser/lib/browserbase");
-    expect(() => validatePublicUrl("http://localhost/")).toThrow();
+    await expect(validatePublicUrl("http://localhost/")).rejects.toThrow();
   });
 
-  it("still throws on invalid URL", async () => {
+  it("still rejects invalid URL", async () => {
     vi.resetModules();
     const { validatePublicUrl } = await import("@/connectors/browser/lib/browserbase");
-    expect(() => validatePublicUrl("not a url")).toThrow();
+    await expect(validatePublicUrl("not a url")).rejects.toThrow();
   });
 
-  it("still throws on cloud metadata", async () => {
+  it("still rejects cloud metadata", async () => {
     vi.resetModules();
     const { validatePublicUrl } = await import("@/connectors/browser/lib/browserbase");
-    expect(() => validatePublicUrl("http://169.254.169.254/")).toThrow();
+    await expect(validatePublicUrl("http://169.254.169.254/")).rejects.toThrow();
   });
 
-  it("accepts public URL silently", async () => {
+  it("accepts a public IP literal silently", async () => {
     vi.resetModules();
     const { validatePublicUrl } = await import("@/connectors/browser/lib/browserbase");
-    expect(() => validatePublicUrl("https://example.com/")).not.toThrow();
+    await expect(validatePublicUrl("https://93.184.216.34/")).resolves.toBeUndefined();
   });
 });

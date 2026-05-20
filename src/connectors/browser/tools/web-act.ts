@@ -14,7 +14,7 @@ type WebActParams = {
 };
 
 export async function handleWebAct(params: WebActParams) {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
 

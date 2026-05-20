@@ -37,7 +37,7 @@ const PER_STEP_WALLCLOCK_MS = 45_000;
  *   bounds end-to-end runtime)
  */
 export async function handleWebAgent(params: WebAgentParams) {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
 

@@ -24,7 +24,7 @@ type WebObserveParams = {
  * - extracting raw `href`s is the goal but selectors aren't known up front
  */
 export async function handleWebObserve(params: WebObserveParams) {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
 

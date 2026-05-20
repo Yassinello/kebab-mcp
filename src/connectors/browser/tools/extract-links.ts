@@ -46,7 +46,7 @@ const PATTERN_MAX_LEN = 200;
  * substring or regex (slash-delimited, e.g. `/items/[a-z0-9-]+/i`).
  */
 export async function handleExtractLinks(params: ExtractLinksParams): Promise<ToolResult> {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const limit = Math.min(HARD_LIMIT, Math.max(1, params.limit ?? DEFAULT_LIMIT));
   if (params.selector && params.selector.length > PATTERN_MAX_LEN) {

@@ -115,10 +115,14 @@ export async function invokeApiTool(
     url.searchParams.set(k, v);
   }
 
-  // 2. SSRF guard (sync is enough; DNS adds latency every call)
+  // 2. SSRF guard — resolve DNS (closes the DNS-rebind hole: a public
+  // hostname whose A/AAAA record points at 169.254.169.254 / 10.x / loopback
+  // would otherwise slip past a syntactic-only check). The added lookup
+  // latency is acceptable on these low-frequency, admin-defined fetches.
   const safety = await isPublicUrl(url.toString(), {
     allowLoopback: allowLocal(),
     allowPrivateNetwork: allowLocal(),
+    resolveDns: true,
   });
   if (!safety.ok) {
     throw new Error(`URL rejected: ${safety.error.message}`);
@@ -189,6 +193,7 @@ export async function testApiConnection(
   const safety = await isPublicUrl(url, {
     allowLoopback: allowLocal(),
     allowPrivateNetwork: allowLocal(),
+    resolveDns: true,
   });
   if (!safety.ok) {
     return { ok: false, ms: 0, error: safety.error.message };

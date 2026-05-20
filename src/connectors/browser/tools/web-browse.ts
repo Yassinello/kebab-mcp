@@ -14,7 +14,7 @@ type WebBrowseParams = {
 };
 
 export async function handleWebBrowse(params: WebBrowseParams) {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
 

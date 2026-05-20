@@ -33,7 +33,7 @@ function okResult(payload: Record<string, unknown>): ToolResult {
 export async function handleReadPaywalledHard(params: { url: string }): Promise<ToolResult> {
   const { url } = params;
 
-  validatePublicUrl(url);
+  await validatePublicUrl(url);
 
   const source = findSourceForUrl(url);
   if (!source) {

@@ -22,7 +22,7 @@ type ToolResult = {
 };
 
 export async function handleWebExtract(params: WebExtractParams): Promise<ToolResult> {
-  validatePublicUrl(params.url);
+  await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
 
   // Compile the optional JSON Schema before opening a browser session —

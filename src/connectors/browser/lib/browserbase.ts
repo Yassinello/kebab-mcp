@@ -1,5 +1,5 @@
 import { getInstanceConfig } from "@/core/config";
-import { isPublicUrlSync } from "@/core/url-safety";
+import { isPublicUrl } from "@/core/url-safety";
 import { Stagehand } from "@browserbasehq/stagehand";
 import Browserbase from "@browserbasehq/sdk";
 import { getConfig } from "@/core/config-facade";
@@ -29,12 +29,17 @@ export function validateContextName(name: string): string {
 
 /**
  * Phase 44 SCM-05: delegates to the shared SSRF guard in src/core/url-safety.
- * Kept as a throwing sync wrapper because its 3 callers (web-browse,
- * web-extract, web-act) are not async at the call site. See
- * .planning/phases/44-supply-chain/MIGRATION-NOTES.md § SSRF guard divergence.
+ *
+ * Now async + DNS-resolving: every caller (web-browse, web-extract, web-act,
+ * web-agent, web-observe, extract-links) runs inside an async tool handler,
+ * so awaiting the DNS lookup costs nothing structurally. The prior sync
+ * `isPublicUrlSync` only did a syntactic check — a public hostname whose
+ * A/AAAA record resolved to a private / link-local / cloud-metadata address
+ * passed straight through (DNS-rebind). `resolveDns: true` validates each
+ * resolved record and fails closed on lookup error.
  */
-export function validatePublicUrl(url: string): void {
-  const result = isPublicUrlSync(url);
+export async function validatePublicUrl(url: string): Promise<void> {
+  const result = await isPublicUrl(url, { resolveDns: true });
   if (!result.ok) {
     throw new Error(result.error.message);
   }
