@@ -120,7 +120,7 @@ export async function recordRun(record: RunRecord): Promise<void> {
     // Use console.warn directly (not the tagged logger) to avoid pulling
     // log-store into the runner's hot path — log-store itself depends
     // on KV and would compound the original failure.
-     
+
     console.warn(`[custom-tools] recordRun failed: ${toMsg(err)}`);
   }
 }
@@ -170,7 +170,6 @@ export async function listRuns(toolId: string, limit = 50): Promise<RunRecord[]>
     }
     return out;
   } catch (err) {
-     
     console.warn(`[custom-tools] listRuns failed: ${toMsg(err)}`);
     return [];
   }
