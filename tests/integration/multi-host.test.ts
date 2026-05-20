@@ -156,7 +156,10 @@ describe("Phase 39 / HOST-04 / Scenario B — RECOVERY_RESET foot-gun guard", ()
     expect(res.status).toBe(409);
 
     const body = (await res.json()) as { error: string };
-    expect(body.error).toMatch(/MYMCP_RECOVERY_RESET=1/);
+    // HIGH-2: the 409 copy now names the modern KEBAB_RECOVERY_RESET; the
+    // legacy env var still triggers the guard via the getConfig alias. The
+    // bare RECOVERY_RESET match is robust to the brand prefix.
+    expect(body.error).toMatch(/RECOVERY_RESET=1/);
     expect(body.error).toMatch(/Remove the env var/i);
   });
 });

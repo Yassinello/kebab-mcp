@@ -806,7 +806,9 @@ describe("CORR-03c — MYMCP_RECOVERY_RESET refuses mint", () => {
     expect(r.status).toBe(409);
     const body = (await r.json()) as { error?: string; token?: string };
     expect(body.error).toBeDefined();
-    expect(body.error).toContain("MYMCP_RECOVERY_RESET");
+    // HIGH-2: 409 copy rebranded to KEBAB_RECOVERY_RESET; legacy env var
+    // still triggers the guard via the alias. Bare match is brand-agnostic.
+    expect(body.error).toContain("RECOVERY_RESET");
     expect(body).not.toHaveProperty("token");
 
     // BOOTSTRAP never written — recovery-reset branch short-circuits
