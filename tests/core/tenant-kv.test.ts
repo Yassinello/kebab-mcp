@@ -51,8 +51,14 @@ class TestTenantKVStore {
   delete(key: string) {
     return this.inner.delete(this.pk(key));
   }
-  list(prefix?: string) {
-    return this.inner.list(this.pk(prefix ?? ""));
+  async list(prefix?: string): Promise<string[]> {
+    const keys = await this.inner.list(this.pk(prefix ?? ""));
+    // Mirror the real TenantKVStore.list(): strip the tenant prefix so
+    // callers that do `key.slice(PREFIX.length)` get bare keys (HIGH-1).
+    const tenantPrefix = this.tenantId ? `tenant:${this.tenantId}:` : "";
+    return tenantPrefix
+      ? keys.map((k) => (k.startsWith(tenantPrefix) ? k.slice(tenantPrefix.length) : k))
+      : keys;
   }
 }
 
@@ -101,7 +107,7 @@ describe("TenantKVStore isolation", () => {
     expect(await kvTenant.get("secret")).toBeNull();
   });
 
-  it("list scopes to tenant prefix", async () => {
+  it("list scopes to tenant and returns bare (prefix-stripped) keys", async () => {
     const kvA = tenantKV("alpha");
     const kvB = tenantKV("beta");
     const kvDefault = tenantKV(null);
@@ -114,9 +120,12 @@ describe("TenantKVStore isolation", () => {
     const alphaKeys = await kvA.list("webhook:last:");
     const betaKeys = await kvB.list("webhook:last:");
 
+    // HIGH-1 regression: tenant-scoped list() must strip the tenant prefix
+    // so consumers (tool-toggles, webhook-list) that slice the bare prefix
+    // get correct names. A tenant must see only its own keys, bare.
     expect(defaultKeys).toEqual(["webhook:last:stripe"]);
-    expect(alphaKeys).toEqual(["tenant:alpha:webhook:last:stripe"]);
-    expect(betaKeys).toEqual(["tenant:beta:webhook:last:stripe"]);
+    expect(alphaKeys).toEqual(["webhook:last:stripe"]);
+    expect(betaKeys).toEqual(["webhook:last:stripe"]);
   });
 
   it("delete scopes to tenant", async () => {

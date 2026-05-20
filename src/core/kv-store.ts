@@ -768,8 +768,16 @@ class TenantKVStore implements KVStore {
     return this.inner.delete(this.pk(key));
   }
 
-  list(prefix?: string | undefined) {
-    return this.inner.list(this.pk(prefix ?? ""));
+  async list(prefix?: string | undefined): Promise<string[]> {
+    const keys = await this.inner.list(this.pk(prefix ?? ""));
+    // Strip the tenant prefix so callers see bare keys — same contract as
+    // scan(). Without this, tenant-scoped consumers that do
+    // `key.slice(PREFIX.length)` (e.g. tool-toggles) get garbled names and
+    // silently fail (HIGH-1: disabled tools stayed callable per tenant).
+    const tenantPrefix = this.tenantId ? `tenant:${this.tenantId}:` : "";
+    return tenantPrefix
+      ? keys.map((k) => (k.startsWith(tenantPrefix) ? k.slice(tenantPrefix.length) : k))
+      : keys;
   }
 
   incr(key: string, opts?: { ttlSeconds?: number | undefined }) {
