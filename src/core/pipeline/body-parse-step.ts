@@ -78,6 +78,10 @@ export function bodyParseStep(options: BodyParseOptions = {}): Step {
       body = chunks.join("");
     }
 
+    // Preserve the exact raw bytes for byte-exact HMAC verification. Webhook
+    // routes must sign over this, never over JSON.stringify(parsedBody).
+    ctx.rawBody = body;
+
     // Best-effort JSON parse, fall back to raw string so non-JSON
     // webhook payloads (form-encoded, raw text) still land on ctx.parsedBody.
     if (body.length === 0) {

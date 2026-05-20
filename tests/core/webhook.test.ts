@@ -230,6 +230,31 @@ describe("webhook API route", () => {
     expect(resBad.status).toBe(401);
   });
 
+  it("validates HMAC over the EXACT raw body (whitespace/key-order preserved)", async () => {
+    // MEDIUM fix regression: the sender signs its exact serialization, which
+    // is NOT canonical JSON (extra spaces, specific key order). The pre-fix
+    // route hashed JSON.stringify(JSON.parse(body)) — a re-canonicalized
+    // string — so this valid signature would have been rejected (401).
+    process.env.MYMCP_WEBHOOKS = "stripe";
+    process.env.MYMCP_WEBHOOK_SECRET_STRIPE = "mysecret123";
+    const { POST } = await importRoute();
+
+    // Non-canonical: leading spaces + keys NOT in stringify order.
+    const payload = '{  "zeta": 1,\n  "alpha": "x"  }';
+    const signature = createHmac("sha256", "mysecret123").update(payload).digest("hex");
+
+    const req = new Request("http://localhost/api/webhook/stripe", {
+      method: "POST",
+      body: payload,
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-signature": signature,
+      },
+    });
+    const res = await POST(req, { params: Promise.resolve({ name: "stripe" }) });
+    expect(res.status).toBe(200);
+  });
+
   it("returns 413 when Content-Length exceeds 1 MB", async () => {
     process.env.MYMCP_WEBHOOKS = "stripe";
     const { POST } = await importRoute();

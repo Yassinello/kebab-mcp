@@ -71,17 +71,21 @@ async function webhookHandler(ctx: PipelineContext): Promise<Response> {
 
   // bodyParseStep already buffered the body, honored Content-Length + stream
   // size limits, and parsed JSON best-effort. `ctx.parsedBody` is either a
-  // parsed object or the raw string (the webhook-fallback shape). For HMAC
-  // verification and KV storage we need the raw string, so re-serialize if
-  // we received an object.
+  // parsed object or the raw string (the webhook-fallback shape).
   const parsed = ctx.parsedBody;
   const body: string = typeof parsed === "string" ? parsed : JSON.stringify(parsed ?? "");
+
+  // HMAC must verify over the EXACT raw bytes (ctx.rawBody), not a
+  // re-serialized parse — JSON.stringify(parsed) won't byte-reproduce the
+  // sender's payload, so a valid signature over a JSON body would be
+  // rejected. Fall back to `body` only if rawBody is somehow absent.
+  const rawBody: string = typeof ctx.rawBody === "string" ? ctx.rawBody : body;
 
   // Optional HMAC signature verification
   const secretEnvKey = `MYMCP_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")}`;
   if (getConfig(secretEnvKey)) {
     const signature = request.headers.get("x-webhook-signature");
-    if (!signature || !verifySignature(body, normalizedName, signature)) {
+    if (!signature || !verifySignature(rawBody, normalizedName, signature)) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },

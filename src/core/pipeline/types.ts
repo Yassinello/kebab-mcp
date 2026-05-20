@@ -61,6 +61,14 @@ export interface PipelineContext {
   /** Populated by `bodyParseStep`. JSON-parsed when possible, raw string on parse failure. */
   parsedBody?: unknown | undefined;
   /**
+   * Exact raw request body string as read off the wire by `bodyParseStep`,
+   * before any JSON parse. Webhook routes that verify an HMAC signature MUST
+   * use this (not `JSON.stringify(parsedBody)`) — re-serializing a parsed
+   * object does not byte-reproduce the sender's payload (key order,
+   * whitespace, unicode escaping), so the digest would never match.
+   */
+  rawBody?: string | undefined;
+  /**
    * Free-form extension slot — step authors must prefer the typed slots
    * above. Documented for completeness; aim to land new fields as typed
    * properties instead of indexed lookups.

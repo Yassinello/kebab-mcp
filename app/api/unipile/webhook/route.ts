@@ -67,12 +67,20 @@ async function unipileWebhookHandler(ctx: PipelineContext): Promise<Response> {
     return Response.json({ error: "webhook_not_configured" }, { status: 503 });
   }
 
-  // bodyParseStep already buffered + JSON-first-parsed. `ctx.parsedBody`
-  // is either a parsed object OR the raw string (fallback). For HMAC
-  // verification we need the raw string; re-serialize when we have an
-  // object. Mirrors `app/api/webhook/[name]/route.ts:77-78`.
+  // bodyParseStep buffers the exact raw bytes on ctx.rawBody (before any
+  // JSON parse) and the parsed object on ctx.parsedBody. HMAC must verify
+  // over the EXACT bytes — re-serializing the parsed object via
+  // JSON.stringify would not byte-reproduce the sender's payload (key order,
+  // whitespace, unicode escaping), so the HMAC path would reject every
+  // genuinely-signed delivery. Fall back to re-serialization only if rawBody
+  // is somehow absent (defensive; bodyParseStep always sets it).
   const parsed = ctx.parsedBody;
-  const rawBody: string = typeof parsed === "string" ? parsed : JSON.stringify(parsed ?? "");
+  const rawBody: string =
+    typeof ctx.rawBody === "string"
+      ? ctx.rawBody
+      : typeof parsed === "string"
+        ? parsed
+        : JSON.stringify(parsed ?? "");
 
   // Signature verification (D-52 — dual mode).
   const verifyResult = verifyUnipileWebhook(rawBody, ctx.request.headers, secret);
