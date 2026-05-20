@@ -388,7 +388,17 @@ export function forceReset(): void {
 
 /** Re-hydrate bootstrap state from /tmp on cold start. */
 export function rehydrateBootstrapFromTmp(): void {
-  if (process.env.MYMCP_RECOVERY_RESET === "1") {
+  // HIGH-2: honor BOTH the modern KEBAB_RECOVERY_RESET and the legacy
+  // MYMCP_RECOVERY_RESET (KEBAB_* takes precedence). welcome/init gates on
+  // getConfig("KEBAB_RECOVERY_RESET") which resolves the alias, so this
+  // boot-path read must accept the same name — otherwise an operator who
+  // sets only KEBAB_RECOVERY_RESET gets minting blocked (409) while the
+  // bootstrap is never actually wiped → permanent lockout. This module is
+  // on the process.env direct-read allowlist (module-load-order predates
+  // the config facade), so the alias precedence is replicated inline.
+  const recoveryReset =
+    process.env.KEBAB_RECOVERY_RESET === "1" || process.env.MYMCP_RECOVERY_RESET === "1";
+  if (recoveryReset) {
     forceReset();
     // SEC-05: rotate the signing secret so pre-reset claim cookies no
     // longer verify.
@@ -397,7 +407,7 @@ export function rehydrateBootstrapFromTmp(): void {
       console.info(`[Kebab MCP first-run] rotateSigningSecret skipped: ${toMsg(err)}`);
     });
     console.warn(
-      "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset and signing secret rotated. Remove the env var after recovery."
+      "[Kebab MCP first-run] KEBAB_RECOVERY_RESET=1 detected — bootstrap reset and signing secret rotated. Remove the env var after recovery."
     );
     return;
   }

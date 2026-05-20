@@ -326,7 +326,7 @@ export const ALLOWED_DIRECT_ENV_READS: ReadonlyArray<AllowedDirectEnvRead> = Obj
   },
   {
     file: "src/core/first-run/bootstrap.ts",
-    vars: ["VERCEL", "MCP_AUTH_TOKEN", "MYMCP_RECOVERY_RESET"],
+    vars: ["VERCEL", "MCP_AUTH_TOKEN", "KEBAB_RECOVERY_RESET", "MYMCP_RECOVERY_RESET"],
     reason: "first-run sub-module extracted from first-run.ts; same boot-path constraints apply",
   },
   {

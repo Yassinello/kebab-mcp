@@ -38,16 +38,18 @@ import { toMsg } from "@/core/error-utils";
 async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
   const request = ctx.request;
 
-  // Foot-shoot guard: MYMCP_RECOVERY_RESET=1 wipes the bootstrap on every
-  // cold lambda startup (forceReset deletes /tmp + KV). Letting init mint
-  // a token in this state hands the user a doomed credential — the very
-  // next cold lambda erases it. Refuse outright until the operator
-  // removes the env var.
+  // Foot-shoot guard: KEBAB_RECOVERY_RESET=1 (or legacy MYMCP_RECOVERY_RESET)
+  // wipes the bootstrap on every cold lambda startup (forceReset deletes
+  // /tmp + KV). Letting init mint a token in this state hands the user a
+  // doomed credential — the very next cold lambda erases it. Refuse outright
+  // until the operator removes the env var. getConfig resolves the alias, and
+  // bootstrap.ts honors both names too (HIGH-2), so the gate and the wipe
+  // agree on which flag is set.
   if (getConfig("KEBAB_RECOVERY_RESET") === "1") {
     return NextResponse.json(
       {
         error:
-          "MYMCP_RECOVERY_RESET=1 is set on this deployment — every cold lambda wipes the bootstrap, so any token minted right now would vanish within minutes. Remove the env var from Vercel Settings → Environment Variables, redeploy, and run /welcome again.",
+          "KEBAB_RECOVERY_RESET=1 is set on this deployment — every cold lambda wipes the bootstrap, so any token minted right now would vanish within minutes. Remove the env var from Vercel Settings → Environment Variables, redeploy, and run /welcome again.",
       },
       { status: 409 }
     );

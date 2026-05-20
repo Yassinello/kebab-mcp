@@ -144,8 +144,9 @@ describe("forceReset", () => {
   });
 });
 
-describe("MYMCP_RECOVERY_RESET", () => {
+describe("RECOVERY_RESET (KEBAB_* + MYMCP_* aliases)", () => {
   const ORIGINAL_RESET = process.env.MYMCP_RECOVERY_RESET;
+  const ORIGINAL_KEBAB_RESET = process.env.KEBAB_RECOVERY_RESET;
 
   afterEach(() => {
     if (ORIGINAL_RESET === undefined) {
@@ -153,11 +154,15 @@ describe("MYMCP_RECOVERY_RESET", () => {
     } else {
       process.env.MYMCP_RECOVERY_RESET = ORIGINAL_RESET;
     }
+    if (ORIGINAL_KEBAB_RESET === undefined) {
+      delete process.env.KEBAB_RECOVERY_RESET;
+    } else {
+      process.env.KEBAB_RECOVERY_RESET = ORIGINAL_KEBAB_RESET;
+    }
   });
 
-  it("prevents rehydrate from /tmp and deletes the file", () => {
+  function seedTmpBootstrap(): void {
     __resetFirstRunForTests();
-    // Manually write a bootstrap payload to /tmp.
     const payload = {
       claimId: "a".repeat(64),
       token: "b".repeat(64),
@@ -165,8 +170,24 @@ describe("MYMCP_RECOVERY_RESET", () => {
     };
     writeFileSync(__internals.BOOTSTRAP_PATH, JSON.stringify(payload), { encoding: "utf-8" });
     expect(existsSync(__internals.BOOTSTRAP_PATH)).toBe(true);
+  }
+
+  it("legacy MYMCP_RECOVERY_RESET prevents rehydrate from /tmp and deletes the file", () => {
+    delete process.env.KEBAB_RECOVERY_RESET;
+    seedTmpBootstrap();
 
     process.env.MYMCP_RECOVERY_RESET = "1";
+    rehydrateBootstrapFromTmp();
+
+    expect(isBootstrapActive()).toBe(false);
+    expect(existsSync(__internals.BOOTSTRAP_PATH)).toBe(false);
+  });
+
+  it("modern KEBAB_RECOVERY_RESET also wipes bootstrap (HIGH-2 regression)", () => {
+    delete process.env.MYMCP_RECOVERY_RESET;
+    seedTmpBootstrap();
+
+    process.env.KEBAB_RECOVERY_RESET = "1";
     rehydrateBootstrapFromTmp();
 
     expect(isBootstrapActive()).toBe(false);
