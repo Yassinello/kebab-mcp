@@ -121,8 +121,10 @@ async function unipileWebhookHandler(ctx: PipelineContext): Promise<Response> {
     }
   }
 
-  // D-55 fire-and-forget — return 200 fast, handler work runs after.
-  // Vercel keeps the lambda alive ~30s post-response.
+  // D-55: return 200 fast, dispatch work (KV state updates) runs post-response
+  // while Vercel keeps the lambda alive ~30s; its failure is logged below and
+  // the caller (Unipile) does not depend on it.
+  // fire-and-forget OK: webhook ACK must be sub-second; dispatch runs after the response
   void dispatchEventAsync(payload).catch((err) =>
     log.error("[CONNECTOR:unipile-webhook] dispatch failed", {
       err: toMsg(err),

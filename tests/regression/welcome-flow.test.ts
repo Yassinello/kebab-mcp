@@ -39,6 +39,7 @@ const TRACKED = [
   "MCP_AUTH_TOKEN",
   "ADMIN_AUTH_TOKEN",
   "MYMCP_RECOVERY_RESET",
+  "KEBAB_RECOVERY_RESET",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "KV_REST_API_URL",
@@ -209,8 +210,12 @@ describe("TEST-03 batch A.1 — welcome-flow regressions", () => {
     expect(hasPostFixCopy).toBe(true);
   });
 
-  // ── BUG-05 — MYMCP_RECOVERY_RESET=1 foot-gun guard (5273add) ────────
-  it("regression: BUG-05 init 409s when MYMCP_RECOVERY_RESET=1", async () => {
+  // ── BUG-05 — RECOVERY_RESET=1 foot-gun guard (5273add) ──────────────
+  // HIGH-2 rebrand: the guard now reads getConfig("KEBAB_RECOVERY_RESET")
+  // (which resolves the KEBAB_*→MYMCP_* alias) and the 409 copy names the
+  // modern KEBAB_RECOVERY_RESET. The legacy env var must still trigger the
+  // guard (back-compat via the alias).
+  it("regression: BUG-05 init 409s when legacy MYMCP_RECOVERY_RESET=1 (alias)", async () => {
     // Direct assertion against the route handler — the guard is at the
     // TOP of postHandler in app/api/welcome/init/route.ts.
     process.env.MYMCP_RECOVERY_RESET = "1";
@@ -224,8 +229,23 @@ describe("TEST-03 batch A.1 — welcome-flow regressions", () => {
 
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toMatch(/MYMCP_RECOVERY_RESET=1/);
+    expect(body.error).toMatch(/RECOVERY_RESET=1/);
     expect(body.error).toMatch(/[Rr]emove the env var/);
+  });
+
+  it("regression: HIGH-2 init 409s when modern KEBAB_RECOVERY_RESET=1", async () => {
+    process.env.KEBAB_RECOVERY_RESET = "1";
+
+    const req = new Request("http://localhost:3000/api/welcome/init", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const res = await welcomeInitPOST(req);
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/KEBAB_RECOVERY_RESET=1/);
   });
 
   // ── BUG-06 — init surfaces KV persist failures (1460841) ────────────

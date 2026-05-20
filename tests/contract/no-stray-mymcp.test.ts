@@ -54,6 +54,9 @@ const ALLOWLIST: readonly string[] = [
   // Phase 53: metrics ratelimit route reads MYMCP_RATE_LIMIT_RPM to
   // show Max column; matches the existing admin/rate-limits pattern.
   "app/api/admin/metrics/ratelimit/route.ts",
+  // Doc comment references the real Edge-runtime KV key
+  // `mymcp:firstrun:bootstrap` (cannot be renamed — load-bearing literal).
+  "app/api/config/auth-token/route.ts",
   "app/api/config/context/route.ts",
   "app/api/config/env/route.ts",
   "app/api/config/env-export/route.ts",
