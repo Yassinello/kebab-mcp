@@ -211,4 +211,67 @@ describe("credential-store SEC-02", () => {
     expect(scanCalls).toBe(1);
     expect(getHydratedCredentialSnapshot().CONCURRENT_TEST_KEY).toBe("shared-value");
   });
+
+  it("HIGH-4: hydration snapshot is isolated per tenant on a warm lambda", async () => {
+    // Tenant-aware KV: each tenant's `cred:*` keys live under its prefix,
+    // and getTenantKVStore(tenantId) returns a view scoped to that tenant —
+    // exactly like the real TenantKVStore. We seed DIFFERENT credentials
+    // for two tenants, then hydrate both within their own request context
+    // and assert each snapshot only contains its own tenant's values.
+    // Use a key NOT present in .env / bootEnv — otherwise hydrate's
+    // "boot env wins" guard (`!getConfig(envKey)`) correctly skips the write.
+    const KEY = "HIGH4_TENANT_CRED_TEST";
+    const backing = new Map<string, string>();
+    backing.set(`tenant:alpha:cred:${KEY}`, "xoxb-ALPHA");
+    backing.set(`tenant:beta:cred:${KEY}`, "xoxb-BETA");
+
+    function viewFor(tenantId: string | null) {
+      const prefix = tenantId ? `tenant:${tenantId}:` : "";
+      const pk = (k: string) => `${prefix}${k}`;
+      // Mirrors TenantKVStore: callers pass BARE keys; this view prefixes
+      // them on the way in and strips the prefix from scan() results on the
+      // way out. hydrateCredentialsFromKV → kvScanAll(kv, "cred:*") gets bare
+      // keys back, then calls kv.mget(bareKeys), so mget must re-prefix.
+      return {
+        kind: "upstash" as const,
+        get: async (k: string) => backing.get(pk(k)) ?? null,
+        set: async (k: string, v: string) => {
+          backing.set(pk(k), v);
+        },
+        delete: async (k: string) => {
+          backing.delete(pk(k));
+        },
+        list: async () => [],
+        mget: async (keys: string[]) => keys.map((k) => backing.get(pk(k)) ?? null),
+        scan: async (_c: string, opts?: { match?: string }) => {
+          const m = opts?.match ?? "";
+          const raw = m.endsWith("*") ? m.slice(0, -1) : m;
+          const full = `${prefix}${raw}`;
+          const keys = Array.from(backing.keys())
+            .filter((k) => k.startsWith(full))
+            // TenantKVStore.scan strips the tenant prefix before returning.
+            .map((k) => (prefix && k.startsWith(prefix) ? k.slice(prefix.length) : k));
+          return { cursor: "0", keys };
+        },
+      };
+    }
+
+    tenantKvSpy.mockImplementation(
+      (tenantId: string | null) =>
+        viewFor(tenantId) as unknown as ReturnType<typeof kvStore.getTenantKVStore>
+    );
+
+    const alphaSnap = await requestContext.run({ tenantId: "alpha" }, async () => {
+      await hydrateCredentialsFromKV();
+      return getHydratedCredentialSnapshot()[KEY];
+    });
+    const betaSnap = await requestContext.run({ tenantId: "beta" }, async () => {
+      await hydrateCredentialsFromKV();
+      return getHydratedCredentialSnapshot()[KEY];
+    });
+
+    // Pre-fix, beta would inherit alpha's process-global snapshot.
+    expect(alphaSnap).toBe("xoxb-ALPHA");
+    expect(betaSnap).toBe("xoxb-BETA");
+  });
 });

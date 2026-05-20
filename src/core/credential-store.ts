@@ -18,7 +18,7 @@
  */
 
 import { kvScanAll } from "./kv-store";
-import { getContextKVStore } from "./request-context";
+import { getContextKVStore, getCurrentTenantId } from "./request-context";
 import { hasUpstashCreds } from "./upstash-env";
 import { getConfig } from "./config-facade";
 import { toMsg } from "./error-utils";
@@ -54,23 +54,53 @@ export function detectStorageBackend(): StorageBackend {
   return "filesystem";
 }
 
-// ── Module-scope credential snapshot (SEC-02) ─────────────────────────
+// ── Per-tenant credential snapshot (SEC-02 + HIGH-4) ──────────────────
 //
 // This replaces the pre-v0.10 practice of mutating process.env at
-// request time. `hydrateCredentialsFromKV()` writes into this snapshot,
-// and the transport wraps each request in `runWithCredentials(...)` so
-// tool handlers see the current hydrated state via `getCredential()`.
+// request time. `hydrateCredentialsFromKV()` writes into the snapshot
+// for the CURRENT tenant, and the transport wraps each request in
+// `runWithCredentials(...)` so tool handlers see the current hydrated
+// state via `getCredential()`.
 //
-// Never mutated by user-driven writes (`saveCredentialsToKV`); those
-// go straight to KV and the next cold lambda picks them up via
-// hydrate. This is intentional: request-level isolation trumps
-// "changes visible immediately in the current warm lambda".
+// HIGH-4: the snapshot + hydration promise are keyed by tenant id. They
+// used to be process-global, which leaked credentials across tenants on
+// warm lambdas: the first tenant to trigger hydration on a cold lambda
+// locked in its `cred:*` values (read via the tenant-scoped
+// `getContextKVStore()`), and every subsequent tenant reused that same
+// snapshot. Now each tenant gets its own memoized hydrate + snapshot, so
+// tenant B never sees tenant A's connector tokens.
+//
+// The null-tenant (default / single-tenant deploy) path uses the
+// `NULL_TENANT_KEY` sentinel and is unchanged behaviorally.
+//
+// Never mutated by cross-tenant writes — `saveCredentialsToKV` updates
+// only the calling tenant's snapshot, mirroring its tenant-scoped KV
+// write.
 
-let hydratedSnapshot: Record<string, string> = {};
+const NULL_TENANT_KEY = "__null__";
 
-/** Snapshot exposed for the transport layer to inject via runWithCredentials. */
+function tenantSnapshotKey(): string {
+  return getCurrentTenantId() ?? NULL_TENANT_KEY;
+}
+
+const hydratedSnapshots = new Map<string, Record<string, string>>();
+
+function getSnapshotForCurrentTenant(): Record<string, string> {
+  const key = tenantSnapshotKey();
+  let snap = hydratedSnapshots.get(key);
+  if (!snap) {
+    snap = {};
+    hydratedSnapshots.set(key, snap);
+  }
+  return snap;
+}
+
+/**
+ * Snapshot exposed for the transport layer to inject via
+ * runWithCredentials. Returns the CURRENT tenant's snapshot (HIGH-4).
+ */
 export function getHydratedCredentialSnapshot(): Record<string, string> {
-  return hydratedSnapshot;
+  return getSnapshotForCurrentTenant();
 }
 
 /**
@@ -85,16 +115,16 @@ export function getHydratedCredentialSnapshot(): Record<string, string> {
  */
 export async function saveCredentialsToKV(vars: Record<string, string>): Promise<void> {
   const kv = getContextKVStore();
+  const snapshot = getSnapshotForCurrentTenant();
   const writes: Promise<void>[] = [];
   for (const [key, value] of Object.entries(vars)) {
     if (value) {
       writes.push(kv.set(`${CRED_PREFIX}${key}`, value));
-      // Also update the in-process snapshot so the current warm
-      // lambda's next request sees the new value via getCredential().
-      // This is intentional: writes through saveCredentialsToKV() are
-      // operator-driven (dashboard save), not per-tenant, so the
-      // process-wide snapshot is the right shape.
-      hydratedSnapshot[key] = value;
+      // Also update the in-process snapshot so the current warm lambda's
+      // next request sees the new value via getCredential(). HIGH-4: the
+      // write lands in the CURRENT tenant's snapshot, matching the
+      // tenant-scoped KV write above — never a process-global snapshot.
+      snapshot[key] = value;
     }
   }
   await Promise.all(writes);
@@ -110,7 +140,10 @@ export async function saveCredentialsToKV(vars: Record<string, string>): Promise
 // were actually in KV. Memoizing the promise (and clearing it on
 // failure) lets concurrent callers share one in-flight fetch while
 // allowing the next caller to retry after a failure.
-let hydrationPromise: Promise<void> | null = null;
+//
+// HIGH-4: keyed per-tenant so tenant A's in-flight hydrate doesn't get
+// reused by tenant B (which would serve A's credentials).
+const hydrationPromises = new Map<string, Promise<void>>();
 
 /**
  * Load all `cred:*` keys from KV into the in-process snapshot.
@@ -129,8 +162,12 @@ let hydrationPromise: Promise<void> | null = null;
  * inheriting a poisoned cache.
  */
 export async function hydrateCredentialsFromKV(): Promise<void> {
-  if (hydrationPromise) return hydrationPromise;
-  hydrationPromise = (async () => {
+  const tenantKey = tenantSnapshotKey();
+  const existing = hydrationPromises.get(tenantKey);
+  if (existing) return existing;
+
+  const snapshot = getSnapshotForCurrentTenant();
+  const promise = (async () => {
     const kv = getContextKVStore();
     // Only hydrate if we have real KV (Upstash) — ephemeral /tmp KV
     // on Vercel without Upstash doesn't survive cold starts anyway.
@@ -148,11 +185,13 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
       const value = values[i];
       // Don't overwrite existing env vars — boot env takes precedence.
       if (value && !getConfig(envKey)) {
-        hydratedSnapshot[envKey] = value;
+        snapshot[envKey] = value;
       }
     }
     if (keys.length > 0) {
-      console.log(`[Kebab MCP] Hydrated ${keys.length} credential(s) from KV (SEC-02 snapshot)`);
+      console.log(
+        `[Kebab MCP] Hydrated ${keys.length} credential(s) from KV (SEC-02 snapshot, tenant=${tenantKey})`
+      );
     }
   })().catch((err: unknown) => {
     console.warn("[Kebab MCP] Failed to hydrate credentials from KV:", toMsg(err));
@@ -160,25 +199,28 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
     // a transient KV blip would lock the lambda into "snapshot empty"
     // forever, surfacing as "missing env" for every connector whose
     // credentials only live in KV.
-    hydrationPromise = null;
+    hydrationPromises.delete(tenantKey);
   });
-  return hydrationPromise;
+  hydrationPromises.set(tenantKey, promise);
+  return promise;
 }
 
 /**
- * Reset the hydration flag. Test-only.
+ * Reset all per-tenant hydration state. Test-only.
  */
 export function resetHydrationFlag(): void {
-  hydrationPromise = null;
-  hydratedSnapshot = {};
+  hydrationPromises.clear();
+  hydratedSnapshots.clear();
 }
 
 /**
- * Clear the bootstrap flag so hydration re-runs on next resolveRegistry.
- * Called after credentials are saved to KV to ensure they're visible.
+ * Clear the current tenant's hydration promise so hydration re-runs on
+ * the next resolveRegistry. Called after credentials are saved to KV to
+ * ensure they're visible. HIGH-4: scoped to the calling tenant — a
+ * dashboard save under tenant A must not force tenant B to re-hydrate.
  */
 export function resetCredentialHydration(): void {
-  hydrationPromise = null;
+  hydrationPromises.delete(tenantSnapshotKey());
 }
 
 /**
