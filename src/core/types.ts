@@ -122,6 +122,14 @@ export interface TestConnectionResult {
    * surface (or no kill switch) leave it unset.
    */
   writes_disabled?: boolean;
+  /**
+   * Phase 72 (D-72): connectors backed by a multi-account provider (e.g.
+   * Unipile, where one token can have several LinkedIn/WhatsApp accounts) may
+   * surface the connected accounts here so the /config UI can render a
+   * "default account" picker showing human names instead of opaque ids.
+   * Optional + backward-compatible — single-account connectors leave it unset.
+   */
+  accounts?: Array<{ id: string; name: string; type: string }>;
 }
 
 /** Pack manifest — groups related tools */

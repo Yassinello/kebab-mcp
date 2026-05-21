@@ -206,4 +206,42 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
       expect(r.writes_disabled).toBe(true);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 72 (D-72) — probe() surfaces connected accounts for the picker
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("Phase 72 — probe() surfaces accounts {id, name, type} (D-72)", () => {
+    it("returns LinkedIn + WhatsApp accounts with id/name/type; drops mail + id-less", async () => {
+      getAllMock.mockResolvedValueOnce({
+        items: [
+          { id: "li_1", name: "Yassine (perso)", type: "LINKEDIN" },
+          { id: "li_2", name: "Colleague A", type: "LINKEDIN" },
+          { id: "wa_1", name: "WhatsApp Biz", type: "WHATSAPP" },
+          { id: "mail_1", name: "inbox@x.com", type: "MAIL" }, // dropped: not a picker type
+          { name: "no-id", type: "LINKEDIN" }, // dropped: missing id
+        ],
+      });
+      const r = (await unipileConnector.testConnection!({
+        UNIPILE_DSN: "api.unipile.com",
+        UNIPILE_TOKEN: "tok",
+      })) as { ok: boolean; accounts?: Array<{ id: string; name: string; type: string }> };
+      expect(r.ok).toBe(true);
+      expect(r.accounts).toEqual([
+        { id: "li_1", name: "Yassine (perso)", type: "LINKEDIN" },
+        { id: "li_2", name: "Colleague A", type: "LINKEDIN" },
+        { id: "wa_1", name: "WhatsApp Biz", type: "WHATSAPP" },
+      ]);
+    });
+
+    it("falls back to id as name when the account has no name field", async () => {
+      getAllMock.mockResolvedValueOnce({
+        items: [{ id: "li_only", type: "LINKEDIN" }],
+      });
+      const r = (await unipileConnector.testConnection!({
+        UNIPILE_DSN: "api.unipile.com",
+        UNIPILE_TOKEN: "tok",
+      })) as { ok: boolean; accounts?: Array<{ id: string; name: string; type: string }> };
+      expect(r.accounts).toEqual([{ id: "li_only", name: "li_only", type: "LINKEDIN" }]);
+    });
+  });
 });

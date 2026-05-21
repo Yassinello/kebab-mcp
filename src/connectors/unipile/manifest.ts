@@ -76,9 +76,11 @@ const log = getLogger("CONNECTOR:unipile");
  */
 
 interface UnipileAccountItem {
+  id?: string;
+  name?: string;
   type?: string;
-  // SDK exposes additional fields (id, status, etc.) — only `type` is
-  // load-bearing here; the rest are intentionally unmodeled.
+  // SDK exposes additional fields (status, created_at, etc.) — only id/name/
+  // type are load-bearing here; the rest are intentionally unmodeled.
 }
 
 interface UnipileAccountListResponse {
@@ -88,6 +90,26 @@ interface UnipileAccountListResponse {
 function countLinkedinAccounts(resp: UnipileAccountListResponse): number {
   const items = resp.items ?? [];
   return items.filter((it) => it?.type === "LINKEDIN").length;
+}
+
+/**
+ * Phase 72 (D-72): project the connected accounts into the minimal
+ * {id, name, type} shape the /config default-account picker consumes. Only
+ * messaging types Kebab tools can act on are surfaced (LinkedIn + WhatsApp);
+ * mail/calendar/etc. accounts on the same Unipile token are irrelevant to the
+ * picker and omitted. Items missing an id are dropped (an id-less account can
+ * never be pinned). NEVER includes credentials — only the provider's own
+ * public id + display name (T-68-01-01).
+ */
+const PICKER_ACCOUNT_TYPES = new Set(["LINKEDIN", "WHATSAPP"]);
+
+function pickerAccounts(
+  resp: UnipileAccountListResponse
+): Array<{ id: string; name: string; type: string }> {
+  const items = resp.items ?? [];
+  return items
+    .filter((it) => it?.type && PICKER_ACCOUNT_TYPES.has(it.type) && it.id)
+    .map((it) => ({ id: it.id!, name: it.name ?? it.id!, type: it.type! }));
 }
 
 async function probe(
@@ -101,6 +123,9 @@ async function probe(
   // /config → Connectors tile. Always populated (true | false) so the
   // dashboard can render the warning state without optional-handling.
   writes_disabled?: boolean;
+  // Phase 72 (D-72) — connected LinkedIn/WhatsApp accounts for the /config
+  // default-account picker. Populated on the success path only.
+  accounts?: Array<{ id: string; name: string; type: string }>;
 }> {
   const writes_disabled = isWritesDisabled();
   try {
@@ -116,6 +141,7 @@ async function probe(
           ? `Connected — ${linkedinCount} LinkedIn account(s) — ⚠ writes disabled`
           : `Connected — ${linkedinCount} LinkedIn account(s)`,
         writes_disabled,
+        accounts: pickerAccounts(resp),
       };
     }
     log.info(`Unipile probe: no LinkedIn account connected (${total} total accounts)`);
