@@ -8,6 +8,7 @@ import { renderMarkdown } from "@/core/markdown-lite";
 import { EnvStubBlock } from "./env-stub-block";
 import { ApiConnectionsSection } from "./api-connections-section";
 import { LinkedinConnectButton } from "./linkedin-connect-button";
+import { UnipileAccountSelector } from "./unipile-account-selector";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
@@ -618,6 +619,17 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         currentContextId={getValue("BROWSERBASE_CONTEXT_LINKEDIN")}
                         onSaved={(id) => {
                           setEnvVars((p) => ({ ...p, BROWSERBASE_CONTEXT_LINKEDIN: id }));
+                        }}
+                      />
+                    )}
+                    {pack.id === "unipile" && pack.enabled && (
+                      <UnipileAccountSelector
+                        values={{
+                          UNIPILE_LINKEDIN_ACCOUNT_ID: getValue("UNIPILE_LINKEDIN_ACCOUNT_ID"),
+                          UNIPILE_WHATSAPP_ACCOUNT_ID: getValue("UNIPILE_WHATSAPP_ACCOUNT_ID"),
+                        }}
+                        onSaved={(key, value) => {
+                          setEnvVars((p) => ({ ...p, [key]: value }));
                         }}
                       />
                     )}

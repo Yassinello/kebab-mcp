@@ -291,6 +291,26 @@ export const PACKS: ConnectorDef[] = [
         placeholder: "your-unipile-token",
         sensitive: true,
       },
+      {
+        // Phase 72 (D-72): pinned default LinkedIn account. Optional — only
+        // matters when the token has ≥2 LinkedIn accounts (e.g. a shared
+        // team token). The UnipileAccountSelector below offers a dropdown of
+        // account names; this field is the persisted target. Falls through to
+        // the count-based resolver rules when empty.
+        key: "UNIPILE_LINKEDIN_ACCOUNT_ID",
+        label: "Default LinkedIn account",
+        help: "Which connected LinkedIn account tools act as by default. Run Test connection, then pick from the dropdown below.",
+        placeholder: "(auto when only one LinkedIn account)",
+        optional: true,
+      },
+      {
+        // Phase 72 (D-72): pinned default WhatsApp account (read tools).
+        key: "UNIPILE_WHATSAPP_ACCOUNT_ID",
+        label: "Default WhatsApp account",
+        help: "Which connected WhatsApp account inbox-read tools use by default. Pick from the dropdown below after Test connection.",
+        placeholder: "(auto when only one WhatsApp account)",
+        optional: true,
+      },
     ],
   },
   {
