@@ -67,6 +67,26 @@ Tool envelope (write tools):
 | `UNIPILE_DSN` | Tenant API URL (e.g. `https://api41.unipile.com:17153`). Accepts both protocol-included and bare host:port. |
 | `UNIPILE_TOKEN` | X-API-KEY header for all SDK requests. Rotate via dashboard. |
 
+### Default account selection (multi-account tokens)
+
+| Var | Description |
+|---|---|
+| `UNIPILE_LINKEDIN_ACCOUNT_ID` | Optional. The connected LinkedIn account that write/read tools act as **by default** when no explicit `account_id` is passed. Only needed when the token has ≥2 LinkedIn accounts. |
+| `UNIPILE_WHATSAPP_ACCOUNT_ID` | Optional. Same idea for the WhatsApp inbox-read tools. |
+
+Set these via the **/config → Connectors → Unipile → Default account** dropdown (which shows account *names*, not opaque ids) rather than by hand.
+
+#### Account resolution precedence (D-72)
+
+Every LinkedIn/WhatsApp tool resolves which account to act as in this order:
+
+1. **Explicit `account_id` in the tool call** — always wins, skips the account-list lookup entirely. Use this to act from a *different* account ad-hoc (e.g. a colleague's account on a shared token).
+2. **`UNIPILE_<TYPE>_ACCOUNT_ID` pinned default** — used **only after validating it still exists** in the live `account.getAll()` list. If the pinned account was removed or the token was swapped, the resolver falls through rather than firing into the void.
+3. **Exactly one account of that type** — auto-selected silently.
+4. **≥2 accounts and nothing usable pinned** — refuses with `error_account_id_required` + the list of available ids (safety net).
+
+This is what makes a **shared token** (e.g. a team Brevo token wired to 5 LinkedIn accounts) safe: pin *your* account once and every call defaults to it, while colleagues' accounts are only ever reached by an explicit per-call `account_id`. The pinned default costs the same single `getAll()` the no-arg path already pays — no extra round-trip.
+
 ### Webhook ingress
 
 | Var | Description |
@@ -185,7 +205,11 @@ The global kill switch is set. Unset `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` en
 The connected LinkedIn account doesn't have Premium / Sales Navigator. InMail requires one of those tiers.
 
 ### `error_account_id_required`
-Multiple LinkedIn accounts are connected to your Unipile tenant. Pass `account_id` explicitly in the tool call.
+Multiple LinkedIn accounts are connected to your Unipile token and no default is pinned. Two fixes:
+- **Pin a default** (recommended): /config → Connectors → Unipile → **Default account** dropdown, or set `UNIPILE_LINKEDIN_ACCOUNT_ID`. Every call then defaults to that account. See [Account resolution precedence](#account-resolution-precedence-d-72).
+- **Override per call**: pass `account_id` explicitly in the tool call (wins over any pinned default).
+
+If you *did* pin a default and still see this error, the pinned id is no longer in the token's account list (account removed or token swapped) — re-pick from the dropdown.
 
 ### `error_no_linkedin_account`
 No LinkedIn account is connected to your Unipile tenant. Add one in the Unipile dashboard.
