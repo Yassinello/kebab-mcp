@@ -662,6 +662,7 @@
     "name": "notion_create",
     "pack": "notion",
     "schemaKeys": [
+      "account",
       "content",
       "database_id",
       "title"
@@ -672,6 +673,7 @@
     "name": "notion_query",
     "pack": "notion",
     "schemaKeys": [
+      "account",
       "database_id",
       "filter",
       "limit",
@@ -683,6 +685,7 @@
     "name": "notion_read",
     "pack": "notion",
     "schemaKeys": [
+      "account",
       "page_id"
     ],
     "destructive": false
@@ -691,6 +694,7 @@
     "name": "notion_search",
     "pack": "notion",
     "schemaKeys": [
+      "account",
       "limit",
       "query"
     ],
@@ -700,6 +704,7 @@
     "name": "notion_update",
     "pack": "notion",
     "schemaKeys": [
+      "account",
       "append_content",
       "page_id",
       "properties"
