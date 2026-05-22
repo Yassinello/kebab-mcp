@@ -99,6 +99,8 @@ export function UnipileAccountSelector({
   // ready without the user hunting for a button. Failures fall back to the
   // manual "Reload" button + the advanced disclosure.
   useEffect(() => {
+    // Mount-time probe; failures surface via the Reload button + error box.
+    // fire-and-forget OK: effect has no cleanup to await against.
     void loadAccounts();
   }, [loadAccounts]);
 
