@@ -1,6 +1,6 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
 import { SlackRateLimitError, SlackAuthError } from "@/core/connector-errors";
-import { getConfig } from "@/core/config-facade";
+import type { AccountTokenSet } from "@/core/connector-accounts";
 
 const SLACK_API = "https://slack.com/api";
 
@@ -9,11 +9,20 @@ interface SlackResponse {
   error?: string;
 }
 
+/**
+ * Phase 74 (MATL-01/03/05): the selected account's token set is threaded
+ * in from the tool handler (which resolved it via
+ * `resolveConnectorAccount("slack", …)`) instead of being read from
+ * `getConfig()` here. `slackFetch` uses `SLACK_BOT_TOKEN`; `searchMessages`
+ * falls back to `SLACK_USER_TOKEN ?? SLACK_BOT_TOKEN`. Missing token still
+ * surfaces the same CONFIGURATION_ERROR McpToolError as before.
+ */
 async function slackFetch<T extends SlackResponse>(
+  tokens: AccountTokenSet,
   method: string,
   params: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T> {
-  const token = getConfig("SLACK_BOT_TOKEN");
+  const token = tokens.SLACK_BOT_TOKEN;
   if (!token)
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,
@@ -85,7 +94,10 @@ export interface SlackMessage {
 
 // --- List channels ---
 
-export async function listChannels(limit?: number): Promise<SlackChannel[]> {
+export async function listChannels(
+  tokens: AccountTokenSet,
+  limit?: number
+): Promise<SlackChannel[]> {
   const data = await slackFetch<
     SlackResponse & {
       channels?: {
@@ -96,7 +108,7 @@ export async function listChannels(limit?: number): Promise<SlackChannel[]> {
         is_private?: boolean;
       }[];
     }
-  >("conversations.list", {
+  >(tokens, "conversations.list", {
     types: "public_channel,private_channel",
     limit: limit || 50,
     exclude_archived: true,
@@ -113,7 +125,11 @@ export async function listChannels(limit?: number): Promise<SlackChannel[]> {
 
 // --- Read messages ---
 
-export async function readMessages(channel: string, limit?: number): Promise<SlackMessage[]> {
+export async function readMessages(
+  tokens: AccountTokenSet,
+  channel: string,
+  limit?: number
+): Promise<SlackMessage[]> {
   const data = await slackFetch<
     SlackResponse & {
       messages?: {
@@ -124,7 +140,7 @@ export async function readMessages(channel: string, limit?: number): Promise<Sla
         reply_count?: number;
       }[];
     }
-  >("conversations.history", {
+  >(tokens, "conversations.history", {
     channel,
     limit: limit || 20,
   });
@@ -142,11 +158,13 @@ export async function readMessages(channel: string, limit?: number): Promise<Sla
 // --- Send message ---
 
 export async function sendMessage(
+  tokens: AccountTokenSet,
   channel: string,
   text: string,
   threadTs?: string
 ): Promise<{ ts: string; channel: string }> {
   const data = await slackFetch<SlackResponse & { ts: string; channel: string }>(
+    tokens,
     "chat.postMessage",
     { channel, text, thread_ts: threadTs }
   );
@@ -156,6 +174,7 @@ export async function sendMessage(
 // --- Read thread ---
 
 export async function readThread(
+  tokens: AccountTokenSet,
   channel: string,
   threadTs: string,
   limit?: number
@@ -169,7 +188,7 @@ export async function readThread(
         thread_ts?: string;
       }[];
     }
-  >("conversations.replies", {
+  >(tokens, "conversations.replies", {
     channel,
     ts: threadTs,
     limit: limit || 50,
@@ -200,7 +219,10 @@ export interface SlackProfile {
   statusEmoji: string;
 }
 
-export async function getUserProfile(userId: string): Promise<SlackProfile> {
+export async function getUserProfile(
+  tokens: AccountTokenSet,
+  userId: string
+): Promise<SlackProfile> {
   const data = await slackFetch<
     SlackResponse & {
       user?: {
@@ -217,7 +239,7 @@ export async function getUserProfile(userId: string): Promise<SlackProfile> {
         };
       };
     }
-  >("users.info", { user: userId });
+  >(tokens, "users.info", { user: userId });
 
   const u = data.user;
   return {
@@ -236,11 +258,12 @@ export async function getUserProfile(userId: string): Promise<SlackProfile> {
 // --- Search messages ---
 
 export async function searchMessages(
+  tokens: AccountTokenSet,
   query: string,
   count?: number
 ): Promise<{ text: string; channel: string; user: string; ts: string; date: string }[]> {
-  // Note: search requires a user token (xoxp-), not a bot token
-  const token = getConfig("SLACK_USER_TOKEN") || getConfig("SLACK_BOT_TOKEN");
+  // Note: search requires a user token (xoxp-), not a bot token (MATL-05).
+  const token = tokens.SLACK_USER_TOKEN || tokens.SLACK_BOT_TOKEN;
   if (!token)
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,

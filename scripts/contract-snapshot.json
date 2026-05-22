@@ -729,6 +729,7 @@
     "name": "slack_channels",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "limit"
     ],
     "destructive": false
@@ -737,6 +738,7 @@
     "name": "slack_profile",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "user"
     ],
     "destructive": false
@@ -745,6 +747,7 @@
     "name": "slack_read",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "channel",
       "limit"
     ],
@@ -754,6 +757,7 @@
     "name": "slack_search",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "count",
       "query"
     ],
@@ -763,6 +767,7 @@
     "name": "slack_send",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "channel",
       "text",
       "thread_ts"
@@ -773,6 +778,7 @@
     "name": "slack_thread",
     "pack": "slack",
     "schemaKeys": [
+      "account",
       "channel",
       "limit",
       "thread_ts"
