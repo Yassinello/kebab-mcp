@@ -33,10 +33,19 @@ A Notion workspace where you can install integrations. Notion integrations only 
       headers: { Authorization: `Bearer ${key}`, "Notion-Version": "2022-06-28" },
     });
     if (res.ok) {
-      const data = (await res.json()) as { name?: string; type?: string };
+      const data = (await res.json()) as { id?: string; name?: string; type?: string };
+      // Phase 75 (MAUI): also surface the integration name + bot id so the
+      // multi-account selector can auto-derive the saved account's display
+      // name. `/v1/users/me` returns `name` = integration name, `id` = bot
+      // user id. `message` is left UNCHANGED — setup-test-dispatch + other
+      // callers assert against it. exactOptionalPropertyTypes: only attach
+      // account_id when present.
+      const accountName = data.name || "Notion integration";
       return {
         ok: true,
-        message: `Connected as ${data.name || "Notion integration"} (${data.type || "bot"})`,
+        message: `Connected as ${accountName} (${data.type || "bot"})`,
+        account_name: accountName,
+        ...(data.id ? { account_id: data.id } : {}),
       };
     }
     const errData = (await res.json().catch(() => ({}))) as { message?: string; code?: string };

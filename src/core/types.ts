@@ -130,6 +130,24 @@ export interface TestConnectionResult {
    * Optional + backward-compatible — single-account connectors leave it unset.
    */
   accounts?: Array<{ id: string; name: string; type: string }>;
+  /**
+   * Phase 75 (MAUI): the provider-derived display name for the credential
+   * set that was just tested (Slack: workspace `team`; Notion: integration
+   * `name`). The multi-account `/api/config/accounts` POST route uses this
+   * to auto-name a newly-connected account so the operator never types an
+   * opaque id. Optional + backward-compatible — connectors that don't
+   * surface a friendly name leave it unset and the route falls back to a
+   * caller-supplied name.
+   */
+  account_name?: string;
+  /**
+   * Phase 75 (MAUI): the provider-side id for the tested credential set
+   * (Slack: `team_id`; Notion: bot id), when the test response carries one.
+   * Currently informational — the store keys accounts by slug, not this id —
+   * but kept for parity with the `account_name` derivation and future
+   * dedup-by-provider-id work. Optional + backward-compatible.
+   */
+  account_id?: string;
 }
 
 /** Pack manifest — groups related tools */
