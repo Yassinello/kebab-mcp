@@ -19,8 +19,8 @@ import {
  * Auth + tenant scoping: `withAdminAuth` runs `[rehydrateStep,
  * authStep('admin')]`, identical to `/api/config/env`. Every store call
  * goes through `getContextKVStore()` inside connector-accounts.ts, so a
- * tenant-scoped admin (x-mymcp-tenant header) reads/writes only its own
- * `tenant:<id>:cred:acct:*` namespace.
+ * tenant-scoped admin (per the tenant header — see src/core/tenant.ts)
+ * reads/writes only its own `tenant:<id>:cred:acct:*` namespace.
  *
  * Token hygiene (SEC): the GET path NEVER echoes token values — it
  * returns `{ slug, name }` pairs only. The POST path accepts tokens,
