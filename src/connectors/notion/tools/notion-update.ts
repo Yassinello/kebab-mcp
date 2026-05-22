@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { updatePage } from "../lib/notion-api";
+import { resolveNotionTokens } from "../lib/resolve-account";
 
 export const notionUpdateSchema = {
   page_id: z.string().describe("Notion page ID to update"),
@@ -13,14 +14,29 @@ export const notionUpdateSchema = {
     .string()
     .optional()
     .describe("Text to append to the page (paragraphs separated by double newlines)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleNotionUpdate(params: {
   page_id: string;
   properties?: Record<string, string | number | boolean> | undefined;
   append_content?: string | undefined;
+  account?: string | undefined;
 }) {
-  const result = await updatePage(params.page_id, params.properties, params.append_content);
+  const resolved = await resolveNotionTokens(params.account);
+  if (!resolved.ok) return resolved.result;
+
+  const result = await updatePage(
+    resolved.tokens,
+    params.page_id,
+    params.properties,
+    params.append_content
+  );
 
   const actions: string[] = [];
   if (params.properties)

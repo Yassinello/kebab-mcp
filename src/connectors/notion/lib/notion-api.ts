@@ -1,13 +1,21 @@
-import { getConfig } from "@/core/config-facade";
+import type { AccountTokenSet } from "@/core/connector-accounts";
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
+/**
+ * Phase 74 (MATL-02): the selected account's token set is threaded in from
+ * the tool handler (which resolved it via `resolveConnectorAccount("notion",
+ * …)`) instead of being read from `getConfig()` here. `notionFetch` uses the
+ * account's `NOTION_API_KEY`. Missing key still throws the same plain Error
+ * as before.
+ */
 async function notionFetch<T>(
+  tokens: AccountTokenSet,
   path: string,
   opts: { method?: string | undefined; body?: unknown | undefined } = {}
 ): Promise<T> {
-  const token = getConfig("NOTION_API_KEY");
+  const token = tokens.NOTION_API_KEY;
   if (!token) throw new Error("NOTION_API_KEY not configured");
 
   const res = await fetch(`${NOTION_API}${path}`, {
@@ -93,7 +101,11 @@ function extractProperty(prop: NotionProperty): string {
 
 // --- Search ---
 
-export async function searchNotion(query: string, limit?: number): Promise<NotionPage[]> {
+export async function searchNotion(
+  tokens: AccountTokenSet,
+  query: string,
+  limit?: number
+): Promise<NotionPage[]> {
   const data = await notionFetch<{
     results: {
       id: string;
@@ -101,7 +113,7 @@ export async function searchNotion(query: string, limit?: number): Promise<Notio
       last_edited_time: string;
       properties?: Record<string, NotionProperty>;
     }[];
-  }>("/search", {
+  }>(tokens, "/search", {
     method: "POST",
     body: {
       query,
@@ -127,11 +139,14 @@ export async function searchNotion(query: string, limit?: number): Promise<Notio
 
 // --- Read page content ---
 
-export async function readPage(pageId: string): Promise<{ title: string; content: string }> {
+export async function readPage(
+  tokens: AccountTokenSet,
+  pageId: string
+): Promise<{ title: string; content: string }> {
   // Get page metadata
   const page = await notionFetch<{
     properties?: Record<string, NotionProperty>;
-  }>(`/pages/${pageId}`);
+  }>(tokens, `/pages/${pageId}`);
 
   const title = page.properties ? extractTitle(page.properties) : "(untitled)";
 
@@ -141,7 +156,7 @@ export async function readPage(pageId: string): Promise<{ title: string; content
       type: string;
       [key: string]: unknown;
     }[];
-  }>(`/blocks/${pageId}/children?page_size=100`);
+  }>(tokens, `/blocks/${pageId}/children?page_size=100`);
 
   const lines: string[] = [];
   for (const block of blocks.results) {
@@ -193,6 +208,7 @@ export async function readPage(pageId: string): Promise<{ title: string; content
 // --- Query database ---
 
 export async function queryDatabase(
+  tokens: AccountTokenSet,
   databaseId: string,
   filter?: Record<string, string | number | boolean>,
   sort?: string,
@@ -238,7 +254,7 @@ export async function queryDatabase(
       last_edited_time: string;
       properties?: Record<string, NotionProperty>;
     }[];
-  }>(`/databases/${databaseId}/query`, {
+  }>(tokens, `/databases/${databaseId}/query`, {
     method: "POST",
     body,
   });
@@ -261,6 +277,7 @@ export async function queryDatabase(
 // --- Update page ---
 
 export async function updatePage(
+  tokens: AccountTokenSet,
   pageId: string,
   properties?: Record<string, string | number | boolean>,
   appendContent?: string
@@ -282,7 +299,7 @@ export async function updatePage(
       }
     }
 
-    await notionFetch(`/pages/${pageId}`, {
+    await notionFetch(tokens, `/pages/${pageId}`, {
       method: "PATCH",
       body: { properties: notionProps },
     });
@@ -301,24 +318,27 @@ export async function updatePage(
         },
       }));
 
-    await notionFetch(`/blocks/${pageId}/children`, {
+    await notionFetch(tokens, `/blocks/${pageId}/children`, {
       method: "PATCH",
       body: { children },
     });
   }
 
   // Return page info
-  const page = await notionFetch<{ id: string; url: string }>(`/pages/${pageId}`);
+  const page = await notionFetch<{ id: string; url: string }>(tokens, `/pages/${pageId}`);
   return { id: page.id, url: page.url };
 }
 
 // --- Create page ---
 
-export async function createPage(opts: {
-  parentId: string;
-  title: string;
-  content?: string | undefined;
-}): Promise<{ id: string; url: string }> {
+export async function createPage(
+  tokens: AccountTokenSet,
+  opts: {
+    parentId: string;
+    title: string;
+    content?: string | undefined;
+  }
+): Promise<{ id: string; url: string }> {
   const children: unknown[] = [];
 
   if (opts.content) {
@@ -334,7 +354,7 @@ export async function createPage(opts: {
     }
   }
 
-  const data = await notionFetch<{ id: string; url: string }>("/pages", {
+  const data = await notionFetch<{ id: string; url: string }>(tokens, "/pages", {
     method: "POST",
     body: {
       parent: { database_id: opts.parentId },

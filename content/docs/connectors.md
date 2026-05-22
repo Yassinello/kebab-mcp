@@ -39,9 +39,31 @@ Generate a fine-grained PAT at [github.com/settings/tokens](https://github.com/s
 
 Required: `NOTION_API_KEY`. Create an Internal Integration at [notion.so/profile/integrations](https://www.notion.so/profile/integrations), then share the pages/databases you want to expose with the integration from inside Notion.
 
+### Multiple accounts
+
+You can connect more than one Notion integration (e.g. a personal workspace and a team workspace) and switch between them per tool call.
+
+- **Connect a 2nd account**: `/config → Connectors → Notion → Connected accounts → Add another Notion account`. Paste the second integration token and click **Add account**. The token is tested before saving, and the account is named automatically from the integration's name in Notion.
+- **Pin a default**: each connected account shows a radio button — pick the one tools should use when no account is specified. Marked with a **Default** badge.
+- **Use per call**: every Notion tool accepts an optional `account` parameter (the account **name** or its slug). Omit it to use the pinned default — or your only account.
+- **Single-token deployments keep working**: if you just set `NOTION_API_KEY` (env var or one saved token and nothing else), it's the implicit "default" account — no migration, the `account` parameter is optional.
+
+Tokens for each account are stored separately in tenant-scoped KV (never an env var) and never leave the server — the dashboard only ever sees account names.
+
 ## Slack
 
 Required: `SLACK_BOT_TOKEN` (`xoxb-...`). Create a Slack app, add scopes (`channels:read`, `chat:write`, `groups:read`, `im:read`, `mpim:read`, `search:read`, `users:read`), install to your workspace, copy the Bot User OAuth Token.
+
+### Multiple accounts
+
+You can connect more than one Slack workspace and switch between them per tool call.
+
+- **Connect a 2nd account**: `/config → Connectors → Slack → Connected accounts → Add another Slack account`. Paste the second workspace's Bot User OAuth Token (and optionally a User OAuth Token) and click **Add account**. The token is tested before saving, and the account is named automatically from the Slack workspace name.
+- **Pin a default**: each connected account shows a radio button — pick the workspace tools should act in when no account is specified. Marked with a **Default** badge.
+- **Use per call**: every Slack tool accepts an optional `account` parameter (the workspace **name** or its slug). Omit it to use the pinned default — or your only account. With ≥2 accounts and no default pinned, tools refuse and list the available account names so you can re-run with `account` set.
+- **Single-token deployments keep working**: if you just set `SLACK_BOT_TOKEN` (env var or one saved token and nothing else), it's the implicit "default" account — no migration, the `account` parameter is optional.
+
+Tokens for each account are stored separately in tenant-scoped KV (never an env var) and never leave the server — the dashboard only ever sees account names.
 
 ## Obsidian Vault (via GitHub)
 

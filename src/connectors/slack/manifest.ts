@@ -38,13 +38,22 @@ Admin access (or approval) to install a custom app in a Slack workspace. Free Sl
     const data = (await res.json()) as {
       ok: boolean;
       team?: string;
+      team_id?: string;
       error?: string;
       user?: string;
     };
     if (data.ok) {
+      // Phase 75 (MAUI): also surface the raw workspace name + id so the
+      // multi-account selector can auto-derive the saved account's display
+      // name (auth.test returns `team` = workspace name, `team_id` = its id).
+      // `message` is left UNCHANGED — setup-test-dispatch + other callers
+      // assert against it. exactOptionalPropertyTypes: only attach
+      // account_id when present.
       return {
         ok: true,
         message: `Connected to ${data.team} as ${data.user || "bot"}`,
+        account_name: data.team || "Slack workspace",
+        ...(data.team_id ? { account_id: data.team_id } : {}),
       };
     }
     return {

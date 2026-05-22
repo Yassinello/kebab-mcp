@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { queryDatabase } from "../lib/notion-api";
+import { resolveNotionTokens } from "../lib/resolve-account";
 
 export const notionQuerySchema = {
   database_id: z.string().describe("Notion database ID to query"),
@@ -14,6 +15,12 @@ export const notionQuerySchema = {
     .optional()
     .describe("Property name to sort by (descending). Default: last_edited_time."),
   limit: z.number().optional().describe("Max results (default: 20)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleNotionQuery(params: {
@@ -21,8 +28,18 @@ export async function handleNotionQuery(params: {
   filter?: Record<string, string | number | boolean> | undefined;
   sort?: string | undefined;
   limit?: number | undefined;
+  account?: string | undefined;
 }) {
-  const pages = await queryDatabase(params.database_id, params.filter, params.sort, params.limit);
+  const resolved = await resolveNotionTokens(params.account);
+  if (!resolved.ok) return resolved.result;
+
+  const pages = await queryDatabase(
+    resolved.tokens,
+    params.database_id,
+    params.filter,
+    params.sort,
+    params.limit
+  );
 
   if (pages.length === 0) {
     return { content: [{ type: "text" as const, text: "No results found." }] };

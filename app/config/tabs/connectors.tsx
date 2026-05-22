@@ -9,6 +9,7 @@ import { EnvStubBlock } from "./env-stub-block";
 import { ApiConnectionsSection } from "./api-connections-section";
 import { LinkedinConnectButton } from "./linkedin-connect-button";
 import { UnipileAccountSelector } from "./unipile-account-selector";
+import { MultiAccountSelector } from "./multi-account-selector";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
@@ -632,6 +633,12 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                           setEnvVars((p) => ({ ...p, [key]: value }));
                         }}
                       />
+                    )}
+                    {pack.id === "slack" && pack.enabled && (
+                      <MultiAccountSelector connector="slack" />
+                    )}
+                    {pack.id === "notion" && pack.enabled && (
+                      <MultiAccountSelector connector="notion" />
                     )}
                     {storageMode === "static" && (
                       <EnvStubBlock
