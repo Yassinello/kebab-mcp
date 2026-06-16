@@ -397,6 +397,14 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         // so the toggle acts as a "Setup" affordance instead of a silent no-op.
         const isConfigured = pack.enabled || !pack.reason.startsWith("missing env");
 
+        // Phase 76: slack/notion are configured through the multi-account
+        // selector (the primary path) rather than a single legacy token
+        // field — but only when the KV-backed account store is available.
+        // In static mode the store is unreachable, so we fall back to the
+        // legacy fields + EnvStubBlock.
+        const useMultiAccountUI =
+          (pack.id === "slack" || pack.id === "notion") && storageMode !== "static";
+
         const handleCardClick = () => {
           setExpanded(isOpen ? null : pack.id);
         };
@@ -559,62 +567,72 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                 )}
                 {packDef ? (
                   <>
-                    {packDef.vars.map((v) => (
-                      <div key={v.key}>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <label className="text-sm font-medium">{v.label}</label>
-                          <code className="text-[11px] text-text-muted">{v.key}</code>
-                          {v.optional && (
-                            <span className="text-[11px] text-text-muted bg-bg-muted px-1.5 py-0.5 rounded">
-                              optional
+                    {/* Phase 76: Slack/Notion are configured via the
+                        multi-account selector below (the primary path), so we
+                        hide the legacy single-token field + Save/Test. The
+                        exception is static mode, where the multi-account store
+                        (KV-only) is unavailable — there we keep the legacy
+                        fields + EnvStubBlock as the only way to configure. */}
+                    {!useMultiAccountUI && (
+                      <>
+                        {packDef.vars.map((v) => (
+                          <div key={v.key}>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <label className="text-sm font-medium">{v.label}</label>
+                              <code className="text-[11px] text-text-muted">{v.key}</code>
+                              {v.optional && (
+                                <span className="text-[11px] text-text-muted bg-bg-muted px-1.5 py-0.5 rounded">
+                                  optional
+                                </span>
+                              )}
+                            </div>
+                            <CredentialInput
+                              v={v}
+                              value={getValue(v.key)}
+                              onChange={(val) => updateEdit(v.key, val)}
+                            />
+                          </div>
+                        ))}
+                        <div className="flex items-center gap-3 pt-2 flex-wrap">
+                          <button
+                            onClick={() => savePack(pack.id)}
+                            disabled={savingId === pack.id || savesDisabled}
+                            title={
+                              savesDisabled
+                                ? storageMode === "static"
+                                  ? "Static mode — saves disabled. Use the env stub helper below."
+                                  : "KV unreachable — saves blocked to prevent data loss."
+                                : undefined
+                            }
+                            className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {savingId === pack.id ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            onClick={() => testPack(pack.id)}
+                            disabled={testing === pack.id}
+                            className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text disabled:opacity-60"
+                          >
+                            {testing === pack.id ? "Testing..." : "Test connection"}
+                          </button>
+                          {test && test.message !== "Testing..." && (
+                            <span
+                              className={`text-xs font-medium px-2 py-1 rounded-full ${test.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"}`}
+                            >
+                              {test.ok ? "✓ " : "✗ "}
+                              {test.message}
+                            </span>
+                          )}
+                          {savesDisabled && (
+                            <span className="text-[11px] text-orange">
+                              {storageMode === "static"
+                                ? "Static mode (env-vars only)"
+                                : `KV unreachable${storageError ? ` — ${storageError}` : ""}`}
                             </span>
                           )}
                         </div>
-                        <CredentialInput
-                          v={v}
-                          value={getValue(v.key)}
-                          onChange={(val) => updateEdit(v.key, val)}
-                        />
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-3 pt-2 flex-wrap">
-                      <button
-                        onClick={() => savePack(pack.id)}
-                        disabled={savingId === pack.id || savesDisabled}
-                        title={
-                          savesDisabled
-                            ? storageMode === "static"
-                              ? "Static mode — saves disabled. Use the env stub helper below."
-                              : "KV unreachable — saves blocked to prevent data loss."
-                            : undefined
-                        }
-                        className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {savingId === pack.id ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={() => testPack(pack.id)}
-                        disabled={testing === pack.id}
-                        className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text disabled:opacity-60"
-                      >
-                        {testing === pack.id ? "Testing..." : "Test connection"}
-                      </button>
-                      {test && test.message !== "Testing..." && (
-                        <span
-                          className={`text-xs font-medium px-2 py-1 rounded-full ${test.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"}`}
-                        >
-                          {test.ok ? "✓ " : "✗ "}
-                          {test.message}
-                        </span>
-                      )}
-                      {savesDisabled && (
-                        <span className="text-[11px] text-orange">
-                          {storageMode === "static"
-                            ? "Static mode (env-vars only)"
-                            : `KV unreachable${storageError ? ` — ${storageError}` : ""}`}
-                        </span>
-                      )}
-                    </div>
+                      </>
+                    )}
                     {pack.id === "browser" && pack.enabled && (
                       <LinkedinConnectButton
                         currentContextId={getValue("BROWSERBASE_CONTEXT_LINKEDIN")}
@@ -634,11 +652,16 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         }}
                       />
                     )}
-                    {pack.id === "slack" && pack.enabled && (
-                      <MultiAccountSelector connector="slack" />
-                    )}
-                    {pack.id === "notion" && pack.enabled && (
-                      <MultiAccountSelector connector="notion" />
+                    {/* Phase 76: multi-account selector is the PRIMARY config
+                        path for slack/notion — shown even on a disabled card so
+                        the first account can be connected here (adding it gates
+                        the connector active). KV-only, so suppressed in static
+                        mode (legacy fields + EnvStubBlock handle that case). */}
+                    {useMultiAccountUI && (pack.id === "slack" || pack.id === "notion") && (
+                      <MultiAccountSelector
+                        connector={pack.id}
+                        onAccountsChanged={() => router.refresh()}
+                      />
                     )}
                     {storageMode === "static" && (
                       <EnvStubBlock

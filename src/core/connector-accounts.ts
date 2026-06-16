@@ -114,6 +114,57 @@ function accountKey(connectorId: string, slug: string): string {
 }
 
 /**
+ * SYNCHRONOUS gate helper: does this connector have at least one usable
+ * credential set, judged from an already-materialized env snapshot?
+ *
+ * Used by the slack/notion manifests' `isActive(env)` predicate (the gate
+ * runs synchronously and cannot await a KV read — see
+ * src/core/registry.ts gateConnector / buildGateEnv). The merged gate env
+ * already carries every KV-hydrated `cred:*` key with the `cred:` prefix
+ * stripped (credential-store.ts hydrateCredentialsFromKV), so the
+ * multi-account index `cred:acct:<id>:__index__` appears here as
+ * `acct:<id>:__index__` (value = the raw index JSON). We therefore derive
+ * the snapshot key from KEY_PREFIX minus the leading `cred:`.
+ *
+ * Returns true when EITHER:
+ *   - the legacy primary key is present (back-compat: single-token deploys
+ *     + static/file mode where the index is never hydrated), OR
+ *   - the multi-account index parses to >= 1 account.
+ *
+ * The index entry count is authoritative: a stale index (entry listed but
+ * its token blob missing) still counts as configured — same precedence as
+ * listAccounts(), which lists from the index. Corrupt JSON or an empty
+ * accounts array → not configured (the legacy check may still rescue it).
+ *
+ * NOTE: keep the `missing env: <KEY>` reason string in the calling
+ * manifests in sync with the UI's isConfigured heuristic
+ * (app/config/tabs/connectors.tsx — `reason.startsWith("missing env")`).
+ */
+export function hasConfiguredAccountSync(
+  connectorId: string,
+  env: Record<string, string | undefined>
+): boolean {
+  const descriptor = ACCOUNT_DESCRIPTORS[connectorId];
+
+  // 1) Legacy single-token path (also the only path in static/file mode).
+  if (descriptor && env[descriptor.primaryKey]?.trim()) return true;
+
+  // 2) Multi-account index. KEY_PREFIX is `cred:acct:`; the hydrated
+  //    snapshot drops the `cred:` prefix, so the snapshot key is
+  //    `acct:<id>:__index__`.
+  const snapshotIndexKey = `${KEY_PREFIX.slice("cred:".length)}${connectorId}:__index__`;
+  const raw = env[snapshotIndexKey];
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { accounts?: unknown };
+    return Array.isArray(parsed.accounts) && parsed.accounts.length >= 1;
+  } catch {
+    // Corrupt index — treat as absent (mirrors readIndex()).
+    return false;
+  }
+}
+
+/**
  * Lowercase, kebab-case a display name into a stable slug. Strips
  * accents and non-alphanumerics, collapses runs into single hyphens,
  * trims leading/trailing hyphens. Falls back to "account" if the name

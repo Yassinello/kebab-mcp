@@ -56,6 +56,12 @@ const CREDENTIAL_VARS = [
   "MYMCP_WEBHOOKS",
   "GITHUB_PAT",
   "GITHUB_REPO",
+  // Phase 76: the slack/notion gate reads the multi-account index from the
+  // gate env. In prod these arrive via the hydrated KV snapshot under the
+  // `cred:`-stripped key; in this test we inject them straight into
+  // process.env (buildGateEnv spreads process.env) to exercise isActive().
+  "acct:slack:__index__",
+  "acct:notion:__index__",
 ];
 
 const TOGGLE_VARS = [
@@ -250,6 +256,57 @@ describe("registry lazy loaders (PERF-01)", () => {
     expect(uniques.size).toBe(loaderCalls.length);
     // Notion is active; its loader ran.
     expect(uniques.has("notion")).toBe(true);
+  });
+
+  // ── Phase 76: multi-account gate for slack/notion ──────────────────
+  // slack/notion now gate via manifest.isActive(env) (hasCustomActive),
+  // accepting EITHER a legacy primary token OR a multi-account index ≥1.
+  describe("multi-account gate (Phase 76)", () => {
+    it("multi-account index ≥1 (no legacy token) → slack enabled", async () => {
+      process.env["acct:slack:__index__"] = JSON.stringify({
+        accounts: [{ slug: "acme", name: "Acme" }],
+      });
+      const state = await resolveRegistryAsync();
+      const slack = state.find((p) => p.manifest.id === "slack");
+      expect(slack?.enabled).toBe(true);
+      expect(slack?.reason).toBe("active");
+    });
+
+    it("legacy SLACK_BOT_TOKEN only (no index) → slack enabled (back-compat)", async () => {
+      process.env.SLACK_BOT_TOKEN = "xoxb-legacy";
+      const state = await resolveRegistryAsync();
+      const slack = state.find((p) => p.manifest.id === "slack");
+      expect(slack?.enabled).toBe(true);
+    });
+
+    it("empty accounts array + no legacy token → slack disabled, `missing env:` reason", async () => {
+      process.env["acct:slack:__index__"] = JSON.stringify({ accounts: [] });
+      const state = await resolveRegistryAsync();
+      const slack = state.find((p) => p.manifest.id === "slack");
+      expect(slack?.enabled).toBe(false);
+      // UI isConfigured heuristic depends on this exact prefix.
+      expect(slack?.reason).toMatch(/^missing env: /);
+      expect(slack?.reason).toContain("SLACK_BOT_TOKEN");
+    });
+
+    it("corrupt index + no legacy token → notion disabled", async () => {
+      process.env["acct:notion:__index__"] = "{not json";
+      const state = await resolveRegistryAsync();
+      const notion = state.find((p) => p.manifest.id === "notion");
+      expect(notion?.enabled).toBe(false);
+      expect(notion?.reason).toContain("NOTION_API_KEY");
+    });
+
+    it("MYMCP_DISABLE_SLACK wins over a configured account", async () => {
+      process.env["acct:slack:__index__"] = JSON.stringify({
+        accounts: [{ slug: "acme", name: "Acme" }],
+      });
+      process.env.MYMCP_DISABLE_SLACK = "true";
+      const state = await resolveRegistryAsync();
+      const slack = state.find((p) => p.manifest.id === "slack");
+      expect(slack?.enabled).toBe(false);
+      expect(slack?.reason).toBe("disabled via MYMCP_DISABLE_SLACK");
+    });
   });
 });
 

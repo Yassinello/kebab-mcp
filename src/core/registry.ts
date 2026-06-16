@@ -100,8 +100,13 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     id: "slack",
     label: "Slack",
     description: "Search messages, read channels, and send DMs via a Bot User OAuth token.",
-    requiredEnvVars: ["SLACK_BOT_TOKEN"],
+    // Phase 76: empty requiredEnvVars + hasCustomActive so the gate defers
+    // to manifest.isActive(), which accepts a multi-account workspace OR the
+    // legacy SLACK_BOT_TOKEN. Keep in lockstep with the manifest (the
+    // registry-metadata contract test asserts requiredEnvVars equality).
+    requiredEnvVars: [],
     toolCount: 6,
+    hasCustomActive: true,
     guide: slackGuide,
     loader: () => import("@/connectors/slack/manifest").then((m) => m.slackConnector),
   },
@@ -109,8 +114,10 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     id: "notion",
     label: "Notion",
     description: "Search pages, read content, and create/update Notion databases.",
-    requiredEnvVars: ["NOTION_API_KEY"],
+    // Phase 76: see slack entry — gate defers to manifest.isActive().
+    requiredEnvVars: [],
     toolCount: 5,
+    hasCustomActive: true,
     guide: notionGuide,
     loader: () => import("@/connectors/notion/manifest").then((m) => m.notionConnector),
   },

@@ -72,7 +72,19 @@ const CONFIGS: Record<string, { label: string; fields: TokenField[] }> = {
   },
 };
 
-export function MultiAccountSelector({ connector }: { connector: "slack" | "notion" }) {
+export function MultiAccountSelector({
+  connector,
+  onAccountsChanged,
+}: {
+  connector: "slack" | "notion";
+  /**
+   * Phase 76: fired after a successful add/remove so the parent can
+   * re-resolve the connector's gate state (the slack/notion gate now reads
+   * account presence) — without this the card shows the new account but the
+   * enable toggle stays disabled until a manual reload.
+   */
+  onAccountsChanged?: () => void;
+}) {
   const cfg = CONFIGS[connector]!;
   const primaryKey = cfg.fields[0]!.key;
 
@@ -163,6 +175,7 @@ export function MultiAccountSelector({ connector }: { connector: "slack" | "noti
         return;
       }
       await loadAccounts();
+      onAccountsChanged?.();
     } catch {
       setError("Network error while removing the account.");
     } finally {
@@ -194,6 +207,7 @@ export function MultiAccountSelector({ connector }: { connector: "slack" | "noti
       }
       setDraft({});
       await loadAccounts();
+      onAccountsChanged?.();
     } catch {
       setAddError("Network error while adding the account.");
     } finally {
@@ -268,8 +282,8 @@ export function MultiAccountSelector({ connector }: { connector: "slack" | "noti
 
       {loadedOnce && accounts.length === 0 && !error && (
         <p className="text-xs text-text-muted italic">
-          No accounts connected yet. Add one below — your saved single token still works as the
-          implicit default.
+          Connect your first {cfg.label} account below to activate this connector. We test the token
+          before saving and name the account automatically.
         </p>
       )}
 
@@ -279,16 +293,21 @@ export function MultiAccountSelector({ connector }: { connector: "slack" | "noti
         </div>
       )}
 
-      {/* Add-account mini-form, collapsed by default. */}
-      <details className="group">
+      {/* Add-account mini-form. Phase 76: open by default when there are no
+          accounts yet so the first-account step is the obvious next action on
+          a freshly-expanded (and possibly disabled) card. */}
+      <details className="group" open={loadedOnce && accounts.length === 0}>
         <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
           <span className="inline-block transition-transform group-open:rotate-90">▶</span>
-          Add another {cfg.label} account
+          {accounts.length === 0
+            ? `Connect your first ${cfg.label} account`
+            : `Add another ${cfg.label} account`}
         </summary>
         <div className="mt-3 space-y-3 rounded-md border border-border bg-bg-muted/40 px-4 py-3">
           <p className="text-[11px] text-text-dim leading-relaxed">
-            Paste the credentials for a second {cfg.label} account. We test the token before saving
-            and name the account automatically from {cfg.label}.
+            {accounts.length === 0
+              ? `Paste your ${cfg.label} credentials. We test the token before saving and name the account automatically from ${cfg.label}.`
+              : `Paste the credentials for another ${cfg.label} account. We test the token before saving and name the account automatically from ${cfg.label}.`}
           </p>
           {cfg.fields.map((f) => (
             <div key={f.key} className="space-y-1">

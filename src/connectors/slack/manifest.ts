@@ -6,6 +6,7 @@ import { slackSearchSchema, handleSlackSearch } from "./tools/slack-search";
 import { slackThreadSchema, handleSlackThread } from "./tools/slack-thread";
 import { slackProfileSchema, handleSlackProfile } from "./tools/slack-profile";
 import { slackGuide } from "./guide";
+import { hasConfiguredAccountSync } from "@/core/connector-accounts";
 import { getConfig } from "@/core/config-facade";
 
 export const slackConnector: ConnectorManifest = {
@@ -13,7 +14,18 @@ export const slackConnector: ConnectorManifest = {
   label: "Slack",
   description: "Channels, messages, threads, profiles, search, send",
   guide: slackGuide,
-  requiredEnvVars: ["SLACK_BOT_TOKEN"],
+  // Phase 76 (multi-account primary): the connector is configured via the
+  // multi-account store (cred:acct:slack:*) OR the legacy SLACK_BOT_TOKEN.
+  // requiredEnvVars is therefore empty and gating defers to isActive() so a
+  // workspace added purely through the account selector activates the
+  // connector. The reason string MUST keep the `missing env: <KEY>` shape —
+  // app/config/tabs/connectors.tsx derives isConfigured from
+  // `reason.startsWith("missing env")`.
+  requiredEnvVars: [],
+  isActive: (env) =>
+    hasConfiguredAccountSync("slack", env as Record<string, string | undefined>)
+      ? { active: true }
+      : { active: false, reason: "missing env: SLACK_BOT_TOKEN" },
   testConnection: async (credentials) => {
     const token = credentials.SLACK_BOT_TOKEN;
     if (!token) return { ok: false, message: "Missing token" };

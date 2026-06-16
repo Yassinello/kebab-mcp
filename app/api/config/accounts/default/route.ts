@@ -4,6 +4,8 @@ import { errorResponse } from "@/core/error-response";
 import type { PipelineContext } from "@/core/pipeline";
 import { detectStorageMode } from "@/core/storage-mode";
 import { setDefaultAccount } from "@/core/connector-accounts";
+import { resetCredentialHydration } from "@/core/credential-store";
+import { emit } from "@/core/events";
 
 /**
  * PUT /api/config/accounts/default — pin the default account for a
@@ -55,6 +57,10 @@ async function putHandler(ctx: PipelineContext) {
 
   try {
     await setDefaultAccount(connector, body.slug.trim());
+    // Drop the stale hydrated index (now missing the new `default` field) so
+    // the gate/snapshot re-reads KV. Mirrors the parent accounts route.
+    resetCredentialHydration();
+    emit("env.changed");
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err, { status: 500, route: "config/accounts/default" });
