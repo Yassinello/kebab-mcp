@@ -12,7 +12,7 @@ A Notion workspace where you can install integrations. Notion integrations only 
 
 ### How to get credentials
 1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) and click **New integration**
-2. Pick the associated workspace, give it a name (e.g. _MyMCP_), and submit
+2. Pick the associated workspace, give it a name (e.g. _Kebab MCP_), and submit
 3. Copy the **Internal Integration Token** (starts with \`secret_\` or \`ntn_\`) and set it as \`NOTION_API_KEY\`
 4. Open every page or database you want Kebab MCP to access, click **…** → **Connections** → add your integration. Granting a parent page shares all its children.
 
