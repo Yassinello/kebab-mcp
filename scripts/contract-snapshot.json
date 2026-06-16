@@ -665,6 +665,8 @@
       "account",
       "content",
       "database_id",
+      "parent_id",
+      "parent_type",
       "title"
     ],
     "destructive": true

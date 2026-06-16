@@ -89,7 +89,7 @@ export const notionConnector: ConnectorManifest = {
     defineTool({
       name: "notion_create",
       description:
-        "Create a new page in a Notion database. Provide the database ID, title, and optional content.",
+        "Create a new Notion page under a parent that can be a PAGE (a sub-page) OR a database (a row) — the parent type is auto-detected. Content is Markdown and is converted to native blocks (headings, bulleted/numbered lists, checkboxes, code, dividers).",
       schema: notionCreateSchema,
       handler: async (args) => handleNotionCreate(args),
       destructive: true,
