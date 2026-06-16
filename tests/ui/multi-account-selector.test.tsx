@@ -163,6 +163,18 @@ describe("MultiAccountSelector", () => {
     expect(botInput).toBeTruthy();
   });
 
+  it("renders the where-to-find-it hint pointing at OAuth & Permissions (not Basic Information)", async () => {
+    mockFetch({ list: () => ({ ok: true, accounts: [] }) });
+    render(<MultiAccountSelector connector="slack" />);
+    await waitFor(() => expect(screen.getByText("Connect your first Slack account")).toBeTruthy());
+    // The hint must steer the user to OAuth & Permissions and warn off the
+    // Basic Information page (the reported confusion). The hint renders as
+    // before + <a> + after, so assert against the link + its parent's text.
+    const link = screen.getByText("OAuth & Permissions").closest("a");
+    expect(link?.getAttribute("href")).toBe("https://api.slack.com/apps");
+    expect(link?.parentElement?.textContent).toMatch(/NOT on the Basic Information page/);
+  });
+
   it("fires onAccountsChanged after a successful add", async () => {
     let added = false;
     mockFetch({

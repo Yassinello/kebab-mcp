@@ -45,18 +45,35 @@ export interface TokenField {
   label: string;
   placeholder: string;
   optional?: boolean;
+  /**
+   * Short where-to-find-it hint rendered under the input. Plain text; an
+   * optional {link} marks the substring to turn into an anchor pointing at
+   * `linkHref` (so we don't ship raw HTML).
+   */
+  hint?: string;
+  linkHref?: string;
 }
 
 const CONFIGS: Record<string, { label: string; fields: TokenField[] }> = {
   slack: {
     label: "Slack",
     fields: [
-      { key: "SLACK_BOT_TOKEN", label: "Bot User OAuth Token", placeholder: "xoxb-…" },
+      {
+        key: "SLACK_BOT_TOKEN",
+        label: "Bot User OAuth Token",
+        placeholder: "xoxb-…",
+        // The #1 confusion: this token is NOT on "Basic Information" (that
+        // page shows the Client/Signing secrets, which are the wrong thing).
+        // It only appears after adding scopes + installing the app.
+        hint: "In your Slack app → {OAuth & Permissions}. Add Bot Token Scopes, click Install to Workspace, then copy the token shown at the top (starts with xoxb-). It is NOT on the Basic Information page.",
+        linkHref: "https://api.slack.com/apps",
+      },
       {
         key: "SLACK_USER_TOKEN",
         label: "User OAuth Token",
         placeholder: "xoxp-… (optional)",
         optional: true,
+        hint: "Optional — only needed to search messages on a paid workspace. Same OAuth & Permissions page, under User Token Scopes (starts with xoxp-). Leave blank if unsure.",
       },
     ],
   },
@@ -67,10 +84,39 @@ const CONFIGS: Record<string, { label: string; fields: TokenField[] }> = {
         key: "NOTION_API_KEY",
         label: "Internal Integration Token",
         placeholder: "secret_… or ntn_…",
+        hint: "Create an integration at {notion.so/my-integrations}, then copy its Internal Integration Token (starts with ntn_ or secret_). Remember to share your pages/databases with the integration.",
+        linkHref: "https://www.notion.so/my-integrations",
       },
     ],
   },
 };
+
+/**
+ * Render a hint string, turning a `{…}` span into a link to `href` when
+ * provided. Keeps copy declarative (no raw HTML) while still surfacing the
+ * one link that matters (where to get the token).
+ */
+function HintText({ hint, href }: { hint: string; href?: string | undefined }) {
+  const m = href ? hint.match(/^(.*?)\{([^}]+)\}(.*)$/s) : null;
+  if (!m) {
+    return <span>{hint.replace(/[{}]/g, "")}</span>;
+  }
+  const [, before, linked, after] = m;
+  return (
+    <span>
+      {before}
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent underline hover:no-underline"
+      >
+        {linked}
+      </a>
+      {after}
+    </span>
+  );
+}
 
 export function MultiAccountSelector({
   connector,
@@ -326,6 +372,11 @@ export function MultiAccountSelector({
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
                 className="w-full text-sm font-mono rounded-md border border-border bg-bg px-3 py-1.5"
               />
+              {f.hint && (
+                <p className="text-[11px] text-text-muted leading-relaxed">
+                  <HintText hint={f.hint} href={f.linkHref} />
+                </p>
+              )}
             </div>
           ))}
           <div className="flex items-center gap-3">
