@@ -13,7 +13,9 @@ export const notionUpdateSchema = {
   append_content: z
     .string()
     .optional()
-    .describe("Text to append to the page (paragraphs separated by double newlines)"),
+    .describe(
+      "Markdown to append to the page — supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks, dividers (---), and paragraphs. Converted to native Notion blocks."
+    ),
   account: z
     .string()
     .optional()

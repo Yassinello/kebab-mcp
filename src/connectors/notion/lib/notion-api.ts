@@ -305,28 +305,178 @@ export async function updatePage(
     });
   }
 
-  // Append content if provided
+  // Append content if provided — same markdown→blocks builder as createPage
+  // so appended content gets headings/lists/checkboxes/code, not flat text.
   if (appendContent) {
-    const children = appendContent
-      .split("\n\n")
-      .filter(Boolean)
-      .map((paragraph) => ({
-        object: "block",
-        type: "paragraph",
-        paragraph: {
-          rich_text: [{ type: "text", text: { content: paragraph } }],
-        },
-      }));
-
-    await notionFetch(tokens, `/blocks/${pageId}/children`, {
-      method: "PATCH",
-      body: { children },
-    });
+    const children = markdownToBlocks(appendContent);
+    if (children.length > 0) {
+      await notionFetch(tokens, `/blocks/${pageId}/children`, {
+        method: "PATCH",
+        body: { children },
+      });
+    }
   }
 
   // Return page info
   const page = await notionFetch<{ id: string; url: string }>(tokens, `/pages/${pageId}`);
   return { id: page.id, url: page.url };
+}
+
+// --- Markdown → Notion blocks ---
+//
+// Inverse of the readPage() switch above (heading_1/2/3, paragraph,
+// bulleted_list_item, numbered_list_item, to_do, code, divider). Keeping the
+// two in lockstep means content written by notion_create / notion_update and
+// then read back by notion_read round-trips without surprises. Inline marks
+// (bold/italic/links) are intentionally NOT parsed — readPage flattens them
+// too, so a single rich_text run per block keeps write/read symmetric.
+
+function richText(content: string) {
+  return content ? [{ type: "text" as const, text: { content } }] : [];
+}
+
+function block(type: string, payload: Record<string, unknown>) {
+  return { object: "block" as const, type, [type]: payload };
+}
+
+/**
+ * Parse a markdown string into Notion block objects. Recognizes the same
+ * constructs readPage() emits:
+ *   #/##/### → heading_1/2/3 · - → bulleted_list_item · 1. → numbered_list_item
+ *   [ ]/[x] → to_do (checked) · ```lang fenced → code · --- → divider
+ *   blank-line-separated runs → paragraph
+ * Anything unrecognized falls through to a paragraph.
+ */
+export function markdownToBlocks(md: string): unknown[] {
+  const blocks: unknown[] = [];
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+
+  let i = 0;
+  let paragraph: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
+    const text = paragraph.join("\n").trim();
+    if (text) blocks.push(block("paragraph", { rich_text: richText(text) }));
+    paragraph = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    const trimmed = line.trim();
+
+    // Fenced code block — consume until the closing ``` (mirrors readPage's
+    // ```lang\n…\n``` emission).
+    const fence = trimmed.match(/^```(\w*)\s*$/);
+    if (fence) {
+      flushParagraph();
+      const language = fence[1] || "plain text";
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !(lines[i] ?? "").trim().startsWith("```")) {
+        code.push(lines[i] ?? "");
+        i++;
+      }
+      i++; // skip the closing fence
+      blocks.push(block("code", { rich_text: richText(code.join("\n")), language }));
+      continue;
+    }
+
+    // Blank line → paragraph boundary.
+    if (trimmed === "") {
+      flushParagraph();
+      i++;
+      continue;
+    }
+
+    // Divider.
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushParagraph();
+      blocks.push(block("divider", {}));
+      i++;
+      continue;
+    }
+
+    // Headings (1–3; readPage only emits up to ###).
+    const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
+    if (heading) {
+      flushParagraph();
+      const level = heading[1]!.length;
+      blocks.push(block(`heading_${level}`, { rich_text: richText(heading[2]!.trim()) }));
+      i++;
+      continue;
+    }
+
+    // Checkbox (to_do) — `[ ] text` / `[x] text`, optionally as a `- [ ]` list.
+    const todo = trimmed.match(/^(?:[-*]\s+)?\[([ xX])\]\s+(.*)$/);
+    if (todo) {
+      flushParagraph();
+      blocks.push(
+        block("to_do", {
+          rich_text: richText(todo[2]!.trim()),
+          checked: todo[1]!.toLowerCase() === "x",
+        })
+      );
+      i++;
+      continue;
+    }
+
+    // Bulleted list item.
+    const bullet = trimmed.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      flushParagraph();
+      blocks.push(block("bulleted_list_item", { rich_text: richText(bullet[1]!.trim()) }));
+      i++;
+      continue;
+    }
+
+    // Numbered list item.
+    const numbered = trimmed.match(/^\d+[.)]\s+(.*)$/);
+    if (numbered) {
+      flushParagraph();
+      blocks.push(block("numbered_list_item", { rich_text: richText(numbered[1]!.trim()) }));
+      i++;
+      continue;
+    }
+
+    // Otherwise accumulate into the current paragraph.
+    paragraph.push(trimmed);
+    i++;
+  }
+
+  flushParagraph();
+  return blocks;
+}
+
+// --- Parent type detection ---
+//
+// notion_create accepts a parent id that may be a PAGE or a DATABASE. Notion's
+// POST /pages needs `parent:{page_id}` vs `{database_id}` accordingly. We probe
+// the object: GET /pages/<id> first (the common case — sub-page under a page),
+// then GET /databases/<id>. A 404 on both means the id is wrong or not shared
+// with the integration.
+
+export type NotionParentKind = "page" | "database";
+
+export async function detectParentType(
+  tokens: AccountTokenSet,
+  id: string
+): Promise<NotionParentKind> {
+  try {
+    await notionFetch(tokens, `/pages/${id}`);
+    return "page";
+  } catch {
+    // fall through to database probe
+  }
+  try {
+    await notionFetch(tokens, `/databases/${id}`);
+    return "database";
+  } catch {
+    throw new Error(
+      `Notion parent ${id} is neither a page nor a database reachable by this integration. ` +
+        `Check the ID and that the page/database is shared with the integration (… → Connections).`
+    );
+  }
 }
 
 // --- Create page ---
@@ -337,27 +487,25 @@ export async function createPage(
     parentId: string;
     title: string;
     content?: string | undefined;
+    /**
+     * Optional override. When omitted, the parent kind is auto-detected
+     * (detectParentType) so callers can pass any page OR database id without
+     * knowing which it is — the common case for an agent given a URL.
+     */
+    parentType?: NotionParentKind | undefined;
   }
 ): Promise<{ id: string; url: string }> {
-  const children: unknown[] = [];
+  const children = opts.content ? markdownToBlocks(opts.content) : [];
 
-  if (opts.content) {
-    // Split content into paragraph blocks
-    for (const paragraph of opts.content.split("\n\n").filter(Boolean)) {
-      children.push({
-        object: "block",
-        type: "paragraph",
-        paragraph: {
-          rich_text: [{ type: "text", text: { content: paragraph } }],
-        },
-      });
-    }
-  }
+  const kind = opts.parentType ?? (await detectParentType(tokens, opts.parentId));
+  const parent = kind === "page" ? { page_id: opts.parentId } : { database_id: opts.parentId };
 
   const data = await notionFetch<{ id: string; url: string }>(tokens, "/pages", {
     method: "POST",
     body: {
-      parent: { database_id: opts.parentId },
+      parent,
+      // Notion accepts properties.title.title[...] for both page and database
+      // parents; only the `parent` form differs.
       properties: {
         title: {
           title: [{ text: { content: opts.title } }],
