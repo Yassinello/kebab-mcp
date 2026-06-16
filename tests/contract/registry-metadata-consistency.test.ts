@@ -54,6 +54,18 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
     }
   }, 45_000);
 
+  it("every loader entry with a guide matches the loaded manifest.guide", async () => {
+    // The disabled-stub path surfaces `entry.guide` before the manifest
+    // loads (so users see setup instructions while the connector is still
+    // missing its token). Both must stay byte-identical or a disabled card
+    // would show stale instructions vs. the enabled card.
+    for (const entry of ALL_CONNECTOR_LOADERS) {
+      if (entry.guide === undefined) continue;
+      const manifest = await entry.loader();
+      expect(manifest.guide, `guide mismatch for "${entry.id}"`).toBe(entry.guide);
+    }
+  }, 45_000);
+
   it("every loader entry's toolCount matches the loaded manifest.tools.length", async () => {
     // Skills + api-connections are user-defined: the sync tool-list reads
     // from disk/KV and varies per deploy. The loader's static toolCount=0

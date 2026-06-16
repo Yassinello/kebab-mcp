@@ -3,6 +3,12 @@ import { getEnabledPacksOverride } from "./config";
 import { on } from "./events";
 import { hydrateCredentialsFromKV, getHydratedCredentialSnapshot } from "./credential-store";
 import { getConfig } from "./config-facade";
+// Credential guides for the disabled-stub path. These are plain markdown
+// strings (no tool handlers / SDK pulled in), so importing them statically
+// here costs nothing and lets the stub manifest carry the guide before any
+// token is configured. See ConnectorLoaderEntry.guide.
+import { slackGuide } from "@/connectors/slack/guide";
+import { notionGuide } from "@/connectors/notion/guide";
 
 // ── PERF-01: lazy connector loaders ──────────────────────────────────
 //
@@ -54,6 +60,14 @@ interface ConnectorLoaderEntry {
    * tab but always load. Mirrored here for the stub manifest.
    */
   core?: boolean;
+  /**
+   * Optional credential-setup guide (markdown). Mirrored here so the
+   * DISABLED stub manifest can surface it — the guide is most useful BEFORE
+   * a token is configured (i.e. while the connector is still rejected), so
+   * it must not depend on loading the full manifest. Source of truth is the
+   * connector's `guide.ts`; both this entry and the manifest import it.
+   */
+  guide?: string;
   loader: () => Promise<ConnectorManifest>;
 }
 
@@ -88,6 +102,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     description: "Search messages, read channels, and send DMs via a Bot User OAuth token.",
     requiredEnvVars: ["SLACK_BOT_TOKEN"],
     toolCount: 6,
+    guide: slackGuide,
     loader: () => import("@/connectors/slack/manifest").then((m) => m.slackConnector),
   },
   {
@@ -96,6 +111,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     description: "Search pages, read content, and create/update Notion databases.",
     requiredEnvVars: ["NOTION_API_KEY"],
     toolCount: 5,
+    guide: notionGuide,
     loader: () => import("@/connectors/notion/manifest").then((m) => m.notionConnector),
   },
   {
@@ -363,6 +379,10 @@ function synthesizeStubManifest(entry: ConnectorLoaderEntry): ConnectorManifest 
     requiredEnvVars: entry.requiredEnvVars,
     tools: [] as ToolDefinition[],
     core: entry.core,
+    // Surface the credential guide even while the connector is disabled —
+    // that's exactly when the user needs setup instructions. Only present
+    // for connectors that declared a guide on their registry entry.
+    ...(entry.guide ? { guide: entry.guide } : {}),
   };
 }
 
