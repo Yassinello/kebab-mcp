@@ -150,4 +150,39 @@ describe("MultiAccountSelector", () => {
     const del = calls.find((c) => c.method === "DELETE");
     expect(del?.body).toEqual({ connector: "slack", slug: "acme" });
   });
+
+  // ── Phase 76: first-account UX + onAccountsChanged ──────────────────
+  it("shows the first-account prompt + opens the form when zero accounts", async () => {
+    mockFetch({ list: () => ({ ok: true, accounts: [] }) });
+    render(<MultiAccountSelector connector="slack" />);
+    // Dynamic summary label for the empty state.
+    await waitFor(() => expect(screen.getByText("Connect your first Slack account")).toBeTruthy());
+    // The add-form is open by default (the bot-token input is reachable
+    // without expanding a collapsed <details>).
+    const botInput = document.querySelector('input[placeholder="xoxb-…"]') as HTMLInputElement;
+    expect(botInput).toBeTruthy();
+  });
+
+  it("fires onAccountsChanged after a successful add", async () => {
+    let added = false;
+    mockFetch({
+      list: () =>
+        added
+          ? { ok: true, accounts: [{ slug: "acme", name: "Acme" }] }
+          : { ok: true, accounts: [] },
+      post: () => {
+        added = true;
+        return { ok: true, account: { slug: "acme", name: "Acme" } };
+      },
+    });
+    const onAccountsChanged = vi.fn();
+    render(<MultiAccountSelector connector="slack" onAccountsChanged={onAccountsChanged} />);
+    await waitFor(() => expect(screen.getByText("Add account")).toBeTruthy());
+
+    const botInput = document.querySelector('input[placeholder="xoxb-…"]') as HTMLInputElement;
+    fireEvent.change(botInput, { target: { value: "xoxb-good" } });
+    fireEvent.click(screen.getByText("Add account"));
+
+    await waitFor(() => expect(onAccountsChanged).toHaveBeenCalledTimes(1));
+  });
 });

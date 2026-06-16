@@ -77,6 +77,7 @@ import {
   getDefaultAccount,
   resolveConnectorAccount,
   slugify,
+  hasConfiguredAccountSync,
 } from "../connector-accounts";
 
 beforeEach(() => {
@@ -326,5 +327,58 @@ describe("tenant isolation (MACS-05)", () => {
 
     hoist.setTenant("beta");
     expect(await getDefaultAccount("slack")).toBeUndefined();
+  });
+});
+
+// ── hasConfiguredAccountSync — gate helper ───────────────────────────
+//
+// Pure function over a materialized env snapshot (no KV). The gate
+// (registry.ts) feeds it `buildGateEnv()`, where the multi-account index
+// `cred:acct:slack:__index__` appears as `acct:slack:__index__` (the
+// `cred:` prefix is stripped during hydration). These tests assert the
+// exact snapshot-key shape the gate relies on.
+describe("hasConfiguredAccountSync", () => {
+  const idxKey = (id: string) => `acct:${id}:__index__`;
+
+  it("legacy primary key present → configured (single-token back-compat)", () => {
+    expect(hasConfiguredAccountSync("slack", { SLACK_BOT_TOKEN: "xoxb-1" })).toBe(true);
+    expect(hasConfiguredAccountSync("notion", { NOTION_API_KEY: "ntn_1" })).toBe(true);
+  });
+
+  it("blank legacy key does not count", () => {
+    expect(hasConfiguredAccountSync("slack", { SLACK_BOT_TOKEN: "   " })).toBe(false);
+  });
+
+  it("multi-account index with >= 1 account → configured", () => {
+    const env = {
+      [idxKey("slack")]: JSON.stringify({ accounts: [{ slug: "acme", name: "Acme" }] }),
+    };
+    expect(hasConfiguredAccountSync("slack", env)).toBe(true);
+  });
+
+  it("multi-account index counts a stale entry (token blob may be missing)", () => {
+    // The index is authoritative for the gate — same as listAccounts().
+    const env = {
+      [idxKey("notion")]: JSON.stringify({ accounts: [{ slug: "x", name: "X" }] }),
+    };
+    expect(hasConfiguredAccountSync("notion", env)).toBe(true);
+  });
+
+  it("empty accounts array → not configured", () => {
+    expect(
+      hasConfiguredAccountSync("slack", { [idxKey("slack")]: JSON.stringify({ accounts: [] }) })
+    ).toBe(false);
+  });
+
+  it("corrupt index JSON → not configured", () => {
+    expect(hasConfiguredAccountSync("slack", { [idxKey("slack")]: "{not json" })).toBe(false);
+  });
+
+  it("no legacy key and no index → not configured", () => {
+    expect(hasConfiguredAccountSync("slack", {})).toBe(false);
+  });
+
+  it("unknown connector with no descriptor → not configured", () => {
+    expect(hasConfiguredAccountSync("nope", { SLACK_BOT_TOKEN: "xoxb-1" })).toBe(false);
   });
 });

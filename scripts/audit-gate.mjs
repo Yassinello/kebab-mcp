@@ -48,6 +48,12 @@ const ALLOWLIST = [
     reviewBy: "2026-08-20",
   },
   {
+    pkg: "@opentelemetry/exporter-trace-otlp-http",
+    reason:
+      "MODERATE inherited via its bundled OTel deps (@opentelemetry/core, otlp-exporter-base, otlp-transformer, resources, sdk-trace-base — all <2.x advisories). This IS the OTLP-HTTP trace exporter Kebab uses (src/core/tracing.ts), but the advisory is in the transitive @opentelemetry/* peer set, not the exporter logic. Only fix is the breaking major bump to 0.219.0, which churns the entire OTel peer set in lockstep with @opentelemetry/sdk-node (already allowlisted, same 2026-08-20 review). Tracing is opt-in — disabled unless OTEL_SERVICE_NAME is set — so even the exercised path is off by default. Bump the whole OTel cluster together at review time.",
+    reviewBy: "2026-08-20",
+  },
+  {
     pkg: "next",
     reason:
       "Moderate advisory inherited via postcss <8.5.10 (XSS via unescaped </style> in CSS Stringify). Next.js 16.x ships postcss 8.5.6 internally; the vulnerable path requires server-rendered CSS-in-JS with attacker-controlled style strings, which Kebab MCP does not expose (all styles are static Tailwind/PostCSS at build time, never user-controlled). Allowlist until Next.js bumps its bundled postcss; npm audit fix --force would downgrade Next.js to 9.3.3 which would break the entire app.",

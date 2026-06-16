@@ -4,6 +4,8 @@ import { errorResponse } from "@/core/error-response";
 import type { PipelineContext } from "@/core/pipeline";
 import { detectStorageMode } from "@/core/storage-mode";
 import { loadConnectorManifest } from "@/core/registry";
+import { resetCredentialHydration } from "@/core/credential-store";
+import { emit } from "@/core/events";
 import {
   listAccounts,
   saveAccount,
@@ -46,6 +48,24 @@ const PRIMARY_TOKEN_KEY: Record<string, string> = {
 
 function isSupported(connector: unknown): connector is string {
   return typeof connector === "string" && SUPPORTED.has(connector);
+}
+
+/**
+ * After an account mutation, invalidate the gate's view of credentials so
+ * the connector re-gates immediately. Mirrors `/api/config/env`
+ * (env/route.ts) which does the same after a legacy credential save:
+ *   - resetCredentialHydration() drops the current tenant's hydrated
+ *     snapshot so the next resolveRegistryAsync() re-reads KV (and sees the
+ *     new/removed `cred:acct:<id>:__index__`);
+ *   - emit("env.changed") clears the cached registry so the next page
+ *     render re-runs the gate.
+ * Without this, a freshly-added account would not flip the connector to
+ * enabled until a cold lambda (Phase 76 — the slack/notion gate now reads
+ * account presence, so this invalidation is load-bearing, not cosmetic).
+ */
+function invalidateGateAfterAccountChange(): void {
+  resetCredentialHydration();
+  emit("env.changed");
 }
 
 /**
@@ -173,6 +193,7 @@ async function postHandler(ctx: PipelineContext) {
     const name = result.account_name?.trim() || providedName || "account";
 
     const account = await saveAccount(connector, name, tokenSet);
+    invalidateGateAfterAccountChange();
     return NextResponse.json({
       ok: true,
       account: { slug: account.slug, name: account.name },
@@ -210,6 +231,7 @@ async function deleteHandler(ctx: PipelineContext) {
 
   try {
     await removeAccount(connector, body.slug.trim());
+    invalidateGateAfterAccountChange();
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err, { status: 500, route: "config/accounts" });

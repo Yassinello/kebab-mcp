@@ -5,6 +5,7 @@ import { notionCreateSchema, handleNotionCreate } from "./tools/notion-create";
 import { notionUpdateSchema, handleNotionUpdate } from "./tools/notion-update";
 import { notionQuerySchema, handleNotionQuery } from "./tools/notion-query";
 import { notionGuide } from "./guide";
+import { hasConfiguredAccountSync } from "@/core/connector-accounts";
 import { getConfig } from "@/core/config-facade";
 
 export const notionConnector: ConnectorManifest = {
@@ -12,7 +13,16 @@ export const notionConnector: ConnectorManifest = {
   label: "Notion",
   description: "Search, read, create, update, and query databases in Notion",
   guide: notionGuide,
-  requiredEnvVars: ["NOTION_API_KEY"],
+  // Phase 76 (multi-account primary): configured via cred:acct:notion:* OR
+  // the legacy NOTION_API_KEY. Empty requiredEnvVars + isActive() gating so
+  // an integration added via the account selector activates the connector.
+  // Keep the `missing env: <KEY>` reason shape (see connectors.tsx
+  // isConfigured heuristic).
+  requiredEnvVars: [],
+  isActive: (env) =>
+    hasConfiguredAccountSync("notion", env as Record<string, string | undefined>)
+      ? { active: true }
+      : { active: false, reason: "missing env: NOTION_API_KEY" },
   testConnection: async (credentials) => {
     const key = credentials.NOTION_API_KEY;
     if (!key) return { ok: false, message: "Missing API key" };
