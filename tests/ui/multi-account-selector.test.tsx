@@ -119,7 +119,7 @@ describe("MultiAccountSelector", () => {
     await waitFor(() => expect(screen.getByText("Add account")).toBeTruthy());
 
     const keyInput = document.querySelector(
-      'input[placeholder="secret_… or ntn_…"]'
+      'input[placeholder="ntn_… or secret_…"]'
     ) as HTMLInputElement;
     fireEvent.change(keyInput, { target: { value: "secret_bad" } });
     fireEvent.click(screen.getByText("Add account"));

@@ -11,10 +11,13 @@ export const notionGuide = `Search pages, read/append content, and query databas
 A Notion workspace where you can install integrations. Notion integrations only see pages that have been _explicitly shared_ with them — there is no workspace-wide permission.
 
 ### How to get credentials
-1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) and click **New integration**
-2. Pick the associated workspace, give it a name (e.g. _Kebab MCP_), and submit
-3. Copy the **Internal Integration Token** (starts with \`secret_\` or \`ntn_\`) and set it as \`NOTION_API_KEY\`
-4. Open every page or database you want Kebab MCP to access, click **…** → **Connections** → add your integration. Granting a parent page shares all its children.
+1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) and click **New integration** (or **New connection**)
+2. For **Authentication method**, choose **Access token** — _not_ OAuth. Access token is the workspace-scoped static token Kebab uses; OAuth needs a redirect/sign-in flow Kebab doesn't run.
+3. Give it a name (e.g. _Kebab MCP_), pick the workspace, and create it
+4. Copy the **Internal Integration Token** (starts with \`ntn_\` or \`secret_\`) and paste it here
+5. Open every page or database you want Kebab MCP to access, click **…** → **Connections** → add your integration. Granting a parent page shares all its children.
+
+> **Access token, not OAuth.** "Limited to 1 workspace" is fine — to use several workspaces, create one Access-token connection per workspace and add each as a separate account in Kebab.
 
 ### Multiple accounts
 Once enabled, you can connect more than one Notion workspace/integration from the connector card and pin which one tools act as by default. Override per call with the \`account\` parameter.

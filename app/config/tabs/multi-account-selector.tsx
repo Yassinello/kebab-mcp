@@ -83,8 +83,11 @@ const CONFIGS: Record<string, { label: string; fields: TokenField[] }> = {
       {
         key: "NOTION_API_KEY",
         label: "Internal Integration Token",
-        placeholder: "secret_… or ntn_…",
-        hint: "Create an integration at {notion.so/my-integrations}, then copy its Internal Integration Token (starts with ntn_ or secret_). Remember to share your pages/databases with the integration.",
+        placeholder: "ntn_… or secret_…",
+        // Notion's newer "New connection" dialog asks Access token vs OAuth —
+        // Kebab needs Access token (the static workspace token). OAuth needs a
+        // redirect flow Kebab doesn't run.
+        hint: "Create an integration at {notion.so/my-integrations}. Choose Authentication method = Access token (NOT OAuth), then copy its Internal Integration Token (starts with ntn_ or secret_). Remember to share your pages/databases with the integration via … → Connections.",
         linkHref: "https://www.notion.so/my-integrations",
       },
     ],
