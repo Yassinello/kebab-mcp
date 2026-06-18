@@ -4,6 +4,7 @@ import { notionReadSchema, handleNotionRead } from "./tools/notion-read";
 import { notionCreateSchema, handleNotionCreate } from "./tools/notion-create";
 import { notionUpdateSchema, handleNotionUpdate } from "./tools/notion-update";
 import { notionQuerySchema, handleNotionQuery } from "./tools/notion-query";
+import { notionDbSchemaSchema, handleNotionDbSchema } from "./tools/notion-db-schema";
 import { notionGuide } from "./guide";
 import { hasConfiguredAccountSync } from "@/core/connector-accounts";
 import { getConfig } from "@/core/config-facade";
@@ -108,6 +109,14 @@ export const notionConnector: ConnectorManifest = {
         "Query a Notion database with optional filters and sorting. Use notion_search to find the database ID first.",
       schema: notionQuerySchema,
       handler: async (args) => handleNotionQuery(args),
+      destructive: false,
+    }),
+    defineTool({
+      name: "notion_get_db_schema",
+      description:
+        "Get a Notion database's property schema: each property's name, type, and valid option names for select/multi_select/status. Call this before querying or updating database rows so you use correct property names and values.",
+      schema: notionDbSchemaSchema,
+      handler: async (args) => handleNotionDbSchema(args),
       destructive: false,
     }),
   ],

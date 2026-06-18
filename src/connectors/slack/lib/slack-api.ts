@@ -128,7 +128,8 @@ export async function listChannels(
 export async function readMessages(
   tokens: AccountTokenSet,
   channel: string,
-  limit?: number
+  limit?: number,
+  bounds?: { oldest?: string | undefined; latest?: string | undefined }
 ): Promise<SlackMessage[]> {
   const data = await slackFetch<
     SlackResponse & {
@@ -143,6 +144,10 @@ export async function readMessages(
   >(tokens, "conversations.history", {
     channel,
     limit: limit || 20,
+    // Unix-seconds bounds (Slack message ts format). Undefined keys are
+    // dropped by slackFetch.
+    oldest: bounds?.oldest,
+    latest: bounds?.latest,
   });
 
   return (data.messages || []).map((m) => ({
@@ -310,4 +315,111 @@ export async function searchMessages(
     ts: m.ts,
     date: new Date(parseFloat(m.ts) * 1000).toISOString(),
   }));
+}
+
+// --- Direct messages ---
+
+/**
+ * Resolve a DM target to a Slack user id. Accepts:
+ *   - a user id (U…/W…) → returned as-is;
+ *   - an email → users.lookupByEmail (needs the users:read.email scope);
+ *   - a display/real name → users.list match (needs users:read).
+ *
+ * A name that matches more than one active member throws a clear error
+ * listing the candidates rather than guessing — the caller must disambiguate
+ * (e.g. by id or email). No match → not-found error.
+ */
+export async function resolveUserId(tokens: AccountTokenSet, target: string): Promise<string> {
+  const t = target.trim();
+
+  // Already a user id.
+  if (/^[UW][A-Z0-9]{6,}$/.test(t)) return t;
+
+  // Email → direct lookup.
+  if (t.includes("@")) {
+    const data = await slackFetch<SlackResponse & { user?: { id: string } }>(
+      tokens,
+      "users.lookupByEmail",
+      { email: t }
+    );
+    if (!data.user?.id) {
+      throw new McpToolError({
+        code: ErrorCode.EXTERNAL_API_ERROR,
+        toolName: "slack",
+        message: `No Slack user for email ${t}`,
+        userMessage: `No Slack user found for ${t}.`,
+        retryable: false,
+      });
+    }
+    return data.user.id;
+  }
+
+  // Name → scan the member roster (one page; large workspaces should pass an
+  // id or email). Match real_name or display_name case-insensitively.
+  const lc = t.toLowerCase();
+  const data = await slackFetch<
+    SlackResponse & {
+      members?: {
+        id: string;
+        deleted?: boolean;
+        is_bot?: boolean;
+        real_name?: string;
+        profile?: { display_name?: string; real_name?: string };
+      }[];
+    }
+  >(tokens, "users.list", { limit: 200 });
+
+  const matches = (data.members || []).filter((m) => {
+    if (m.deleted || m.is_bot) return false;
+    const names = [m.real_name, m.profile?.display_name, m.profile?.real_name]
+      .filter(Boolean)
+      .map((n) => n!.toLowerCase());
+    return names.includes(lc);
+  });
+
+  if (matches.length === 1) return matches[0]!.id;
+  if (matches.length === 0) {
+    throw new McpToolError({
+      code: ErrorCode.EXTERNAL_API_ERROR,
+      toolName: "slack",
+      message: `No Slack member named "${t}"`,
+      userMessage: `No Slack member named "${t}". Try an email or user id.`,
+      retryable: false,
+    });
+  }
+  const names = matches.map((m) => m.real_name || m.profile?.display_name || m.id).join(", ");
+  throw new McpToolError({
+    code: ErrorCode.EXTERNAL_API_ERROR,
+    toolName: "slack",
+    message: `Ambiguous name "${t}"`,
+    userMessage: `"${t}" matches multiple members (${names}). Use an email or user id to disambiguate.`,
+    retryable: false,
+  });
+}
+
+/**
+ * Open (or reuse) a DM channel with a user and post a message into it.
+ * Returns the DM channel id + message ts. Reuses sendMessage().
+ */
+export async function openDmAndSend(
+  tokens: AccountTokenSet,
+  userId: string,
+  text: string
+): Promise<{ ts: string; channel: string }> {
+  const opened = await slackFetch<SlackResponse & { channel?: { id: string } }>(
+    tokens,
+    "conversations.open",
+    { users: userId }
+  );
+  const channel = opened.channel?.id;
+  if (!channel) {
+    throw new McpToolError({
+      code: ErrorCode.EXTERNAL_API_ERROR,
+      toolName: "slack",
+      message: "conversations.open returned no channel",
+      userMessage: "Could not open a DM channel with that user.",
+      retryable: false,
+    });
+  }
+  return sendMessage(tokens, channel, text);
 }
