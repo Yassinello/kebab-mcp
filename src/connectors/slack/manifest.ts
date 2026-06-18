@@ -2,6 +2,7 @@ import { defineTool, type ConnectorManifest } from "@/core/types";
 import { slackChannelsSchema, handleSlackChannels } from "./tools/slack-channels";
 import { slackReadSchema, handleSlackRead } from "./tools/slack-read";
 import { slackSendSchema, handleSlackSend } from "./tools/slack-send";
+import { slackSendDmSchema, handleSlackSendDm } from "./tools/slack-send-dm";
 import { slackSearchSchema, handleSlackSearch } from "./tools/slack-search";
 import { slackThreadSchema, handleSlackThread } from "./tools/slack-thread";
 import { slackProfileSchema, handleSlackProfile } from "./tools/slack-profile";
@@ -96,6 +97,14 @@ export const slackConnector: ConnectorManifest = {
         "Send a message to a Slack channel. Supports Slack markdown. Can reply in a thread using thread_ts. Always show the message to the user for approval before calling.",
       schema: slackSendSchema,
       handler: async (args) => handleSlackSend(args),
+      destructive: true,
+    }),
+    defineTool({
+      name: "slack_send_dm",
+      description:
+        "Send a direct message to a person by user id, email, or name (auto-resolved). Use this instead of slack_send when the target is a person, not a channel. Always show the message to the user for approval before calling.",
+      schema: slackSendDmSchema,
+      handler: async (args) => handleSlackSendDm(args),
       destructive: true,
     }),
     defineTool({

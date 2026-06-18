@@ -274,29 +274,167 @@ export async function queryDatabase(
   }));
 }
 
+// --- Database schema ---
+
+export interface NotionPropertySchema {
+  name: string;
+  type: string;
+  /** Choice names for select / multi_select / status properties. */
+  options?: string[];
+}
+
+interface RawDbProperty {
+  type: string;
+  select?: { options?: { name: string }[] };
+  multi_select?: { options?: { name: string }[] };
+  status?: { options?: { name: string }[] };
+}
+
+/**
+ * Fetch a database's property schema: each property's name, type, and (for
+ * select/multi_select/status) its valid option names. An agent needs this to
+ * supply correct values when querying or updating rows — and updatePage uses
+ * it to type each property correctly.
+ */
+export async function getDatabaseSchema(
+  tokens: AccountTokenSet,
+  databaseId: string
+): Promise<{ title: string; properties: NotionPropertySchema[] }> {
+  const data = await notionFetch<{
+    title?: NotionRichText[];
+    properties?: Record<string, RawDbProperty>;
+  }>(tokens, `/databases/${databaseId}`);
+
+  const title = (data.title || []).map((t) => t.plain_text).join("") || "(untitled database)";
+
+  const properties: NotionPropertySchema[] = Object.entries(data.properties || {}).map(
+    ([name, prop]) => {
+      const opts =
+        prop.select?.options ?? prop.multi_select?.options ?? prop.status?.options ?? undefined;
+      const schema: NotionPropertySchema = { name, type: prop.type };
+      if (opts) schema.options = opts.map((o) => o.name);
+      return schema;
+    }
+  );
+
+  return { title, properties };
+}
+
 // --- Update page ---
+
+/**
+ * Build a Notion property-value object for a given property TYPE. This is what
+ * makes select/date/status/etc. updates actually work — Notion rejects a
+ * rich_text payload on a select property. The type comes from the parent
+ * database's schema (getDatabaseSchema); when the type is unknown (page parent,
+ * not a DB) we fall back to rich_text for strings.
+ *
+ * multi_select accepts a comma-separated string or is split on commas. people
+ * accepts comma-separated user ids. date accepts an ISO string (or anything
+ * Notion's date.start accepts).
+ */
+export function buildPropertyValue(
+  type: string,
+  value: string | number | boolean
+): Record<string, unknown> {
+  const str = String(value);
+  switch (type) {
+    case "title":
+      return { title: [{ type: "text", text: { content: str } }] };
+    case "rich_text":
+      return { rich_text: [{ type: "text", text: { content: str } }] };
+    case "number":
+      return { number: typeof value === "number" ? value : Number(str) };
+    case "checkbox":
+      return { checkbox: typeof value === "boolean" ? value : str === "true" };
+    case "select":
+      return { select: { name: str } };
+    case "status":
+      return { status: { name: str } };
+    case "multi_select":
+      return {
+        multi_select: str
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((name) => ({ name })),
+      };
+    case "date":
+      return { date: { start: str } };
+    case "url":
+      return { url: str };
+    case "email":
+      return { email: str };
+    case "phone_number":
+      return { phone_number: str };
+    case "people":
+      return {
+        people: str
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((id) => ({ id })),
+      };
+    default:
+      // Unknown / unsupported type → best-effort rich_text.
+      return { rich_text: [{ type: "text", text: { content: str } }] };
+  }
+}
+
+/**
+ * Resolve the property TYPE for each provided key from the page's parent
+ * database schema. Returns a name→type map. If the page is not inside a
+ * database (parent is a page/workspace) there is no schema — returns null and
+ * the caller falls back to string→rich_text.
+ */
+async function propertyTypesForPage(
+  tokens: AccountTokenSet,
+  pageId: string
+): Promise<Record<string, string> | null> {
+  const page = await notionFetch<{ parent?: { type?: string; database_id?: string } }>(
+    tokens,
+    `/pages/${pageId}`
+  );
+  const dbId = page.parent?.type === "database_id" ? page.parent.database_id : undefined;
+  if (!dbId) return null;
+  const schema = await getDatabaseSchema(tokens, dbId);
+  return Object.fromEntries(schema.properties.map((p) => [p.name, p.type]));
+}
 
 export async function updatePage(
   tokens: AccountTokenSet,
   pageId: string,
   properties?: Record<string, string | number | boolean>,
-  appendContent?: string
+  appendContent?: string,
+  archive?: boolean
 ): Promise<{ id: string; url: string }> {
-  // Update properties if provided
+  // Archive (trash) the page — terminal, so do it and return early.
+  if (archive) {
+    const page = await notionFetch<{ id: string; url: string }>(tokens, `/pages/${pageId}`, {
+      method: "PATCH",
+      body: { archived: true },
+    });
+    return { id: page.id, url: page.url };
+  }
+
+  // Update properties if provided — type each one from the parent DB schema so
+  // select/date/status/multi_select/people land correctly.
   if (properties && Object.keys(properties).length > 0) {
+    const types = await propertyTypesForPage(tokens, pageId);
     const notionProps: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(properties)) {
-      if (typeof value === "boolean") {
-        notionProps[key] = { checkbox: value };
-      } else if (typeof value === "number") {
-        notionProps[key] = { number: value };
-      } else {
-        // Try rich_text for string values — select/status are auto-detected by Notion
-        notionProps[key] = {
-          rich_text: [{ type: "text", text: { content: String(value) } }],
-        };
+      // Known type from schema wins. Without a schema (page parent), infer:
+      // booleans → checkbox, numbers → number, strings → rich_text. The
+      // special key "title" always maps to the title property.
+      let type = types?.[key];
+      if (!type) {
+        if (key.toLowerCase() === "title") type = "title";
+        else if (typeof value === "boolean") type = "checkbox";
+        else if (typeof value === "number") type = "number";
+        else type = "rich_text";
       }
+      notionProps[key] = buildPropertyValue(type, value);
     }
 
     await notionFetch(tokens, `/pages/${pageId}`, {

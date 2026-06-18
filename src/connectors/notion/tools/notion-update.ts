@@ -8,7 +8,7 @@ export const notionUpdateSchema = {
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
     .optional()
     .describe(
-      'Properties to update as key-value pairs. Example: {"Status": "Done", "Priority": "High"}'
+      'Properties to update as key-value pairs. Each value is typed automatically from the parent database schema, so select/status/date/multi_select/people work — e.g. {"Status": "Done", "Due": "2026-07-01", "Tags": "urgent, q3"}. Use the key "title" to rename the page. For multi_select/people, pass a comma-separated string. Call notion_get_db_schema first to see valid property names + select options.'
     ),
   append_content: z
     .string()
@@ -16,6 +16,10 @@ export const notionUpdateSchema = {
     .describe(
       "Markdown to append to the page — supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks, dividers (---), and paragraphs. Converted to native Notion blocks."
     ),
+  archive: z
+    .boolean()
+    .optional()
+    .describe("Set true to archive (move to trash) the page. Ignores other fields when set."),
   account: z
     .string()
     .optional()
@@ -28,6 +32,7 @@ export async function handleNotionUpdate(params: {
   page_id: string;
   properties?: Record<string, string | number | boolean> | undefined;
   append_content?: string | undefined;
+  archive?: boolean | undefined;
   account?: string | undefined;
 }) {
   const resolved = await resolveNotionTokens(params.account);
@@ -37,8 +42,15 @@ export async function handleNotionUpdate(params: {
     resolved.tokens,
     params.page_id,
     params.properties,
-    params.append_content
+    params.append_content,
+    params.archive
   );
+
+  if (params.archive) {
+    return {
+      content: [{ type: "text" as const, text: `Page archived: ${result.url}` }],
+    };
+  }
 
   const actions: string[] = [];
   if (params.properties)

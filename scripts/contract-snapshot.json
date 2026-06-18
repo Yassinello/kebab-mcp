@@ -672,6 +672,15 @@
     "destructive": true
   },
   {
+    "name": "notion_get_db_schema",
+    "pack": "notion",
+    "schemaKeys": [
+      "account",
+      "database_id"
+    ],
+    "destructive": false
+  },
+  {
     "name": "notion_query",
     "pack": "notion",
     "schemaKeys": [
@@ -708,6 +717,7 @@
     "schemaKeys": [
       "account",
       "append_content",
+      "archive",
       "page_id",
       "properties"
     ],
@@ -756,7 +766,9 @@
     "schemaKeys": [
       "account",
       "channel",
-      "limit"
+      "latest",
+      "limit",
+      "oldest"
     ],
     "destructive": false
   },
@@ -778,6 +790,16 @@
       "channel",
       "text",
       "thread_ts"
+    ],
+    "destructive": true
+  },
+  {
+    "name": "slack_send_dm",
+    "pack": "slack",
+    "schemaKeys": [
+      "account",
+      "text",
+      "to"
     ],
     "destructive": true
   },
