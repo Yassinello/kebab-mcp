@@ -18,11 +18,14 @@ import { calendarRsvpSchema, handleCalendarRsvp } from "./tools/calendar-rsvp";
 import { contactsSearchSchema, handleContactsSearch } from "./tools/contacts-search";
 import { driveSearchSchema, handleDriveSearch } from "./tools/drive-search";
 import { driveReadSchema, handleDriveRead } from "./tools/drive-read";
+import { chatListSpacesSchema, handleChatListSpaces } from "./tools/chat-list-spaces";
+import { chatListMessagesSchema, handleChatListMessages } from "./tools/chat-list-messages";
+import { chatSendMessageSchema, handleChatSendMessage } from "./tools/chat-send-message";
 
 export const googleConnector: ConnectorManifest = {
   id: "google",
   label: "Google Workspace",
-  description: "Gmail, Calendar, Contacts, Drive",
+  description: "Gmail, Calendar, Contacts, Drive, Chat",
   guide: `Access Gmail, Google Calendar, Google Contacts, and Google Drive via a long-lived OAuth refresh token.
 
 ### Prerequisites
@@ -249,6 +252,27 @@ A Google account and a Google Cloud project where you can create an OAuth client
         "Read the content of a Google Drive file. Exports Google Docs as plain text, Sheets as CSV, Slides as text. For binary files (PDF, images), returns metadata with a link.",
       schema: driveReadSchema,
       handler: async (args) => handleDriveRead(args),
+      destructive: false,
+    }),
+    defineTool({
+      name: "google_chat_list_spaces",
+      description: "List spaces and direct messages (DMs) in Google Chat.",
+      schema: chatListSpacesSchema,
+      handler: async (args) => handleChatListSpaces(args),
+      destructive: false,
+    }),
+    defineTool({
+      name: "google_chat_list_messages",
+      description: "List messages in a Google Chat space / channel.",
+      schema: chatListMessagesSchema,
+      handler: async (args) => handleChatListMessages(args),
+      destructive: false,
+    }),
+    defineTool({
+      name: "google_chat_send_message",
+      description: "Send a message to a Google Chat space / channel / DM.",
+      schema: chatSendMessageSchema,
+      handler: async (args) => handleChatSendMessage(args),
       destructive: false,
     }),
   ],
