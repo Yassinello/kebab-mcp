@@ -6,13 +6,10 @@ export const chatSendMessageSchema = {
   text: z.string().describe("The text message to send"),
 };
 
-export async function handleChatSendMessage(params: {
-  space_name: string;
-  text: string;
-}) {
+export async function handleChatSendMessage(params: { space_name: string; text: string }) {
   const message = await createMessage(params.space_name, params.text);
-  const senderName = message.sender.displayName || message.sender.name;
-  const date = new Date(message.createTime).toLocaleString();
+  const senderName = message.sender.displayName || message.sender.name || "(unknown)";
+  const date = message.createTime || "(no date)";
 
   return {
     content: [

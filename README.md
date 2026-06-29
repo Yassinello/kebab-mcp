@@ -299,9 +299,9 @@ KEBAB_ENABLED_PACKS=vault,admin    # Only listed connectors are considered
 src/
   core/                ← Framework: types, registry, config, auth, logging, events
   connectors/
-    google/            ← Google Workspace (18 tools)
+    google/            ← Google Workspace (21+ tools)
       manifest.ts      ← Connector definition (single source of truth)
-      lib/             ← Gmail, Calendar, Contacts, Drive wrappers
+      lib/             ← Gmail, Calendar, Contacts, Drive, Chat wrappers
       tools/           ← Individual tool handlers
     vault/             ← Obsidian Vault (14 tools)
     browser/ slack/ notion/ apify/ paywall/ composio/

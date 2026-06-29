@@ -3,7 +3,10 @@ import { listMessages } from "../lib/chat";
 
 export const chatListMessagesSchema = {
   space_name: z.string().describe("The resource name of the space (e.g. 'spaces/AAAAMMMMMM')"),
-  page_size: z.number().optional().describe("Maximum number of messages to return (default: 20, max: 100)"),
+  page_size: z
+    .number()
+    .optional()
+    .describe("Maximum number of messages to return (default: 20, max: 100)"),
   page_token: z.string().optional().describe("Token for retrieving the next page of results"),
 };
 
@@ -19,13 +22,15 @@ export async function handleChatListMessages(params: {
 
   if (!res.messages || res.messages.length === 0) {
     return {
-      content: [{ type: "text" as const, text: `No messages found in space ${params.space_name}.` }],
+      content: [
+        { type: "text" as const, text: `No messages found in space ${params.space_name}.` },
+      ],
     };
   }
 
   const lines = res.messages.map((m) => {
-    const senderName = m.sender.displayName || m.sender.name;
-    const date = new Date(m.createTime).toLocaleString();
+    const senderName = m.sender.displayName || m.sender.name || "(unknown)";
+    const date = m.createTime || "(no date)";
     return `[${date}] ${senderName}: ${m.text}`;
   });
 
