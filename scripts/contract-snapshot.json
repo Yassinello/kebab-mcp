@@ -448,6 +448,34 @@
     "destructive": true
   },
   {
+    "name": "google_chat_list_messages",
+    "pack": "google",
+    "schemaKeys": [
+      "page_size",
+      "page_token",
+      "space_name"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "google_chat_list_spaces",
+    "pack": "google",
+    "schemaKeys": [
+      "page_size",
+      "page_token"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "google_chat_send_message",
+    "pack": "google",
+    "schemaKeys": [
+      "space_name",
+      "text"
+    ],
+    "destructive": true
+  },
+  {
     "name": "linear_create_issue",
     "pack": "linear",
     "schemaKeys": [

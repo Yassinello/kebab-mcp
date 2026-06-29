@@ -77,7 +77,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Google Workspace",
     description: "Gmail, Calendar, Drive, Docs, and Sheets via a single OAuth2 refresh token.",
     requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
-    toolCount: 18,
+    toolCount: 21,
     loader: () => import("@/connectors/google/manifest").then((m) => m.googleConnector),
   },
   {

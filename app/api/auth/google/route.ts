@@ -32,6 +32,9 @@ async function getHandler(_ctx: PipelineContext) {
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/contacts.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+    "https://www.googleapis.com/auth/chat.messages.create",
   ];
 
   const state = crypto.randomUUID();
