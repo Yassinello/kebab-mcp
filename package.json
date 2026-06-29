@@ -91,7 +91,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.15",
     "@types/turndown": "^5.0.6",
-    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "fast-check": "^4.7.0",
