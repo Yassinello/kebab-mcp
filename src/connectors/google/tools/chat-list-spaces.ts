@@ -2,7 +2,10 @@ import { z } from "zod";
 import { listSpaces } from "../lib/chat";
 
 export const chatListSpacesSchema = {
-  page_size: z.number().optional().describe("Maximum number of spaces to return (default: 20, max: 100)"),
+  page_size: z
+    .number()
+    .optional()
+    .describe("Maximum number of spaces to return (default: 20, max: 100)"),
   page_token: z.string().optional().describe("Token for retrieving the next page of results"),
 };
 
