@@ -167,21 +167,23 @@ describe("registry lazy loaders (PERF-01)", () => {
 
   // Test 4
   it("env.changed event invalidates cache so next resolve re-gates", async () => {
-    // First resolve: no Google creds → Google disabled, loader not called.
+    // First resolve: no creds. composio gates purely on COMPOSIO_API_KEY
+    // (no hasCustomActive), so its loader is skipped while disabled.
+    // (Google now has hasCustomActive — its loader runs to evaluate
+    // isActive() even when disabled, like slack/notion — so it is no longer
+    // a valid "lazy-skip" example here.)
     await resolveRegistryAsync();
-    expect(loaderCalls).not.toContain("google");
+    expect(loaderCalls).not.toContain("composio");
 
-    // Simulate env change: operator sets creds + emits event.
-    process.env.GOOGLE_CLIENT_ID = "id";
-    process.env.GOOGLE_CLIENT_SECRET = "secret";
-    process.env.GOOGLE_REFRESH_TOKEN = "refresh";
+    // Simulate env change: operator sets the credential + emits event.
+    process.env.COMPOSIO_API_KEY = "comp_test";
     // The event-bus handler is wired inside registry.ts; here we exercise
     // the cache invalidation directly (the event handler's behavior).
     __resetRegistryCacheForTests();
     loaderCalls = [];
 
     await resolveRegistryAsync();
-    expect(loaderCalls).toContain("google");
+    expect(loaderCalls).toContain("composio");
   });
 
   // Test 5
@@ -229,20 +231,20 @@ describe("registry lazy loaders (PERF-01)", () => {
   });
 
   // Test 7
-  it("disabled-due-to-missing-env reason still reads `missing env: X, Y`", async () => {
-    // Google needs 3 env vars. Set only 1 → reason lists the 2 missing.
+  it("disabled-due-to-missing-env reason still reads `missing env: X`", async () => {
+    // v0.19: Google now gates via manifest.isActive() (hasCustomActive),
+    // which requires the primary GOOGLE_REFRESH_TOKEN (the per-account secret)
+    // and returns a fixed `missing env: GOOGLE_REFRESH_TOKEN` reason — the
+    // client id/secret are stored per-account but are not the gate key.
+    // Set client id only → still disabled (no refresh token).
     process.env.GOOGLE_CLIENT_ID = "id";
-    // Intentionally leave SECRET + REFRESH unset.
 
     const state = await resolveRegistryAsync();
     const google = state.find((p) => p.manifest.id === "google");
     expect(google).toBeDefined();
     expect(google?.enabled).toBe(false);
     expect(google?.reason).toMatch(/^missing env: /);
-    expect(google?.reason).toContain("GOOGLE_CLIENT_SECRET");
     expect(google?.reason).toContain("GOOGLE_REFRESH_TOKEN");
-    // The already-set var should NOT appear in the missing list.
-    expect(google?.reason).not.toContain("GOOGLE_CLIENT_ID");
   });
 
   // Safety check: loader spy produces a stable id set matching the loader entries.
