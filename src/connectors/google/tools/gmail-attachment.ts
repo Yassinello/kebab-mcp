@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getAttachment, readEmail } from "../lib/gmail";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const gmailAttachmentSchema = {
   message_id: z.string().describe("Gmail message ID containing the attachment"),
@@ -7,17 +8,27 @@ export const gmailAttachmentSchema = {
     .string()
     .optional()
     .describe("Attachment ID (from gmail_read results). If omitted, returns first attachment."),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleGmailAttachment(params: {
   message_id: string;
   attachment_id?: string | undefined;
+  account?: string | undefined;
 }) {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
   let attId = params.attachment_id;
 
   // If no attachment_id, get the first one from the message
   if (!attId) {
-    const email = await readEmail(params.message_id);
+    const email = await readEmail(r.ctx, params.message_id);
     if (email.attachments.length === 0) {
       return {
         content: [{ type: "text" as const, text: "No attachments found on this message." }],
@@ -31,7 +42,7 @@ export async function handleGmailAttachment(params: {
     }
   }
 
-  const att = await getAttachment(params.message_id, attId);
+  const att = await getAttachment(r.ctx, params.message_id, attId);
 
   // Try to decode as text
   const raw = Buffer.from(att.data, "base64url");

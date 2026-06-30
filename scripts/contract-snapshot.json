@@ -171,6 +171,7 @@
     "name": "calendar_create",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "calendar_id",
       "description",
       "end",
@@ -184,6 +185,7 @@
     "name": "calendar_delete",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "calendar_id",
       "event_id"
     ],
@@ -193,6 +195,7 @@
     "name": "calendar_events",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "days"
     ],
     "destructive": false
@@ -201,6 +204,7 @@
     "name": "calendar_find_free",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "days",
       "duration_minutes",
       "start_date"
@@ -211,6 +215,7 @@
     "name": "calendar_rsvp",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "calendar_id",
       "event_id",
       "response"
@@ -221,6 +226,7 @@
     "name": "calendar_update",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "calendar_id",
       "description",
       "end",
@@ -253,6 +259,7 @@
     "name": "contacts_search",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "max_results",
       "query"
     ],
@@ -262,6 +269,7 @@
     "name": "drive_read",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "file_id"
     ],
     "destructive": false
@@ -270,6 +278,7 @@
     "name": "drive_search",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "max_results",
       "query"
     ],
@@ -363,6 +372,7 @@
     "name": "gmail_attachment",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "attachment_id",
       "message_id"
     ],
@@ -372,6 +382,7 @@
     "name": "gmail_draft",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "bcc",
       "body",
       "cc",
@@ -384,6 +395,7 @@
     "name": "gmail_inbox",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "max_results",
       "query"
     ],
@@ -393,6 +405,7 @@
     "name": "gmail_label",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "add",
       "message_id",
       "remove"
@@ -403,6 +416,7 @@
     "name": "gmail_read",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "message_id"
     ],
     "destructive": false
@@ -411,6 +425,7 @@
     "name": "gmail_reply",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "body",
       "cc",
       "message_id"
@@ -421,6 +436,7 @@
     "name": "gmail_search",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "body_mode",
       "max_results",
       "query"
@@ -431,6 +447,7 @@
     "name": "gmail_send",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "bcc",
       "body",
       "cc",
@@ -443,6 +460,7 @@
     "name": "gmail_trash",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "message_id"
     ],
     "destructive": true
@@ -451,6 +469,7 @@
     "name": "google_chat_list_messages",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "page_size",
       "page_token",
       "space_name"
@@ -461,6 +480,7 @@
     "name": "google_chat_list_spaces",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "page_size",
       "page_token"
     ],
@@ -470,6 +490,7 @@
     "name": "google_chat_send_message",
     "pack": "google",
     "schemaKeys": [
+      "account",
       "space_name",
       "text"
     ],

@@ -1,17 +1,31 @@
 import { getInstanceConfig } from "@/core/config";
 import { z } from "zod";
 import { searchDrive } from "../lib/drive";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const driveSearchSchema = {
   query: z.string().describe("Search query — file name or content keywords"),
   max_results: z.number().optional().describe("Max results (default: 10, max: 20)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleDriveSearch(params: {
   query: string;
   max_results?: number | undefined;
+  account?: string | undefined;
 }) {
-  const files = await searchDrive(params);
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const files = await searchDrive(r.ctx, {
+    query: params.query,
+    maxResults: params.max_results,
+  });
 
   if (files.length === 0) {
     return {

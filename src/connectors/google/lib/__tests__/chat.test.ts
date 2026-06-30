@@ -16,6 +16,15 @@ vi.mock("../google-fetch", () => ({
   googleFetch: (...a: unknown[]) => googleFetchMock(...a),
 }));
 
+const ctx = {
+  tokens: {
+    GOOGLE_CLIENT_ID: "id",
+    GOOGLE_CLIENT_SECRET: "secret",
+    GOOGLE_REFRESH_TOKEN: "rt",
+  },
+  slug: "default",
+};
+
 describe("google/lib/chat.ts", () => {
   beforeEach(() => {
     googleFetchJSONMock.mockReset();
@@ -35,7 +44,7 @@ describe("google/lib/chat.ts", () => {
       });
 
       const { listSpaces } = await import("../chat");
-      const res = await listSpaces();
+      const res = await listSpaces(ctx);
       expect(res.spaces).toHaveLength(3);
       expect(res.spaces[0]!.type).toBe("SPACE");
       expect(res.spaces[1]!.type).toBe("DM");
@@ -46,15 +55,15 @@ describe("google/lib/chat.ts", () => {
     it("clamps page_size to the API max of 100", async () => {
       googleFetchJSONMock.mockResolvedValueOnce({ spaces: [] });
       const { listSpaces } = await import("../chat");
-      await listSpaces({ pageSize: 5000 });
-      const url = googleFetchJSONMock.mock.calls[0]![0] as string;
+      await listSpaces(ctx, { pageSize: 5000 });
+      const url = googleFetchJSONMock.mock.calls[0]![1] as string;
       expect(url).toContain("pageSize=100");
     });
 
     it("empty spaces → empty array", async () => {
       googleFetchJSONMock.mockResolvedValueOnce({});
       const { listSpaces } = await import("../chat");
-      const res = await listSpaces();
+      const res = await listSpaces(ctx);
       expect(res.spaces).toEqual([]);
     });
   });
@@ -74,7 +83,7 @@ describe("google/lib/chat.ts", () => {
       });
 
       const { listMessages } = await import("../chat");
-      const res = await listMessages("spaces/AAA");
+      const res = await listMessages(ctx, "spaces/AAA");
       expect(res.messages).toHaveLength(2);
       expect(res.messages[0]!.sender.displayName).toBe("Yass");
       expect(res.messages[1]!.text).toBe("");
@@ -85,7 +94,7 @@ describe("google/lib/chat.ts", () => {
     it("propagates fetch errors", async () => {
       googleFetchJSONMock.mockRejectedValueOnce(new Error("403 insufficient scopes"));
       const { listMessages } = await import("../chat");
-      await expect(listMessages("spaces/AAA")).rejects.toThrow(/insufficient scopes/);
+      await expect(listMessages(ctx, "spaces/AAA")).rejects.toThrow(/insufficient scopes/);
     });
   });
 
@@ -99,11 +108,12 @@ describe("google/lib/chat.ts", () => {
       });
 
       const { createMessage } = await import("../chat");
-      const msg = await createMessage("spaces/AAA", "sent");
+      const msg = await createMessage(ctx, "spaces/AAA", "sent");
       expect(msg.text).toBe("sent");
       expect(msg.sender.displayName).toBe("Kebab Bot");
 
-      const [, opts] = googleFetchJSONMock.mock.calls[0]! as [
+      const [, , opts] = googleFetchJSONMock.mock.calls[0]! as [
+        unknown,
         string,
         { method: string; body: string },
       ];

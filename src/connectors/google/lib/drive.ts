@@ -1,3 +1,4 @@
+import type { GoogleAuthContext } from "./google-auth";
 import { googleFetch, googleFetchJSON } from "./google-fetch";
 
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -31,14 +32,18 @@ export interface DriveFile {
   owners?: string[] | undefined;
 }
 
-export async function searchDrive(opts: {
-  query: string;
-  maxResults?: number | undefined;
-}): Promise<DriveFile[]> {
+export async function searchDrive(
+  ctx: GoogleAuthContext,
+  opts: {
+    query: string;
+    maxResults?: number | undefined;
+  }
+): Promise<DriveFile[]> {
   const limit = Math.min(opts.maxResults || 10, 20);
   const q = `(name contains '${opts.query.replace(/'/g, "\\'")}' or fullText contains '${opts.query.replace(/'/g, "\\'")}') and trashed = false`;
 
   const data = await googleFetchJSON<DriveFileListResponse>(
+    ctx,
     `${DRIVE}/files?q=${encodeURIComponent(q)}&pageSize=${limit}` +
       `&fields=files(id,name,mimeType,modifiedTime,webViewLink,size,owners)` +
       `&orderBy=modifiedTime desc`
@@ -56,9 +61,11 @@ export async function searchDrive(opts: {
 }
 
 export async function readDriveFile(
+  ctx: GoogleAuthContext,
   fileId: string
 ): Promise<{ name: string; content: string; mimeType: string }> {
   const meta = await googleFetchJSON<DriveFileMetadata>(
+    ctx,
     `${DRIVE}/files/${fileId}?fields=name,mimeType`
   );
   const mimeType = meta.mimeType || "";
@@ -72,6 +79,7 @@ export async function readDriveFile(
 
   if (exportMap[mimeType]) {
     const res = await googleFetch(
+      ctx,
       `${DRIVE}/files/${fileId}/export?mimeType=${encodeURIComponent(exportMap[mimeType])}`
     );
     return { name: meta.name, content: await res.text(), mimeType };
@@ -79,7 +87,7 @@ export async function readDriveFile(
 
   // Regular text files — download content
   if (mimeType.startsWith("text/") || mimeType === "application/json") {
-    const res = await googleFetch(`${DRIVE}/files/${fileId}?alt=media`);
+    const res = await googleFetch(ctx, `${DRIVE}/files/${fileId}?alt=media`);
     return { name: meta.name, content: await res.text(), mimeType };
   }
 

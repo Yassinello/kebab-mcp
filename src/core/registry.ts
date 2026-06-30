@@ -76,8 +76,14 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     id: "google",
     label: "Google Workspace",
     description: "Gmail, Calendar, Drive, Docs, and Sheets via a single OAuth2 refresh token.",
-    requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+    // v0.19 (multi-account): empty requiredEnvVars + hasCustomActive so the
+    // gate defers to manifest.isActive(), which accepts a multi-account Google
+    // account OR the legacy GOOGLE_* env vars. Keep in lockstep with the
+    // manifest (the registry-metadata contract test asserts requiredEnvVars
+    // equality).
+    requiredEnvVars: [],
     toolCount: 21,
+    hasCustomActive: true,
     loader: () => import("@/connectors/google/manifest").then((m) => m.googleConnector),
   },
   {

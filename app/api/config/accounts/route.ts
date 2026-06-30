@@ -13,6 +13,7 @@ import {
   getDefaultAccount,
   type AccountTokenSet,
 } from "@/core/connector-accounts";
+import { evictGoogleTokenCache } from "@/connectors/google/lib/google-auth";
 
 /**
  * /api/config/accounts — multi-account CRUD over the phase-73 store
@@ -36,7 +37,7 @@ import {
 
 /** Connectors this route manages. A single-token deployment of either
  * still works via the store's MACS-02 legacy-default synthesis. */
-const SUPPORTED = new Set(["slack", "notion"]);
+const SUPPORTED = new Set(["slack", "notion", "google"]);
 
 /** Required token keys per connector (POST validation). The store accepts
  * any AccountTokenSet, but we gate on the connector's primary key being
@@ -44,6 +45,7 @@ const SUPPORTED = new Set(["slack", "notion"]);
 const PRIMARY_TOKEN_KEY: Record<string, string> = {
   slack: "SLACK_BOT_TOKEN",
   notion: "NOTION_API_KEY",
+  google: "GOOGLE_REFRESH_TOKEN",
 };
 
 function isSupported(connector: unknown): connector is string {
@@ -100,7 +102,7 @@ async function getHandler(ctx: PipelineContext) {
   const connector = url.searchParams.get("connector");
   if (!isSupported(connector)) {
     return NextResponse.json(
-      { ok: false, error: "Unsupported connector. Use one of: slack, notion." },
+      { ok: false, error: "Unsupported connector. Use one of: slack, notion, google." },
       { status: 400 }
     );
   }
@@ -136,7 +138,7 @@ async function postHandler(ctx: PipelineContext) {
   const { connector } = body;
   if (!isSupported(connector)) {
     return NextResponse.json(
-      { ok: false, error: "Unsupported connector. Use one of: slack, notion." },
+      { ok: false, error: "Unsupported connector. Use one of: slack, notion, google." },
       { status: 400 }
     );
   }
@@ -193,6 +195,10 @@ async function postHandler(ctx: PipelineContext) {
     const name = result.account_name?.trim() || providedName || "account";
 
     const account = await saveAccount(connector, name, tokenSet);
+    // Google mints a short-lived access token per refresh token and caches it
+    // per slug. A re-saved slug (same name, new refresh token) must not serve
+    // the previously-minted token — drop its cache buckets.
+    if (connector === "google") await evictGoogleTokenCache(account.slug);
     invalidateGateAfterAccountChange();
     return NextResponse.json({
       ok: true,
@@ -218,7 +224,7 @@ async function deleteHandler(ctx: PipelineContext) {
   const { connector } = body;
   if (!isSupported(connector)) {
     return NextResponse.json(
-      { ok: false, error: "Unsupported connector. Use one of: slack, notion." },
+      { ok: false, error: "Unsupported connector. Use one of: slack, notion, google." },
       { status: 400 }
     );
   }
@@ -230,7 +236,9 @@ async function deleteHandler(ctx: PipelineContext) {
   if (degraded) return degraded;
 
   try {
-    await removeAccount(connector, body.slug.trim());
+    const slug = body.slug.trim();
+    await removeAccount(connector, slug);
+    if (connector === "google") await evictGoogleTokenCache(slug);
     invalidateGateAfterAccountChange();
     return NextResponse.json({ ok: true });
   } catch (err) {

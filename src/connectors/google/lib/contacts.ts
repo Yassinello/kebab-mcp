@@ -1,3 +1,4 @@
+import type { GoogleAuthContext } from "./google-auth";
 import { googleFetchJSON } from "./google-fetch";
 
 const PEOPLE = "https://people.googleapis.com/v1";
@@ -23,10 +24,15 @@ export interface Contact {
   title: string;
 }
 
-export async function searchContacts(query: string, maxResults?: number): Promise<Contact[]> {
+export async function searchContacts(
+  ctx: GoogleAuthContext,
+  query: string,
+  maxResults?: number
+): Promise<Contact[]> {
   const limit = Math.min(maxResults || 10, 30);
 
   const data = await googleFetchJSON<PeopleSearchResponse>(
+    ctx,
     `${PEOPLE}/people:searchContacts?query=${encodeURIComponent(query)}&readMask=names,emailAddresses,phoneNumbers,organizations&pageSize=${limit}`
   );
 

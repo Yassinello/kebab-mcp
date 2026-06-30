@@ -1,35 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.17
-milestone_name: — Unipile Connector (LinkedIn write)
-status: MILESTONE v0.17 CODE-COMPLETE. Phase 71 finished via FAST mode (Plan 71-02 shipped via executor in background, Plan 71-03 docs coded inline). Ready for code review.
-stopped_at: Phase 71 docs shipped (docs/connectors/unipile.md + .env.example + CONNECTORS.md ref). Next step is full code review of src/connectors/unipile/.
-last_updated: "2026-05-19T00:30:00Z"
-last_activity: 2026-05-19
+milestone: v0.19
+milestone_name: — Multi-account Google Workspace
+status: MILESTONE v0.19 STARTED. PROJECT.md + REQUIREMENTS.md + ROADMAP.md written (3 phases 73-75, realizes FUT-01). Branch feat/v0.19-google-multi-account. Ready to plan/execute Phase 73.
+stopped_at: Roadmap v0.19 written. Next step is to execute Phase 73 (Google store + auth refactor — GMA-01..05) per the approved design (~/.claude/plans/cryptic-greeting-island.md, phases G0/G1/G2).
+last_updated: "2026-06-30T02:00:00Z"
+last_activity: 2026-06-30
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 18
-  completed_plans: 18
-  percent: 100
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-16)
+See: .planning/PROJECT.md (updated 2026-06-30 — milestone v0.19, renamed Kebab MCP)
 
-**Current focus:** Phase 71 — Unipile Hardening (1/3 plans shipped — UNI-20 kill-switch closed; UNI-21 metrics + UNI-22 audit-query API remaining).
-**Next:** Phase 71 Plan 02 (metrics endpoints) then Plan 03 (audit query + docs).
+**Current focus:** Phase 73 — Google multi-account store + auth refactor (GMA-01..05). Replicate the v0.18 Slack/Notion pattern; key wrinkle = per-slug access-token cache.
+**Next:** Execute Phase 73 (store registration G0 → auth refactor G1 → resolve helper G2 per the design doc).
 
 ## Current Position
 
-Phase: 71 — Unipile Hardening — IN PROGRESS (1/3 plans shipped — UNI-20 closed by plan 71-01)
-Plan: 1 of 3 complete (Wave 1 plan 71-01 shipped — Step -1 kill-switch retrofit on all 4 LinkedIn write tools + manifest probe; UNI-20 closed end-to-end)
-Previous milestones: v0.10 → v0.16 all complete. v0.17 phase 68 + 69 + 70 shipped; phase 71 in progress 2026-05-19.
-Status: Plan complete — ready for next plan (71-02)
-Last activity: 2026-05-19
+Phase: 73 — Google store + auth refactor — NOT STARTED (defining/executing)
+Plan: — (executing from approved design doc cryptic-greeting-island.md)
+Previous milestones: v0.10 → v0.17 (Unipile) shipped; v0.18 (multi-account Slack/Notion) shipped + merged; Google Chat connector (#37) merged.
+Status: Milestone scaffolding written — ready to implement Phase 73 on branch feat/v0.19-google-multi-account
+Last activity: 2026-06-30
 
 ## Session Continuity
 

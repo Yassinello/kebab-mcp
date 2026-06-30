@@ -1,16 +1,29 @@
 import { getInstanceConfig } from "@/core/config";
 import { z } from "zod";
 import { listEventsAllCalendars } from "../lib/calendar";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const calendarEventsSchema = {
   days: z.number().optional().describe("Number of days to look ahead (default: 7)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
-export async function handleCalendarEvents(params: { days?: number | undefined }) {
+export async function handleCalendarEvents(params: {
+  days?: number | undefined;
+  account?: string | undefined;
+}) {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
   const now = new Date();
   const timeMax = new Date(now.getTime() + (params.days || 7) * 86400000).toISOString();
 
-  const events = await listEventsAllCalendars({
+  const events = await listEventsAllCalendars(r.ctx, {
     timeMin: now.toISOString(),
     timeMax,
   });

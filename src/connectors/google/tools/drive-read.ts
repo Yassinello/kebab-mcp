@@ -1,12 +1,22 @@
 import { z } from "zod";
 import { readDriveFile } from "../lib/drive";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const driveReadSchema = {
   file_id: z.string().describe("Google Drive file ID (from drive_search results)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
-export async function handleDriveRead(params: { file_id: string }) {
-  const file = await readDriveFile(params.file_id);
+export async function handleDriveRead(params: { file_id: string; account?: string | undefined }) {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const file = await readDriveFile(r.ctx, params.file_id);
 
   const typeLabels: Record<string, string> = {
     "application/vnd.google-apps.document": "Google Doc",
