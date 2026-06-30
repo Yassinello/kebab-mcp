@@ -1,3 +1,4 @@
+import type { GoogleAuthContext } from "./google-auth";
 import { googleFetchJSON } from "./google-fetch";
 
 const CHAT = "https://chat.googleapis.com/v1";
@@ -98,6 +99,7 @@ function normalizeMessage(m: ChatMessageResponse): ChatMessage {
 // --- List spaces ---
 
 export async function listSpaces(
+  ctx: GoogleAuthContext,
   opts: {
     pageSize?: number | undefined;
     pageToken?: string | undefined;
@@ -106,7 +108,10 @@ export async function listSpaces(
   const params = new URLSearchParams({ pageSize: String(clampPageSize(opts.pageSize)) });
   if (opts.pageToken) params.set("pageToken", opts.pageToken);
 
-  const data = await googleFetchJSON<ListSpacesResponse>(`${CHAT}/spaces?${params.toString()}`);
+  const data = await googleFetchJSON<ListSpacesResponse>(
+    ctx,
+    `${CHAT}/spaces?${params.toString()}`
+  );
 
   return {
     spaces: (data.spaces || []).map(normalizeSpace),
@@ -117,6 +122,7 @@ export async function listSpaces(
 // --- List messages in a space ---
 
 export async function listMessages(
+  ctx: GoogleAuthContext,
   spaceName: string,
   opts: {
     pageSize?: number | undefined;
@@ -131,6 +137,7 @@ export async function listMessages(
   if (opts.pageToken) params.set("pageToken", opts.pageToken);
 
   const data = await googleFetchJSON<ListMessagesResponse>(
+    ctx,
     `${CHAT}/${spaceName}/messages?${params.toString()}`
   );
 
@@ -142,8 +149,12 @@ export async function listMessages(
 
 // --- Create (send) a message ---
 
-export async function createMessage(spaceName: string, text: string): Promise<ChatMessage> {
-  const data = await googleFetchJSON<ChatMessageResponse>(`${CHAT}/${spaceName}/messages`, {
+export async function createMessage(
+  ctx: GoogleAuthContext,
+  spaceName: string,
+  text: string
+): Promise<ChatMessage> {
+  const data = await googleFetchJSON<ChatMessageResponse>(ctx, `${CHAT}/${spaceName}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),

@@ -1,4 +1,4 @@
-import { getGoogleAccessToken } from "./google-auth";
+import { getGoogleAccessToken, type GoogleAuthContext } from "./google-auth";
 import { McpToolError, ErrorCode } from "@/core/errors";
 import { GoogleAuthError, GoogleRateLimitError } from "@/core/connector-errors";
 
@@ -20,8 +20,12 @@ interface GoogleFetchOpts extends Omit<RequestInit, "headers"> {
  * - Timeout (default 15s)
  * - Structured error messages
  */
-export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Promise<Response> {
-  const token = await getGoogleAccessToken();
+export async function googleFetch(
+  ctx: GoogleAuthContext,
+  url: string,
+  opts: GoogleFetchOpts = {}
+): Promise<Response> {
+  const token = await getGoogleAccessToken(ctx);
   const timeoutMs = opts.timeoutMs || 15_000;
 
   const { timeoutMs: _, ...fetchOpts } = opts;
@@ -122,10 +126,11 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
  * googleFetch + parse JSON response
  */
 export async function googleFetchJSON<T = unknown>(
+  ctx: GoogleAuthContext,
   url: string,
   opts: GoogleFetchOpts = {}
 ): Promise<T> {
-  const res = await googleFetch(url, opts);
+  const res = await googleFetch(ctx, url, opts);
   return res.json();
 }
 

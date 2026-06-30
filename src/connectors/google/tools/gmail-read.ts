@@ -1,12 +1,25 @@
 import { z } from "zod";
 import { readEmail } from "../lib/gmail";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const gmailReadSchema = {
   message_id: z.string().describe("Gmail message ID (from gmail_inbox results)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
-export async function handleGmailRead(params: { message_id: string }) {
-  const email = await readEmail(params.message_id);
+export async function handleGmailRead(params: {
+  message_id: string;
+  account?: string | undefined;
+}) {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const email = await readEmail(r.ctx, params.message_id);
 
   const attachList = email.attachments.length
     ? `\n\nAttachments (${email.attachments.length}):\n` +

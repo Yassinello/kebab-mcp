@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listMessages } from "../lib/chat";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const chatListMessagesSchema = {
   space_name: z.string().describe("The resource name of the space (e.g. 'spaces/AAAAMMMMMM')"),
@@ -8,14 +9,24 @@ export const chatListMessagesSchema = {
     .optional()
     .describe("Maximum number of messages to return (default: 20, max: 100)"),
   page_token: z.string().optional().describe("Token for retrieving the next page of results"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleChatListMessages(params: {
   space_name: string;
   page_size?: number | undefined;
   page_token?: string | undefined;
+  account?: string | undefined;
 }) {
-  const res = await listMessages(params.space_name, {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const res = await listMessages(r.ctx, params.space_name, {
     pageSize: params.page_size,
     pageToken: params.page_token,
   });

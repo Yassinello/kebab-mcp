@@ -26,6 +26,15 @@ vi.mock("@/core/config", () => ({
   getToolTimeout: () => 30_000,
 }));
 
+const ctx = {
+  tokens: {
+    GOOGLE_CLIENT_ID: "id",
+    GOOGLE_CLIENT_SECRET: "secret",
+    GOOGLE_REFRESH_TOKEN: "rt",
+  },
+  slug: "default",
+};
+
 describe("Phase 50 / COV-04 — google/lib/calendar.ts", () => {
   beforeEach(() => {
     googleFetchJSONMock.mockReset();
@@ -47,7 +56,7 @@ describe("Phase 50 / COV-04 — google/lib/calendar.ts", () => {
       });
 
       const { listAllCalendars } = await import("../calendar");
-      const calendars = await listAllCalendars();
+      const calendars = await listAllCalendars(ctx);
       expect(calendars).toHaveLength(2);
       expect(calendars[0]!.id).toBe("primary");
       expect(calendars[0]!.summary).toBe("Personal");
@@ -56,14 +65,14 @@ describe("Phase 50 / COV-04 — google/lib/calendar.ts", () => {
     it("empty items → empty array", async () => {
       googleFetchJSONMock.mockResolvedValueOnce({});
       const { listAllCalendars } = await import("../calendar");
-      const calendars = await listAllCalendars();
+      const calendars = await listAllCalendars(ctx);
       expect(calendars).toEqual([]);
     });
 
     it("fetch rejects → error propagated", async () => {
       googleFetchJSONMock.mockRejectedValueOnce(new Error("401 unauthorized"));
       const { listAllCalendars } = await import("../calendar");
-      await expect(listAllCalendars()).rejects.toThrow(/401 unauthorized/);
+      await expect(listAllCalendars(ctx)).rejects.toThrow(/401 unauthorized/);
     });
   });
 
@@ -87,7 +96,7 @@ describe("Phase 50 / COV-04 — google/lib/calendar.ts", () => {
       });
 
       const { listEventsAllCalendars } = await import("../calendar");
-      const events = await listEventsAllCalendars({
+      const events = await listEventsAllCalendars(ctx, {
         timeMin: "2026-04-22T00:00:00Z",
         timeMax: "2026-04-23T00:00:00Z",
       });

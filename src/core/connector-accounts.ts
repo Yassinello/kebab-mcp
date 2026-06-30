@@ -101,6 +101,13 @@ const ACCOUNT_DESCRIPTORS: Record<string, AccountDescriptor> = {
     legacyKeys: ["NOTION_API_KEY"],
     primaryKey: "NOTION_API_KEY",
   },
+  google: {
+    // Google holds a 3-tuple that mints a short-lived access token. The
+    // refresh token is the per-account secret; client id/secret are often
+    // shared but stored per-account so each token set is self-contained.
+    legacyKeys: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+    primaryKey: "GOOGLE_REFRESH_TOKEN",
+  },
 };
 
 const KEY_PREFIX = "cred:acct:";

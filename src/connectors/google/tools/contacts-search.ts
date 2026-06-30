@@ -1,16 +1,27 @@
 import { z } from "zod";
 import { searchContacts } from "../lib/contacts";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const contactsSearchSchema = {
   query: z.string().describe("Search query — name, email, company, or phone number"),
   max_results: z.number().optional().describe("Max results (default: 10, max: 30)"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleContactsSearch(params: {
   query: string;
   max_results?: number | undefined;
+  account?: string | undefined;
 }) {
-  const contacts = await searchContacts(params.query, params.max_results);
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const contacts = await searchContacts(r.ctx, params.query, params.max_results);
 
   if (contacts.length === 0) {
     return {

@@ -1,5 +1,7 @@
 import { defineTool, type ConnectorManifest } from "@/core/types";
 import { getGoogleAccessToken } from "./lib/google-auth";
+import { resolveGoogleTokens } from "./lib/resolve-account";
+import { hasConfiguredAccountSync } from "@/core/connector-accounts";
 import { gmailInboxSchema, handleGmailInbox } from "./tools/gmail-inbox";
 import { gmailReadSchema, handleGmailRead } from "./tools/gmail-read";
 import { gmailSendSchema, handleGmailSend } from "./tools/gmail-send";
@@ -42,7 +44,18 @@ A Google account and a Google Cloud project where you can create an OAuth client
 - _invalid_grant_: the refresh token was revoked (password change, 6 months idle, or too many tokens) — re-run the credential flow from /config.
 - _Insufficient scopes_: re-consent with all required scopes (gmail, calendar, drive, contacts, chat). Chat tools need \`chat.spaces.readonly\`, \`chat.messages.readonly\`, and \`chat.messages.create\` — re-run the credential flow after these are added.
 - _App not verified_: for personal use, add your own email as a **Test user** on the OAuth consent screen.`,
-  requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+  // v0.19 (multi-account primary): the connector is configured via the
+  // multi-account store (cred:acct:google:*) OR the legacy GOOGLE_* env vars.
+  // requiredEnvVars is therefore empty and gating defers to isActive() so an
+  // account added purely through the selector activates the connector. The
+  // reason string MUST keep the `missing env: <KEY>` shape —
+  // app/config/tabs/connectors.tsx derives isConfigured from
+  // `reason.startsWith("missing env")`.
+  requiredEnvVars: [],
+  isActive: (env) =>
+    hasConfiguredAccountSync("google", env as Record<string, string | undefined>)
+      ? { active: true }
+      : { active: false, reason: "missing env: GOOGLE_REFRESH_TOKEN" },
   testConnection: async (credentials) => {
     const clientId = credentials.GOOGLE_CLIENT_ID;
     const clientSecret = credentials.GOOGLE_CLIENT_SECRET;
@@ -91,8 +104,39 @@ A Google account and a Google Cloud project where you can create an OAuth client
     });
     if (profileRes.ok) {
       const profile = (await profileRes.json()) as { emailAddress?: string };
-      return { ok: true, message: `Connected as ${profile.emailAddress || "Google user"}` };
+      const email = profile.emailAddress;
+      // account_name drives the auto-derived account name in the multi-account
+      // store (route POST names the account from result.account_name).
+      return {
+        ok: true,
+        message: `Connected as ${email || "Google user"}`,
+        ...(email ? { account_name: email, account_id: email } : {}),
+      };
     }
+
+    // Gmail scope not granted — fall back to the People API (uses the
+    // contacts.readonly scope already requested) to still derive an email
+    // for the account name.
+    const peopleRes = await fetch(
+      "https://people.googleapis.com/v1/people/me?personFields=emailAddresses",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+    );
+    if (peopleRes.ok) {
+      const people = (await peopleRes.json()) as {
+        emailAddresses?: { value?: string }[];
+      };
+      const email = people.emailAddresses?.[0]?.value;
+      if (email) {
+        return {
+          ok: true,
+          message:
+            "OAuth credentials valid (Gmail scope not granted — other Google APIs may still work)",
+          account_name: email,
+          account_id: email,
+        };
+      }
+    }
+
     return {
       ok: true,
       message:
@@ -101,7 +145,11 @@ A Google account and a Google Cloud project where you can create an OAuth client
   },
   diagnose: async () => {
     try {
-      await getGoogleAccessToken();
+      const resolved = await resolveGoogleTokens();
+      if (!resolved.ok) {
+        return { ok: false, message: "No Google account configured" };
+      }
+      await getGoogleAccessToken(resolved.ctx);
       return { ok: true, message: "Google OAuth token is valid" };
     } catch (err) {
       return {

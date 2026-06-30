@@ -92,6 +92,36 @@ const CONFIGS: Record<string, { label: string; fields: TokenField[] }> = {
       },
     ],
   },
+  google: {
+    label: "Google Workspace",
+    // Refresh token FIRST: the component derives `primaryKey` from fields[0]
+    // and gates "Add" (canAdd) on it. The refresh token is the per-account
+    // secret; client id/secret are often shared but stored per-account so each
+    // account is self-contained.
+    fields: [
+      {
+        key: "GOOGLE_REFRESH_TOKEN",
+        label: "Refresh Token",
+        placeholder: "1//0g…",
+        hint: "Get it via the OAuth flow at {/api/auth/google} (Connect Google), then copy the refresh token shown once. It is account-specific — run the flow signed in as the Google account you want to add.",
+        linkHref: "/api/auth/google",
+      },
+      {
+        key: "GOOGLE_CLIENT_ID",
+        label: "OAuth Client ID",
+        placeholder: "…apps.googleusercontent.com",
+        hint: "From {Google Cloud Console} → APIs & Services → Credentials → your OAuth client (Desktop app).",
+        linkHref: "https://console.cloud.google.com/apis/credentials",
+      },
+      {
+        key: "GOOGLE_CLIENT_SECRET",
+        label: "OAuth Client Secret",
+        placeholder: "GOCSPX-…",
+        hint: "Same OAuth client as the Client ID, under Credentials.",
+        linkHref: "https://console.cloud.google.com/apis/credentials",
+      },
+    ],
+  },
 };
 
 /**
@@ -125,7 +155,7 @@ export function MultiAccountSelector({
   connector,
   onAccountsChanged,
 }: {
-  connector: "slack" | "notion";
+  connector: "slack" | "notion" | "google";
   /**
    * Phase 76: fired after a successful add/remove so the parent can
    * re-resolve the connector's gate state (the slack/notion gate now reads

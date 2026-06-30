@@ -1,6 +1,7 @@
 import { getInstanceConfig } from "@/core/config";
 import { z } from "zod";
 import { createEvent } from "../lib/calendar";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const calendarCreateSchema = {
   summary: z.string().describe("Event title"),
@@ -20,6 +21,12 @@ export const calendarCreateSchema = {
     .string()
     .optional()
     .describe('Calendar ID (default: "primary"). Use calendar_events to list available calendars.'),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleCalendarCreate(params: {
@@ -29,8 +36,12 @@ export async function handleCalendarCreate(params: {
   description?: string | undefined;
   location?: string | undefined;
   calendar_id?: string | undefined;
+  account?: string | undefined;
 }) {
-  const event = await createEvent({
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
+  const event = await createEvent(r.ctx, {
     summary: params.summary,
     start: params.start,
     end: params.end,

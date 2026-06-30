@@ -403,7 +403,8 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         // In static mode the store is unreachable, so we fall back to the
         // legacy fields + EnvStubBlock.
         const useMultiAccountUI =
-          (pack.id === "slack" || pack.id === "notion") && storageMode !== "static";
+          (pack.id === "slack" || pack.id === "notion" || pack.id === "google") &&
+          storageMode !== "static";
 
         const handleCardClick = () => {
           setExpanded(isOpen ? null : pack.id);
@@ -657,12 +658,13 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         the first account can be connected here (adding it gates
                         the connector active). KV-only, so suppressed in static
                         mode (legacy fields + EnvStubBlock handle that case). */}
-                    {useMultiAccountUI && (pack.id === "slack" || pack.id === "notion") && (
-                      <MultiAccountSelector
-                        connector={pack.id}
-                        onAccountsChanged={() => router.refresh()}
-                      />
-                    )}
+                    {useMultiAccountUI &&
+                      (pack.id === "slack" || pack.id === "notion" || pack.id === "google") && (
+                        <MultiAccountSelector
+                          connector={pack.id}
+                          onAccountsChanged={() => router.refresh()}
+                        />
+                      )}
                     {storageMode === "static" && (
                       <EnvStubBlock
                         packId={pack.id}

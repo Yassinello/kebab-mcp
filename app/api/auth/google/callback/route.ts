@@ -6,8 +6,10 @@ import { toMsg } from "@/core/error-utils";
 
 /**
  * Google OAuth callback — exchanges code for tokens.
- * Displays the refresh token for the user to copy to Vercel env vars.
- * Token is shown ONCE, never stored or logged by the server.
+ * Displays the refresh token for the user to copy into /config → Connectors →
+ * Google → Add account (the admin-auth'd multi-account store). This endpoint
+ * is public/unauthenticated, so it deliberately does NOT write to any store —
+ * the token is shown ONCE, never stored or logged by the server.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -143,9 +145,9 @@ function tokenPage(error: string | null, token: string | null): string {
       <div class="steps">
         <strong>Next steps:</strong><br>
         1. Copy the token above<br>
-        2. Go to Vercel → Project Settings → Environment Variables<br>
-        3. Set <code style="background:#1e1e1e;padding:2px 6px;border-radius:3px;">GOOGLE_REFRESH_TOKEN</code> to the copied value<br>
-        4. Redeploy your project
+        2. Open your Kebab MCP dashboard → <code style="background:#1e1e1e;padding:2px 6px;border-radius:3px;">/config</code> → Connectors → Google Workspace<br>
+        3. Click <strong>Add account</strong> and paste this refresh token (plus your Client ID & Secret)<br>
+        4. The account activates immediately — connect more Google accounts the same way, no redeploy needed
       </div>
       <div class="warning">
         This token is shown once and is not stored by Kebab MCP. Save it now.

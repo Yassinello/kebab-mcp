@@ -1,6 +1,7 @@
 import { getInstanceConfig } from "@/core/config";
 import { z } from "zod";
 import { findFreeTime } from "../lib/calendar";
+import { resolveGoogleTokens } from "../lib/resolve-account";
 
 export const calendarFindFreeSchema = {
   duration_minutes: z.number().describe("Duration of the slot needed in minutes (e.g. 30, 60)"),
@@ -9,19 +10,29 @@ export const calendarFindFreeSchema = {
     .string()
     .optional()
     .describe("Start date (ISO 8601, default: now). Example: 2026-04-07T08:00:00+02:00"),
+  account: z
+    .string()
+    .optional()
+    .describe(
+      "Which connected account to use (name or slug). Omit to use the pinned default / your only account."
+    ),
 };
 
 export async function handleCalendarFindFree(params: {
   duration_minutes: number;
   days?: number | undefined;
   start_date?: string | undefined;
+  account?: string | undefined;
 }) {
+  const r = await resolveGoogleTokens(params.account);
+  if (!r.ok) return r.result;
+
   const now = new Date();
   const timeMin = params.start_date || now.toISOString();
   const days = Math.min(params.days || 5, 14);
   const timeMax = new Date(new Date(timeMin).getTime() + days * 86400000).toISOString();
 
-  const slots = await findFreeTime({
+  const slots = await findFreeTime(r.ctx, {
     timeMin,
     timeMax,
     durationMinutes: params.duration_minutes,

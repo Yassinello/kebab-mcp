@@ -35,7 +35,7 @@ async function putHandler(ctx: PipelineContext) {
   const { connector } = body;
   if (!isSupported(connector)) {
     return NextResponse.json(
-      { ok: false, error: "Unsupported connector. Use one of: slack, notion." },
+      { ok: false, error: "Unsupported connector. Use one of: slack, notion, google." },
       { status: 400 }
     );
   }
