@@ -97,7 +97,7 @@
     "fast-check": "^4.7.0",
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
-    "knip": "^6.4.1",
+    "knip": "^6.24.0",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
