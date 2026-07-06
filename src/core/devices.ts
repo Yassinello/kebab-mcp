@@ -15,8 +15,12 @@
  *   - clearDeviceRateLimit(tok)  — best-effort bucket cleanup
  *
  * KV schema:
- *   devices:<tokenId>           → { label: string, createdAt: ISO }
+ *   devices:<tokenId>           → { label: string, createdAt: ISO, connectors?: string[] }
  *   devices:invite:<nonce>      → { consumedAt: ISO, label: string }  (24h TTL)
+ *
+ * `connectors` (v0.20) is an OPTIONAL per-token connector allowlist. Absent
+ * (or corrupt) = no scope = full access (opt-in, fail-open). See
+ * src/core/token-scope.ts for how it is resolved + enforced at request time.
  *
  * Reads go through `getContextKVStore()` so tenant isolation is
  * automatic. Writes to `MCP_AUTH_TOKEN` route through the Phase 48
@@ -32,17 +36,26 @@ import { getConfig } from "./config-facade";
 import { getEnvStore } from "./env-store";
 import { parseTokens, tokenId } from "./auth";
 import { kvScanAll } from "./kv-store";
+import { getKnownConnectorIds } from "./registry";
 
 export interface DeviceRow {
   tokenId: string;
   label: string;
   createdAt: string;
   lastSeenAt: string | null;
+  /**
+   * Per-token connector allowlist (v0.20). `null` = no scope = full access.
+   * A non-null array is the exact set of connector ids this token may reach
+   * (core connectors are always additionally allowed at resolution time).
+   */
+  connectors: string[] | null;
 }
 
 interface DeviceKVEntry {
   label: string;
   createdAt: string;
+  /** Optional per-token connector allowlist. Absent = full access. */
+  connectors?: string[];
 }
 
 const DEVICE_KEY_PREFIX = "devices:";
@@ -83,6 +96,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
     const raw = await kv.get(`${DEVICE_KEY_PREFIX}${id}`);
     let label = "unnamed";
     let createdAt = "unknown";
+    let connectors: string[] | null = null;
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
@@ -90,14 +104,93 @@ export async function listDevices(): Promise<DeviceRow[]> {
         if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
           createdAt = parsed.createdAt;
         }
+        if (Array.isArray(parsed.connectors)) {
+          connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
+        }
       } catch {
-        // Corrupt entry — fall back to defaults.
+        // Corrupt entry — fall back to defaults (full access).
       }
     }
     const lastSeenAt = await getLastSeenAt(t);
-    rows.push({ tokenId: id, label, createdAt, lastSeenAt });
+    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors });
   }
   return rows;
+}
+
+/**
+ * Read a token's connector allowlist. Returns the stored array, or `null`
+ * when the token has no scope (missing entry, absent `connectors` field, or
+ * a corrupt entry) — i.e. fail-open to full access. Never throws.
+ *
+ * `id` is the 8-hex `tokenId` (see auth.ts). Reads through
+ * `getContextKVStore()` so tenant isolation is automatic.
+ */
+export async function getDeviceConnectors(id: string): Promise<string[] | null> {
+  const kv = getContextKVStore();
+  const raw = await kv.get(`${DEVICE_KEY_PREFIX}${id}`);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
+    if (!Array.isArray(parsed.connectors)) return null;
+    return parsed.connectors.filter((c): c is string => typeof c === "string");
+  } catch {
+    // Corrupt entry — fail open (full access), never wedge the token.
+    return null;
+  }
+}
+
+/**
+ * Set (or clear) a token's connector allowlist. Read-modify-write that
+ * preserves the existing `label` + `createdAt` (mirrors setDeviceLabel).
+ *
+ * - `connectors` = array → validated against the known connector ids;
+ *   unknown ids throw. Deduped + order-stable. An empty array is a valid
+ *   "nothing but core" lock.
+ * - `connectors` = `null` → the field is removed (token returns to full
+ *   access).
+ *
+ * Creates the entry with `label: "unnamed"` + fresh `createdAt` when none
+ * exists yet, so a scope can be pinned to a token that was never labelled.
+ */
+export async function setDeviceConnectors(id: string, connectors: string[] | null): Promise<void> {
+  let validated: string[] | null = null;
+  if (connectors !== null) {
+    if (!Array.isArray(connectors)) {
+      throw new Error("Invalid connectors: must be an array of connector ids or null");
+    }
+    const known = new Set(getKnownConnectorIds());
+    const seen = new Set<string>();
+    validated = [];
+    for (const c of connectors) {
+      if (typeof c !== "string" || !known.has(c)) {
+        throw new Error(`Unknown connector id: ${JSON.stringify(c)}`);
+      }
+      if (!seen.has(c)) {
+        seen.add(c);
+        validated.push(c);
+      }
+    }
+  }
+
+  const kv = getContextKVStore();
+  const key = `${DEVICE_KEY_PREFIX}${id}`;
+  const existingRaw = await kv.get(key);
+  let label = "unnamed";
+  let createdAt = new Date().toISOString();
+  if (existingRaw) {
+    try {
+      const parsed = JSON.parse(existingRaw) as Partial<DeviceKVEntry>;
+      if (typeof parsed.label === "string" && parsed.label.length > 0) label = parsed.label;
+      if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
+        createdAt = parsed.createdAt;
+      }
+    } catch {
+      // Corrupt entry — rewrite with fresh label/createdAt.
+    }
+  }
+  const entry: DeviceKVEntry = { label, createdAt };
+  if (validated !== null) entry.connectors = validated;
+  await kv.set(key, JSON.stringify(entry));
 }
 
 /**
@@ -213,16 +306,24 @@ export async function rotateDeviceToken(
   const newKey = `${DEVICE_KEY_PREFIX}${newTokenId}`;
   const oldRaw = await kv.get(oldKey);
   let label = "unnamed";
+  let connectors: string[] | undefined;
   if (oldRaw) {
     try {
       const parsed = JSON.parse(oldRaw) as Partial<DeviceKVEntry>;
       if (typeof parsed.label === "string" && parsed.label.length > 0) label = parsed.label;
+      // Preserve the connector scope across rotation — a rotated team token
+      // must keep its allowlist, else rotation would silently re-grant full
+      // access (privilege escalation).
+      if (Array.isArray(parsed.connectors)) {
+        connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
+      }
     } catch {
       // fall through
     }
     await kv.delete(oldKey);
   }
   const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
+  if (connectors !== undefined) newEntry.connectors = connectors;
   await kv.set(newKey, JSON.stringify(newEntry));
 
   // Clear old rate-limit buckets — the NEW token has a different idHash,

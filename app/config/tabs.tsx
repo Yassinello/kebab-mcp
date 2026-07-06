@@ -184,6 +184,7 @@ export function ConfigTabs({
           hasAuthToken={hasAuthToken}
           scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
           tenantId={tenantId}
+          connectors={connectors}
         />
       );
       break;
@@ -217,6 +218,7 @@ export function ConfigTabs({
           scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
           tenantId={tenantId}
           forceSub="devices"
+          connectors={connectors}
         />
       );
       break;

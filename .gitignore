@@ -33,3 +33,6 @@ CLAUDE.md
 .cold-start-probe-*.ts
 .cold-start-probe-*.mjs
 .cold-start-probe-*.js
+
+# Personal session-resume doc (like CLAUDE.md) — local only
+WAKEUP.md

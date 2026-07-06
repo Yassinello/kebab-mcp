@@ -5,6 +5,7 @@ import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
+import { resolveTokenConnectorScope, isConnectorAllowed } from "@/core/token-scope";
 import {
   composeRequestPipeline,
   rehydrateStep,
@@ -126,6 +127,14 @@ async function buildHandler(
   // cache is warm and subsequent resolves are O(1).
   const enabledPacks = await getEnabledPacksLazy();
 
+  // v0.20 per-token connector scoping: resolve the caller token's connector
+  // allowlist ONCE per request. `null` = no filter (full access). Applied
+  // both at listing (skip out-of-scope packs below) and at invocation
+  // (defense-in-depth check inside each tool handler). Core connectors are
+  // always in-scope (resolved inside token-scope.ts). See
+  // src/core/token-scope.ts + src/core/devices.ts.
+  const connectorScope = await resolveTokenConnectorScope(callerTokenId);
+
   // Prime dynamic tool caches (user-defined Skills, Custom API Tools) before
   // we iterate `manifest.tools`. Without this priming step, connectors that
   // back `tools` with a KV-persisted store return [] on cold lambdas — they
@@ -140,6 +149,11 @@ async function buildHandler(
   return createMcpHandler(
     (server) => {
       for (const pack of enabledPacks) {
+        // v0.20: connectors outside this token's scope are not registered —
+        // their tools/prompts/resources never appear in tools/list. A `null`
+        // scope (full access) allows every pack.
+        if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
+
         for (const tool of pack.manifest.tools) {
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
@@ -159,6 +173,26 @@ async function buildHandler(
                       type: "text" as const,
                       text: JSON.stringify({
                         error: `Tool "${tool.name}" is currently disabled`,
+                      }),
+                    },
+                  ],
+                  isError: true,
+                };
+              }
+              // v0.20: defense-in-depth — re-check the connector scope at
+              // invocation. buildHandler runs per HTTP request, so a
+              // `tools/call` re-resolves `connectorScope` fresh for that
+              // request (mirrors the getDisabledTools re-check above): a
+              // client invoking an out-of-scope tool by name — without a
+              // matching tools/list, or after the operator tightened the
+              // token's scope — is rejected here. A `null` scope allows all.
+              if (!isConnectorAllowed(connectorScope, pack.manifest.id)) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: JSON.stringify({
+                        error: `Tool "${tool.name}" is not in this token's connector scope`,
                       }),
                     },
                   ],
@@ -239,6 +273,9 @@ async function buildHandler(
       // early). See src/core/resources.ts for the registry logic.
       const resourceProviders: ResourceProvider[] = [];
       for (const pack of enabledPacks) {
+        // v0.20: skip resources of out-of-scope connectors (mirror of the
+        // tools/prompts listing filter above).
+        if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
         if (pack.manifest.resources) resourceProviders.push(pack.manifest.resources);
       }
       if (resourceProviders.length > 0) {

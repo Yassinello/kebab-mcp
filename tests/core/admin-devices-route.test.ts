@@ -268,6 +268,81 @@ describe("/api/admin/devices — DELETE revoke", () => {
   });
 });
 
+describe("/api/admin/devices — POST set-connectors", () => {
+  it("returns 200 and persists a validated allowlist", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const tid = tokenId(TOKEN_A);
+    const res = await POST(
+      makeReq("POST", { action: "set-connectors", tokenId: tid, connectors: ["apify", "unipile"] })
+    );
+    expect(res.status).toBe(200);
+    const raw = kvStore.get(`devices:${tid}`);
+    expect(JSON.parse(raw!).connectors).toEqual(["apify", "unipile"]);
+  });
+
+  it("clears the scope on null (full access) and drops the field", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const tid = tokenId(TOKEN_A);
+    kvStore.set(
+      `devices:${tid}`,
+      JSON.stringify({ label: "Team", createdAt: "x", connectors: ["apify"] })
+    );
+    const res = await POST(
+      makeReq("POST", { action: "set-connectors", tokenId: tid, connectors: null })
+    );
+    expect(res.status).toBe(200);
+    expect(JSON.parse(kvStore.get(`devices:${tid}`)!).connectors).toBeUndefined();
+  });
+
+  it("returns 400 unknown_connector on an invalid connector id", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const res = await POST(
+      makeReq("POST", {
+        action: "set-connectors",
+        tokenId: tokenId(TOKEN_A),
+        connectors: ["apify", "not-real"],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("unknown_connector");
+  });
+
+  it("returns 400 invalid_connectors when connectors is not an array or null", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const res = await POST(
+      makeReq("POST", {
+        action: "set-connectors",
+        tokenId: tokenId(TOKEN_A),
+        connectors: "apify",
+      })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("invalid_connectors");
+  });
+
+  it("returns 404 for an unknown tokenId", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const res = await POST(
+      makeReq("POST", { action: "set-connectors", tokenId: "deadbeef", connectors: ["apify"] })
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe("not_found");
+  });
+
+  it("returns 403 root_only under tenant scope", async () => {
+    currentTenantId = "alpha";
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const res = await POST(
+      makeReq(
+        "POST",
+        { action: "set-connectors", tokenId: tokenId(TOKEN_A), connectors: ["apify"] },
+        { tenantHeader: "alpha" }
+      )
+    );
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("/api/admin/devices — POST unknown action", () => {
   it("returns 400", async () => {
     envVars.MCP_AUTH_TOKEN = TOKEN_A;
