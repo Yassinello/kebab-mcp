@@ -56,6 +56,42 @@ app/config/                      — Unified dashboard (connectors, tools, skill
 4. `route.ts` iterates enabled connectors, registers tools via `server.tool()`
 5. Dashboard, health, admin API all read from the same registry
 
+## Per-token connector scoping
+
+Each token in `MCP_AUTH_TOKEN` is a "device". A token can optionally carry a
+**connector allowlist** — the set of connectors it may reach — stored on its
+device KV entry (`devices:<tokenId>.connectors`, tenant-scoped). This lets an
+operator hand a token to an autonomous agent or a teammate that only exposes
+"team" connectors (e.g. Apify, Unipile) while keeping personal connectors
+(Google Workspace, Gmail, Drive, Calendar) private — the motivating use case
+being wiring Kebab into a per-agent MCP config on a platform like Multica,
+which injects a distinct `Authorization: Bearer <token>` per agent.
+
+Semantics (opt-in, **fail-open** — see `src/core/token-scope.ts`):
+
+- **No allowlist** on a token (absent field / missing / corrupt entry) → full
+  access. Existing single-token deployments are unaffected; scoping is opt-in.
+- **Allowlist present** → strict: only those connectors, plus `core`
+  connectors (`admin`, `skills`) which are framework primitives always exposed.
+  An empty allowlist therefore means "core connectors only".
+- **No caller token** (loopback / dev without `MCP_AUTH_TOKEN`) → full access.
+
+Enforcement happens at **two points** in `app/api/[transport]/route.ts`, using
+the caller's `tokenId` resolved by the auth step:
+
+1. **Listing** — out-of-scope connectors' tools/prompts/resources are never
+   registered, so they don't appear in `tools/list`.
+2. **Invocation** — a tool whose connector is out of scope is rejected with an
+   `isError` envelope (defense-in-depth: `buildHandler` runs per request, so a
+   `tools/call` re-resolves the scope — a client calling an unlisted tool, or
+   one that fell out of scope after the operator tightened it, is still blocked).
+
+Manage a token's scope from **/config → Settings → Devices** (the Scope
+column) or via `POST /api/admin/devices` `{ action: "set-connectors",
+tokenId, connectors: string[] | null }` (`null` clears the scope). The scope
+is preserved across `rotateDeviceToken` so rotation never silently re-grants
+full access.
+
 ## Durable bootstrap pattern
 
 Kebab MCP runs on Vercel serverless lambdas, which means any in-memory

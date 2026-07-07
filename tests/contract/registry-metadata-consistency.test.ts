@@ -30,7 +30,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ALL_CONNECTOR_LOADERS } from "@/core/registry";
+import {
+  ALL_CONNECTOR_LOADERS,
+  CORE_CONNECTOR_IDS,
+  getKnownConnectorIds,
+  isCoreConnector,
+} from "@/core/registry";
 
 // This suite intentionally awaits every connector's `loader()` — the only
 // test we have that loads all 14 manifests in one pass. On a cold vitest
@@ -94,4 +99,34 @@ describe("registry loader metadata vs loaded manifest consistency", () => {
       expect(m1.tools.length).toBe(m2.tools.length);
     }
   }, 45_000);
+});
+
+// v0.20 per-token connector scoping (src/core/token-scope.ts) derives two
+// facts from the static loader table. If these drift, a scoped token could
+// silently lose access to a core connector, or an operator could pin a scope
+// to an id that no pack actually serves. These are pure metadata checks — no
+// manifest load needed.
+describe("connector-scope metadata invariants (v0.20)", () => {
+  it("getKnownConnectorIds() equals the full set of loader ids", () => {
+    expect(getKnownConnectorIds().slice().sort()).toEqual(
+      ALL_CONNECTOR_LOADERS.map((e) => e.id).sort()
+    );
+  });
+
+  it("CORE_CONNECTOR_IDS is exactly the connectors flagged core:true", () => {
+    const expected = ALL_CONNECTOR_LOADERS.filter((e) => e.core)
+      .map((e) => e.id)
+      .sort();
+    expect([...CORE_CONNECTOR_IDS].sort()).toEqual(expected);
+    // Guard the two we rely on today (framework primitives always exposed).
+    expect(CORE_CONNECTOR_IDS).toContain("admin");
+    expect(CORE_CONNECTOR_IDS).toContain("skills");
+  });
+
+  it("isCoreConnector agrees with CORE_CONNECTOR_IDS for every known id", () => {
+    for (const id of getKnownConnectorIds()) {
+      expect(isCoreConnector(id)).toBe(CORE_CONNECTOR_IDS.includes(id));
+    }
+    expect(isCoreConnector("apify")).toBe(false);
+  });
 });

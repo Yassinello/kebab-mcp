@@ -118,6 +118,28 @@ describe("backup export/import — v2 baseline", () => {
     expect(mockKV["nested:key"]).toBe('{"deep":true}');
   });
 
+  it("roundtrip preserves a device's connector scope (v0.20)", async () => {
+    // A scoped team token must survive backup/restore with its allowlist
+    // intact — a future backup refactor that drops devices:* entries would
+    // silently re-grant full access.
+    const deviceKey = "devices:abcd1234";
+    mockKV[deviceKey] = JSON.stringify({
+      label: "Team token",
+      createdAt: "2026-07-06T00:00:00.000Z",
+      connectors: ["apify", "unipile"],
+    });
+
+    const exported = await exportBackup();
+    expect(exported.entries[deviceKey]).toBeTruthy();
+
+    for (const key of Object.keys(mockKV)) delete mockKV[key];
+    await importBackup(exported);
+
+    const restored = JSON.parse(mockKV[deviceKey]!);
+    expect(restored.connectors).toEqual(["apify", "unipile"]);
+    expect(restored.label).toBe("Team token");
+  });
+
   it("rejects wrong version", async () => {
     const result = await importBackup({ version: 999, entries: {} });
     expect(result.ok).toBe(false);

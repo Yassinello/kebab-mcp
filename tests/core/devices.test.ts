@@ -75,6 +75,8 @@ import {
   rotateDeviceToken,
   getLastSeenAt,
   clearDeviceRateLimit,
+  getDeviceConnectors,
+  setDeviceConnectors,
 } from "@/core/devices";
 import { tokenId } from "@/core/auth";
 import { createHash } from "node:crypto";
@@ -204,6 +206,133 @@ describe("rotateDeviceToken", () => {
   it("throws when tokenId not found", async () => {
     envVars.MCP_AUTH_TOKEN = TOKEN_A;
     await expect(rotateDeviceToken("deadbeef")).rejects.toThrow(/not_found/i);
+  });
+
+  it("preserves the connector allowlist across rotation (no privilege escalation)", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const tidA = tokenId(TOKEN_A);
+    store.set(
+      `devices:${tidA}`,
+      JSON.stringify({
+        label: "Team token",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        connectors: ["apify", "unipile"],
+      })
+    );
+
+    const { newTokenId } = await rotateDeviceToken(tidA);
+
+    const parsed = JSON.parse(store.get(`devices:${newTokenId}`)!);
+    expect(parsed.label).toBe("Team token");
+    expect(parsed.connectors).toEqual(["apify", "unipile"]);
+  });
+
+  it("does not add a connectors field when the source token was unscoped", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const tidA = tokenId(TOKEN_A);
+    store.set(
+      `devices:${tidA}`,
+      JSON.stringify({ label: "Full-access token", createdAt: "2026-01-01T00:00:00.000Z" })
+    );
+
+    const { newTokenId } = await rotateDeviceToken(tidA);
+
+    const parsed = JSON.parse(store.get(`devices:${newTokenId}`)!);
+    expect(parsed.connectors).toBeUndefined();
+  });
+});
+
+describe("getDeviceConnectors", () => {
+  it("returns null when no entry exists (full access)", async () => {
+    expect(await getDeviceConnectors("nope1234")).toBeNull();
+  });
+
+  it("returns null when entry has no connectors field", async () => {
+    store.set("devices:abcd1234", JSON.stringify({ label: "L", createdAt: "x" }));
+    expect(await getDeviceConnectors("abcd1234")).toBeNull();
+  });
+
+  it("returns the stored allowlist array", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "L", createdAt: "x", connectors: ["apify", "unipile"] })
+    );
+    expect(await getDeviceConnectors("abcd1234")).toEqual(["apify", "unipile"]);
+  });
+
+  it("returns an empty array when the allowlist is empty (nothing-but-core lock)", async () => {
+    store.set("devices:abcd1234", JSON.stringify({ label: "L", createdAt: "x", connectors: [] }));
+    expect(await getDeviceConnectors("abcd1234")).toEqual([]);
+  });
+
+  it("fails open (null) on a corrupt entry", async () => {
+    store.set("devices:abcd1234", "{ not json");
+    expect(await getDeviceConnectors("abcd1234")).toBeNull();
+  });
+});
+
+describe("setDeviceConnectors", () => {
+  it("writes a validated allowlist and preserves label + createdAt", async () => {
+    const original = "2026-01-01T00:00:00.000Z";
+    store.set("devices:abcd1234", JSON.stringify({ label: "Team", createdAt: original }));
+    await setDeviceConnectors("abcd1234", ["apify", "unipile"]);
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.label).toBe("Team");
+    expect(parsed.createdAt).toBe(original);
+    expect(parsed.connectors).toEqual(["apify", "unipile"]);
+  });
+
+  it("creates an entry for a previously-unlabelled token", async () => {
+    await setDeviceConnectors("abcd1234", ["apify"]);
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.label).toBe("unnamed");
+    expect(typeof parsed.createdAt).toBe("string");
+    expect(parsed.connectors).toEqual(["apify"]);
+  });
+
+  it("rejects unknown connector ids", async () => {
+    await expect(setDeviceConnectors("abcd1234", ["apify", "not-a-connector"])).rejects.toThrow(
+      /unknown connector/i
+    );
+    // Nothing written on rejection.
+    expect(store.has("devices:abcd1234")).toBe(false);
+  });
+
+  it("dedupes while preserving order", async () => {
+    await setDeviceConnectors("abcd1234", ["apify", "unipile", "apify"]);
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.connectors).toEqual(["apify", "unipile"]);
+  });
+
+  it("accepts an empty array (nothing-but-core lock)", async () => {
+    await setDeviceConnectors("abcd1234", []);
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.connectors).toEqual([]);
+  });
+
+  it("clears the scope on null (back to full access) and drops the field", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "Team", createdAt: "x", connectors: ["apify"] })
+    );
+    await setDeviceConnectors("abcd1234", null);
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.connectors).toBeUndefined();
+    expect(parsed.label).toBe("Team");
+  });
+
+  it("surfaces the allowlist through listDevices()", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    await setDeviceConnectors(tokenId(TOKEN_A), ["apify"]);
+    const rows = await listDevices();
+    expect(rows[0]!.connectors).toEqual(["apify"]);
+  });
+
+  it("listDevices() reports null connectors for an unscoped token", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    store.set(`devices:${tokenId(TOKEN_A)}`, JSON.stringify({ label: "L", createdAt: "x" }));
+    const rows = await listDevices();
+    expect(rows[0]!.connectors).toBeNull();
   });
 });
 

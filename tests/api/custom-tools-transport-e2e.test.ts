@@ -137,6 +137,13 @@ vi.mock("@/core/tool-toggles", () => ({
   getDisabledTools: async () => new Set<string>(),
 }));
 
+// v0.20: buildHandler resolves a per-token connector scope. This E2E is not
+// about scoping — mock to "no filter" so every enabled connector is listed.
+vi.mock("@/core/token-scope", () => ({
+  resolveTokenConnectorScope: async () => null,
+  isConnectorAllowed: () => true,
+}));
+
 import { resetKVStoreCache } from "@/core/kv-store";
 import {
   createCustomTool,

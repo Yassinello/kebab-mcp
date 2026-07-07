@@ -46,11 +46,20 @@ export function SettingsTab({
   scopeBadge,
   tenantId,
   forceSub,
+  connectors,
 }: {
   config: InstanceConfig;
   vaultEnabled: boolean;
   baseUrl: string;
   hasAuthToken: boolean;
+  /**
+   * All known connectors (id/label/core/toolCount) — forwarded to the
+   * Devices sub-tab so the operator can scope a token to a subset of
+   * connectors.
+   */
+  connectors?:
+    | { id: string; label: string; core?: boolean | undefined; toolCount?: number | undefined }[]
+    | undefined;
   /**
    * Phase 48 / FACADE-04: identifies whether the operator is viewing
    * global settings (`null`) or a specific tenant's override.
@@ -230,7 +239,9 @@ export function SettingsTab({
 
       {tab === "storage" && <StorageTab />}
 
-      {tab === "devices" && <DevicesTab tenantId={tenantId} baseUrl={baseUrl} />}
+      {tab === "devices" && (
+        <DevicesTab tenantId={tenantId} baseUrl={baseUrl} connectors={connectors} />
+      )}
 
       {tab === "advanced" && <AdvancedSection />}
     </div>

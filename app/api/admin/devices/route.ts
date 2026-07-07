@@ -1,8 +1,11 @@
 /**
  * Phase 52 / DEV-03 — /api/admin/devices admin route.
  *
- * GET    → list devices (root-scope only)
- * POST   → { action: "rotate" | "rename" | "invite", ... }
+ * GET    → list devices (root-scope only); each device carries its
+ *          optional connector allowlist (`connectors: string[] | null`).
+ * POST   → { action: "rotate" | "rename" | "set-connectors" | "invite", ... }
+ *          set-connectors: { tokenId, connectors: string[] | null } — pin or
+ *          clear a token's per-connector scope (v0.20). null = full access.
  * DELETE → ?tokenId=XXXXXXXX revoke a device
  *
  * All three verbs compose the standard admin pipeline:
@@ -33,7 +36,13 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { getCurrentTenantId } from "@/core/request-context";
-import { listDevices, setDeviceLabel, deleteDevice, rotateDeviceToken } from "@/core/devices";
+import {
+  listDevices,
+  setDeviceLabel,
+  deleteDevice,
+  rotateDeviceToken,
+  setDeviceConnectors,
+} from "@/core/devices";
 import { mintDeviceInvite } from "@/core/device-invite";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
 import { parseTokens, tokenId } from "@/core/auth";
@@ -62,6 +71,7 @@ interface PostBody {
   action?: string;
   tokenId?: string;
   label?: string;
+  connectors?: string[] | null;
 }
 
 async function handleRotate(body: PostBody): Promise<Response> {
@@ -109,6 +119,36 @@ async function handleRename(body: PostBody): Promise<Response> {
   }
 }
 
+async function handleSetConnectors(body: PostBody): Promise<Response> {
+  const targetId = body.tokenId;
+  if (!targetId || typeof targetId !== "string") {
+    return NextResponse.json({ error: "missing_tokenId" }, { status: 400 });
+  }
+  // `connectors` must be an array of connector ids, or null to clear the
+  // scope (full access). Anything else is a bad request.
+  const connectors = body.connectors;
+  if (connectors !== null && !Array.isArray(connectors)) {
+    return NextResponse.json({ error: "invalid_connectors" }, { status: 400 });
+  }
+  // Pre-validate token presence so we return a clean 404 rather than
+  // silently pinning a scope to a tokenId that isn't in MCP_AUTH_TOKEN.
+  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
+  const present = tokens.some((t) => tokenId(t) === targetId);
+  if (!present) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  try {
+    await setDeviceConnectors(targetId, connectors);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const msg = toMsg(err);
+    if (msg.toLowerCase().includes("unknown connector")) {
+      return NextResponse.json({ error: "unknown_connector", message: msg }, { status: 400 });
+    }
+    return NextResponse.json({ error: "set_connectors_failed", message: msg }, { status: 500 });
+  }
+}
+
 async function handleInvite(body: PostBody): Promise<Response> {
   const label = body.label;
   if (typeof label !== "string" || label.trim().length === 0 || label.length > 40) {
@@ -153,6 +193,8 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
       return handleRotate(body);
     case "rename":
       return handleRename(body);
+    case "set-connectors":
+      return handleSetConnectors(body);
     case "invite":
       return handleInvite(body);
     default:

@@ -244,6 +244,36 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
   },
 ];
 
+// ── Connector-id introspection (token-scope support) ─────────────────
+//
+// v0.20 per-token connector scoping (see src/core/token-scope.ts) needs
+// two things derived from the static loader table, WITHOUT loading any
+// manifest: the set of valid connector ids (to validate an operator's
+// allowlist) and the set of `core: true` connectors (admin, skills) that
+// must ALWAYS be exposed regardless of a token's scope — otherwise a
+// scoped token would lose access to the framework itself.
+
+/**
+ * Every known connector id (the full static surface — enabled or not).
+ * Used to reject unknown ids when an operator sets a token's allowlist.
+ */
+export function getKnownConnectorIds(): string[] {
+  return ALL_CONNECTOR_LOADERS.map((e) => e.id);
+}
+
+/**
+ * Core connector ids (`core: true` — admin, skills). These are framework
+ * primitives, always exposed regardless of any per-token connector scope.
+ */
+export const CORE_CONNECTOR_IDS: readonly string[] = ALL_CONNECTOR_LOADERS.filter(
+  (e) => e.core
+).map((e) => e.id);
+
+/** True when a connector id is a core (always-exposed) connector. */
+export function isCoreConnector(id: string): boolean {
+  return CORE_CONNECTOR_IDS.includes(id);
+}
+
 // ── Loader spy hook for tests ────────────────────────────────────────
 //
 // Tests wrap loader invocation via `__setLoaderSpyForTests(cb)` to assert
