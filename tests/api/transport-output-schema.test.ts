@@ -89,6 +89,14 @@ vi.mock("@/core/tool-toggles", () => ({
   getDisabledTools: vi.fn().mockResolvedValue(new Set()),
 }));
 
+// v0.20: buildHandler resolves a per-token connector scope. This test isn't
+// about scoping, so mock it to "no filter" (full access) — every pack is
+// listed, matching pre-v0.20 behavior.
+vi.mock("@/core/token-scope", () => ({
+  resolveTokenConnectorScope: vi.fn().mockResolvedValue(null),
+  isConnectorAllowed: () => true,
+}));
+
 vi.mock("@/core/logging", () => ({
   withLogging: vi.fn((_name: string, fn: (p: Record<string, unknown>) => Promise<unknown>) => fn),
 }));
