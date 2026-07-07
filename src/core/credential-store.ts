@@ -183,8 +183,9 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
       if (!k) continue;
       const envKey = k.slice(CRED_PREFIX.length);
       const value = values[i];
-      // Don't overwrite existing env vars — boot env takes precedence.
-      if (value && !getConfig(envKey)) {
+      // Phase 51 / SEC-02: KV-backed credentials (Redis) take precedence over static boot env vars
+      // to allow dynamic credential rotation via the dashboard without requiring redeployments.
+      if (value) {
         snapshot[envKey] = value;
       }
     }
