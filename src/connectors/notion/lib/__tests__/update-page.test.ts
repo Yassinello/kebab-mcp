@@ -83,7 +83,7 @@ describe("updatePage", () => {
       // 4) GET /pages/<id> → final return
       .mockResolvedValueOnce(jsonRes({ id: "p1", url: "https://notion.so/p1" }));
 
-    await updatePage(TOKENS, "p1", { Status: "Done", Due: "2026-07-01" });
+    await updatePage(TOKENS, "p1", { properties: { Status: "Done", Due: "2026-07-01" } });
 
     const patch = fetchSpy.mock.calls.find(
       (c) => (c[1] as RequestInit).method === "PATCH" && urlOf(c).includes("/pages/")
@@ -99,7 +99,7 @@ describe("updatePage", () => {
       .mockResolvedValueOnce(jsonRes({ id: "p1", url: "u" })) // PATCH props
       .mockResolvedValueOnce(jsonRes({ id: "p1", url: "https://notion.so/p1" })); // final GET
 
-    await updatePage(TOKENS, "p1", { title: "Renamed" });
+    await updatePage(TOKENS, "p1", { properties: { title: "Renamed" } });
 
     const patch = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit).method === "PATCH")!;
     const props = bodyOf(patch).properties as Record<string, unknown>;
@@ -109,7 +109,7 @@ describe("updatePage", () => {
   it("archives the page and returns early (single PATCH { archived: true })", async () => {
     fetchSpy.mockResolvedValueOnce(jsonRes({ id: "p1", url: "https://notion.so/p1" }));
 
-    await updatePage(TOKENS, "p1", undefined, undefined, true);
+    await updatePage(TOKENS, "p1", { archive: true });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const call = fetchSpy.mock.calls[0]!;

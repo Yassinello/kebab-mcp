@@ -713,7 +713,9 @@
     "schemaKeys": [
       "account",
       "content",
+      "cover",
       "database_id",
+      "icon",
       "parent_id",
       "parent_type",
       "title"
@@ -765,10 +767,14 @@
     "pack": "notion",
     "schemaKeys": [
       "account",
+      "after_block_id",
       "append_content",
       "archive",
+      "cover",
+      "icon",
       "page_id",
-      "properties"
+      "properties",
+      "replace_content"
     ],
     "destructive": true
   },
