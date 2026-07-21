@@ -82,7 +82,7 @@ export const notionConnector: ConnectorManifest = {
     defineTool({
       name: "notion_read",
       description:
-        "Read the full content of a Notion page. Returns title and content as markdown (headings, paragraphs, lists, code blocks).",
+        "Read the full content of a Notion page as markdown. Follows pagination to the end of the page and descends into nested blocks (toggles, list children), so long or deeply-structured pages come back complete — headings, paragraphs, lists, code, tables, callouts, toggles, media, and inline formatting.",
       schema: notionReadSchema,
       handler: async (args) => handleNotionRead(args),
       destructive: false,
@@ -98,7 +98,7 @@ export const notionConnector: ConnectorManifest = {
     defineTool({
       name: "notion_update",
       description:
-        "Update an existing Notion page. Can update properties (Status, Priority, etc.) and/or append content to the page body.",
+        "Update an existing Notion page: properties (Status, Priority, …), page icon/cover, and the page body — either APPEND to it or REPLACE it wholesale with replace_content, which is how you iterate on a generated document instead of creating a new page each time.",
       schema: notionUpdateSchema,
       handler: async (args) => handleNotionUpdate(args),
       destructive: true,

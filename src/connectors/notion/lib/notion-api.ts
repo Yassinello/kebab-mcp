@@ -1,4 +1,5 @@
 import type { AccountTokenSet } from "@/core/connector-accounts";
+import { toMsg } from "@/core/error-utils";
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
@@ -102,8 +103,19 @@ async function notionFetch<T>(
 
 // --- Types ---
 
+interface NotionAnnotations {
+  bold?: boolean;
+  italic?: boolean;
+  strikethrough?: boolean;
+  underline?: boolean;
+  code?: boolean;
+  color?: string;
+}
+
 interface NotionRichText {
   plain_text: string;
+  annotations?: NotionAnnotations;
+  href?: string | null;
 }
 
 interface NotionProperty {
@@ -314,9 +326,21 @@ function plain(rt: NotionRichText[] | undefined): string {
  */
 function renderBlock(block: RawBlock): string | null {
   const payload = block[block.type] as
-    | { rich_text?: NotionRichText[]; checked?: boolean; language?: string }
+    | {
+        rich_text?: NotionRichText[];
+        checked?: boolean;
+        language?: string;
+        icon?: { type?: string; emoji?: string; external?: { url?: string } };
+        color?: string;
+        caption?: NotionRichText[];
+        url?: string;
+        external?: { url?: string };
+        file?: { url?: string };
+        has_column_header?: boolean;
+        cells?: NotionRichText[][];
+      }
     | undefined;
-  const text = plain(payload?.rich_text);
+  const text = renderRichText(payload?.rich_text);
 
   switch (block.type) {
     case "heading_1":
@@ -334,9 +358,41 @@ function renderBlock(block: RawBlock): string | null {
     case "to_do":
       return `${payload?.checked ? "[x]" : "[ ]"} ${text}`;
     case "code":
-      return `\`\`\`${payload?.language || ""}\n${text}\n\`\`\``;
+      // Code is opaque: emit the raw text, no inline marks.
+      return `\`\`\`${payload?.language || ""}\n${plain(payload?.rich_text)}\n\`\`\``;
     case "divider":
       return "---";
+
+    // --- v0.21 rich blocks (NRICH-01..04) ---
+    case "callout": {
+      // `> [!icon] text` — the icon slot carries the emoji so the writer can
+      // reproduce it. Colors round-trip via a trailing attribute.
+      const emoji = payload?.icon?.emoji || "";
+      const color = payload?.color && payload.color !== "default" ? ` {${payload.color}}` : "";
+      return `> [!${emoji}] ${text}${color}`;
+    }
+    case "toggle":
+      // Children are rendered by renderTree as indented blocks underneath.
+      return `<details> ${text}`;
+    case "image":
+    case "embed":
+    case "bookmark": {
+      const url = payload?.url || payload?.external?.url || payload?.file?.url || "";
+      if (!url) return null;
+      const caption = renderRichText(payload?.caption);
+      if (block.type === "image") return `![${caption}](${url})`;
+      if (block.type === "bookmark") return `[bookmark](${url})`;
+      return `[embed](${url})`;
+    }
+    case "table":
+      // The table itself renders nothing; its table_row children carry the
+      // cells and are emitted by renderTree.
+      return null;
+    case "table_row": {
+      const cells = (payload?.cells || []).map((cell) => renderRichText(cell));
+      return `| ${cells.join(" | ")} |`;
+    }
+
     default:
       return text || null;
   }
@@ -352,8 +408,36 @@ function indent(text: string, level: number): string {
     .join("\n");
 }
 
+/**
+ * Render a table as one markdown block. Tables are special-cased because a
+ * markdown table only parses when its rows are contiguous and unindented —
+ * feeding table_row through the generic indent path would break it.
+ */
+function renderTable(node: BlockNode): string | null {
+  const rows = node.children
+    .filter((child) => child.block.type === "table_row")
+    .map((child) => renderBlock(child.block))
+    .filter((line): line is string => line !== null);
+
+  if (rows.length === 0) return null;
+
+  const table = node.block[node.block.type] as { has_column_header?: boolean } | undefined;
+  if (!table?.has_column_header) return rows.join("\n");
+
+  // With a header row, insert the markdown separator so the round-trip keeps
+  // the header flag.
+  const columns = (rows[0]!.match(/\|/g)?.length ?? 2) - 1;
+  const separator = `|${" --- |".repeat(Math.max(columns, 1))}`;
+  return [rows[0]!, separator, ...rows.slice(1)].join("\n");
+}
+
 function renderTree(nodes: BlockNode[], level: number, out: string[]): void {
   for (const node of nodes) {
+    if (node.block.type === "table") {
+      const table = renderTable(node);
+      if (table !== null) out.push(indent(table, level));
+      continue;
+    }
     const rendered = renderBlock(node.block);
     if (rendered !== null) out.push(indent(rendered, level));
     if (node.children.length > 0) renderTree(node.children, level + 1, out);
@@ -692,7 +776,7 @@ async function deleteAllBlocks(tokens: AccountTokenSet, pageId: string): Promise
       await notionFetch(tokens, `/blocks/${block.id}`, { method: "DELETE" });
       deleted++;
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = toMsg(err);
       throw new Error(
         `replace_content failed after deleting ${deleted}/${blocks.length} blocks: ${reason}. ` +
           `The page is in a PARTIAL state — the deleted blocks are recoverable from the Notion trash ` +
@@ -816,21 +900,25 @@ export async function updatePage(
 // (bold/italic/links) are intentionally NOT parsed — readPage flattens them
 // too, so a single rich_text run per block keeps write/read symmetric.
 
-/**
- * Build a rich_text array, splitting on MAX_RICH_TEXT_LENGTH (NWRITE-06).
- * Notion rejects any single run over 2000 characters, so a long paragraph or
- * code block has to become several runs rather than one oversized one. Splits
- * prefer a newline, then a space, then fall back to a hard cut, so the seam
- * lands between words where possible. Notion concatenates the runs, so the
- * rendered text is identical either way.
- */
-function richText(content: string) {
-  if (!content) return [];
-  if (content.length <= MAX_RICH_TEXT_LENGTH) {
-    return [{ type: "text" as const, text: { content } }];
-  }
+/** One rich_text run as we build it for the API. */
+interface RichTextRun {
+  type: "text";
+  text: { content: string; link?: { url: string } };
+  annotations?: NotionAnnotations;
+}
 
-  const runs: { type: "text"; text: { content: string } }[] = [];
+/**
+ * Split a single run's content on MAX_RICH_TEXT_LENGTH (NWRITE-06). Notion
+ * rejects any run over 2000 characters, so a long paragraph or code block has
+ * to become several runs. Splits prefer a newline, then a space, then fall
+ * back to a hard cut, so the seam lands between words where possible. Notion
+ * concatenates runs on render, so the visible text is identical either way.
+ */
+function splitRun(run: RichTextRun): RichTextRun[] {
+  const content = run.text.content;
+  if (content.length <= MAX_RICH_TEXT_LENGTH) return [run];
+
+  const out: RichTextRun[] = [];
   let rest = content;
 
   while (rest.length > MAX_RICH_TEXT_LENGTH) {
@@ -841,12 +929,108 @@ function richText(content: string) {
     let cut = window.lastIndexOf("\n");
     if (cut < floor) cut = window.lastIndexOf(" ");
     if (cut < floor) cut = MAX_RICH_TEXT_LENGTH;
-    runs.push({ type: "text" as const, text: { content: rest.slice(0, cut) } });
+    out.push({ ...run, text: { ...run.text, content: rest.slice(0, cut) } });
     rest = rest.slice(cut);
   }
 
-  if (rest) runs.push({ type: "text" as const, text: { content: rest } });
+  if (rest) out.push({ ...run, text: { ...run.text, content: rest } });
+  return out;
+}
+
+// Inline marks (v0.21, NRICH-05). Ordered so that longer delimiters win:
+// `**bold**` must be tried before `*italic*`, and a code span must be matched
+// before anything inside it is interpreted (Notion treats code as opaque).
+const INLINE_PATTERN = new RegExp(
+  [
+    "`([^`]+)`", // 1: code
+    "\\[([^\\]]+)\\]\\(([^)\\s]+)\\)", // 2: link text, 3: url
+    "\\*\\*([^*]+)\\*\\*", // 4: bold
+    "__([^_]+)__", // 5: bold (alt)
+    "\\*([^*]+)\\*", // 6: italic
+    "_([^_]+)_", // 7: italic (alt)
+    "~~([^~]+)~~", // 8: strikethrough
+  ].join("|"),
+  "g"
+);
+
+/**
+ * Parse inline markdown marks into annotated rich_text runs (NRICH-05).
+ *
+ * Notion models a styled span as its own rich_text object, so "a **b** c" is
+ * three runs, not one. Marks are NOT nested: the first matching delimiter wins
+ * and its content is taken literally. That keeps the parser predictable and
+ * matches what renderRichText() can reproduce — the round-trip is the contract
+ * (NRICH-06), so anything we can't render back, we don't parse.
+ */
+function parseInline(content: string): RichTextRun[] {
+  const runs: RichTextRun[] = [];
+  let last = 0;
+
+  const push = (text: string, annotations?: NotionAnnotations, url?: string) => {
+    if (!text) return;
+    const run: RichTextRun = { type: "text", text: { content: text } };
+    if (url) run.text.link = { url };
+    if (annotations) run.annotations = annotations;
+    runs.push(run);
+  };
+
+  INLINE_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = INLINE_PATTERN.exec(content)) !== null) {
+    push(content.slice(last, match.index));
+
+    if (match[1] !== undefined) push(match[1], { code: true });
+    else if (match[2] !== undefined) push(match[2], undefined, match[3]);
+    else if (match[4] !== undefined) push(match[4], { bold: true });
+    else if (match[5] !== undefined) push(match[5], { bold: true });
+    else if (match[6] !== undefined) push(match[6], { italic: true });
+    else if (match[7] !== undefined) push(match[7], { italic: true });
+    else if (match[8] !== undefined) push(match[8], { strikethrough: true });
+
+    last = match.index + match[0].length;
+  }
+
+  push(content.slice(last));
   return runs;
+}
+
+/**
+ * Build a rich_text array from markdown, parsing inline marks and splitting
+ * any run that exceeds Notion's per-run character cap.
+ */
+function richText(content: string): RichTextRun[] {
+  if (!content) return [];
+  return parseInline(content).flatMap(splitRun);
+}
+
+/** Plain text with no inline parsing — for code blocks, where marks are literal. */
+function literalText(content: string): RichTextRun[] {
+  if (!content) return [];
+  return splitRun({ type: "text", text: { content } });
+}
+
+/**
+ * Render annotated rich_text back to markdown (NRICH-06 / read side).
+ *
+ * The inverse of parseInline: emit the same delimiters it consumes, so a page
+ * written by notion_create/notion_update and read back by notion_read
+ * round-trips. Order matters — code wins over other marks because Notion
+ * renders code spans opaquely.
+ */
+function renderRichText(rt: NotionRichText[] | undefined): string {
+  return (rt || [])
+    .map((run) => {
+      let text = run.plain_text;
+      if (!text) return "";
+      const a = run.annotations;
+      if (a?.code) return `\`${text}\``;
+      if (a?.bold) text = `**${text}**`;
+      if (a?.italic) text = `*${text}*`;
+      if (a?.strikethrough) text = `~~${text}~~`;
+      if (run.href) text = `[${text}](${run.href})`;
+      return text;
+    })
+    .join("");
 }
 
 function block(type: string, payload: Record<string, unknown>) {
@@ -892,13 +1076,145 @@ export function markdownToBlocks(md: string): unknown[] {
         i++;
       }
       i++; // skip the closing fence
-      blocks.push(block("code", { rich_text: richText(code.join("\n")), language }));
+      // literalText, not richText: code is opaque — `**x**` inside a snippet
+      // must stay literal, and renderBlock reads it back the same way.
+      blocks.push(block("code", { rich_text: literalText(code.join("\n")), language }));
       continue;
     }
 
     // Blank line → paragraph boundary.
     if (trimmed === "") {
       flushParagraph();
+      i++;
+      continue;
+    }
+
+    // Markdown table (NRICH-03) — a run of `| a | b |` lines, with an optional
+    // `| --- |` separator marking a header row. table_width is fixed at
+    // creation and every row must carry exactly that many cells, so the width
+    // comes from the first row and later rows are padded/trimmed to match.
+    if (/^\|.*\|$/.test(trimmed)) {
+      flushParagraph();
+      const rows: string[][] = [];
+      let hasHeader = false;
+
+      while (i < lines.length && /^\|.*\|$/.test((lines[i] ?? "").trim())) {
+        const raw = (lines[i] ?? "").trim();
+        if (/^\|[\s:|-]+\|$/.test(raw)) {
+          // Separator row: marks the preceding row as the header.
+          hasHeader = rows.length > 0;
+          i++;
+          continue;
+        }
+        rows.push(
+          raw
+            .slice(1, -1)
+            .split("|")
+            .map((cell) => cell.trim())
+        );
+        i++;
+      }
+
+      if (rows.length > 0) {
+        const width = rows[0]!.length;
+        blocks.push(
+          block("table", {
+            table_width: width,
+            has_column_header: hasHeader,
+            has_row_header: false,
+            children: rows.map((cells) =>
+              block("table_row", {
+                cells: Array.from({ length: width }, (_, c) => richText(cells[c] ?? "")),
+              })
+            ),
+          })
+        );
+      }
+      continue;
+    }
+
+    // Callout (NRICH-01) — `> [!emoji] text`, optionally with a trailing
+    // `{color}` attribute. Mirrors renderBlock's callout emission.
+    const callout = trimmed.match(/^>\s*\[!([^\]]*)\]\s*(.*)$/);
+    if (callout) {
+      flushParagraph();
+      let text = callout[2]!.trim();
+      let color = "default";
+      const colorMatch = text.match(/\s*\{([a-z_]+)\}$/);
+      if (colorMatch) {
+        color = colorMatch[1]!;
+        text = text.slice(0, colorMatch.index).trim();
+      }
+      const emoji = callout[1]!.trim();
+      blocks.push(
+        block("callout", {
+          rich_text: richText(text),
+          ...(emoji ? { icon: { type: "emoji", emoji } } : {}),
+          color,
+        })
+      );
+      i++;
+      continue;
+    }
+
+    // Toggle (NRICH-02) — `<details> summary`, with the following indented
+    // lines becoming its children. Notion allows 2 levels of nesting per
+    // request, which a toggle plus its children fits exactly.
+    const toggle = trimmed.match(/^<details>\s*(.*)$/);
+    if (toggle) {
+      flushParagraph();
+      const summary = toggle[1]!.replace(/<\/?summary>/g, "").trim();
+      i++;
+
+      // Consume the indented body that follows.
+      const body: string[] = [];
+      while (i < lines.length) {
+        const next = lines[i] ?? "";
+        if (next.trim() === "") {
+          // A blank line only ends the toggle if the next content is not indented.
+          const after = lines[i + 1] ?? "";
+          if (after.trim() !== "" && !/^\s{2,}/.test(after)) break;
+          body.push("");
+          i++;
+          continue;
+        }
+        if (!/^\s{2,}/.test(next)) break;
+        body.push(next.replace(/^\s{2}/, ""));
+        i++;
+      }
+
+      const children = markdownToBlocks(body.join("\n"));
+      blocks.push(
+        block("toggle", {
+          rich_text: richText(summary),
+          ...(children.length > 0 ? { children } : {}),
+        })
+      );
+      continue;
+    }
+
+    // Image / bookmark / embed (NRICH-04). `![caption](url)` is an image;
+    // `[bookmark](url)` and `[embed](url)` use their label as the marker so
+    // they round-trip through renderBlock.
+    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+    if (image) {
+      flushParagraph();
+      const caption = image[1]!.trim();
+      blocks.push(
+        block("image", {
+          type: "external",
+          external: { url: image[2]! },
+          ...(caption ? { caption: richText(caption) } : {}),
+        })
+      );
+      i++;
+      continue;
+    }
+
+    const media = trimmed.match(/^\[(bookmark|embed)\]\(([^)\s]+)\)$/);
+    if (media) {
+      flushParagraph();
+      blocks.push(block(media[1]!, { url: media[2]! }));
       i++;
       continue;
     }

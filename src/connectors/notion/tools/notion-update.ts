@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { updatePage } from "../lib/notion-api";
 import { resolveNotionTokens } from "../lib/resolve-account";
+import { toMsg } from "@/core/error-utils";
 
 export const notionUpdateSchema = {
   page_id: z.string().describe("Notion page ID to update"),
@@ -14,13 +15,13 @@ export const notionUpdateSchema = {
     .string()
     .optional()
     .describe(
-      "Markdown to ADD to the end of the page, keeping existing content — supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks, dividers (---), and paragraphs. Converted to native Notion blocks. Mutually exclusive with replace_content."
+      "Markdown to ADD to the end of the page, keeping existing content. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code, dividers (---), tables (| a | b | with a | --- | header row), callouts (> [!💡] text, optional trailing {blue_background}), toggles (<details> summary + 2-space-indented body), images (![caption](url)), [bookmark](url), [embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / [links](url). Mutually exclusive with replace_content."
     ),
   replace_content: z
     .string()
     .optional()
     .describe(
-      "Markdown that REPLACES the entire page body: every existing block is deleted, then this content is written. Use it to rewrite a document instead of appending to it. Deleted blocks go to the Notion trash and stay recoverable. Same markdown syntax as append_content. Mutually exclusive with append_content."
+      "Markdown that REPLACES the entire page body: every existing block is deleted, then this content is written. Use it to rewrite a document instead of appending to it — this is the tool for iterating on a generated doc. Deleted blocks go to the Notion trash and stay recoverable. Same markdown syntax as append_content. Mutually exclusive with append_content."
     ),
   after_block_id: z
     .string()
@@ -83,7 +84,7 @@ export async function handleNotionUpdate(params: {
     });
   } catch (err) {
     return {
-      content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
+      content: [{ type: "text" as const, text: toMsg(err) }],
       isError: true,
     };
   }

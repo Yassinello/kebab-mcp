@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createPage } from "../lib/notion-api";
 import { resolveNotionTokens } from "../lib/resolve-account";
+import { toMsg } from "@/core/error-utils";
 
 export const notionCreateSchema = {
   parent_id: z
@@ -24,7 +25,7 @@ export const notionCreateSchema = {
     .string()
     .optional()
     .describe(
-      "Page body as Markdown. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks (```lang), dividers (---), and paragraphs — converted to native Notion blocks."
+      "Page body as Markdown, converted to native Notion blocks. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code (```lang), dividers (---), tables (| a | b | with a | --- | header row), callouts (> [!💡] text, optional trailing {blue_background}), toggles (<details> summary + 2-space-indented body), images (![caption](url)), [bookmark](url), [embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / [links](url)."
     ),
   icon: z.string().optional().describe('Page icon: an emoji ("🎯") or an external image URL.'),
   cover: z
@@ -81,7 +82,7 @@ export async function handleNotionCreate(params: {
     });
   } catch (err) {
     return {
-      content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
+      content: [{ type: "text" as const, text: toMsg(err) }],
       isError: true,
     };
   }
