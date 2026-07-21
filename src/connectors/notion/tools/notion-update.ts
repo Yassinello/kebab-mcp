@@ -99,7 +99,9 @@ export async function handleNotionUpdate(params: {
   if (params.properties)
     actions.push(`${Object.keys(params.properties).length} properties updated`);
   if (params.replace_content !== undefined)
-    actions.push(`content replaced (${result.deletedBlocks ?? 0} blocks removed)`);
+    // "top-level": deleting a parent trashes its subtree, so the count is of
+    // blocks we issued a DELETE for, not of every block that went away.
+    actions.push(`content replaced (${result.deletedBlocks ?? 0} top-level blocks removed)`);
   if (params.append_content) actions.push("content appended");
   if (params.icon !== undefined) actions.push("icon set");
   if (params.cover !== undefined) actions.push("cover set");

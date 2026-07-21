@@ -293,6 +293,30 @@ describe("positioned insert (NWRITE-04)", () => {
     expect(bodyOf(append).after).toBe("anchor-block");
   });
 
+  it("fails loudly rather than scattering content when the anchor echo is lost", async () => {
+    // >100 blocks with an anchor: if Notion doesn't echo the created ids we
+    // cannot place chunk 2, and silently dropping the anchor would put chunk 1
+    // mid-page and the rest at the end — content split across two locations.
+    const md = Array.from({ length: 150 }, (_, i) => `- item ${i}`).join("\n");
+    fetchSpy.mockResolvedValueOnce(jsonRes({}));
+
+    await expect(
+      updatePage(TOKENS, "p1", { appendContent: md, afterBlockId: "anchor" })
+    ).rejects.toThrow(/cannot be inserted after "anchor"/);
+  });
+
+  it("tolerates a missing echo when appending at the end (no anchor)", async () => {
+    const md = Array.from({ length: 150 }, (_, i) => `- item ${i}`).join("\n");
+    fetchSpy
+      .mockResolvedValueOnce(jsonRes({}))
+      .mockResolvedValueOnce(jsonRes({}))
+      .mockResolvedValueOnce(FINAL_PAGE);
+
+    await expect(updatePage(TOKENS, "p1", { appendContent: md })).resolves.toMatchObject({
+      id: "p1",
+    });
+  });
+
   it("omits `after` entirely when no anchor is given", async () => {
     fetchSpy
       .mockResolvedValueOnce(jsonRes({ results: [{ id: "n" }] }))

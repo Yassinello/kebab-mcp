@@ -78,6 +78,44 @@ describe("inline marks (NRICH-05)", () => {
     expect(runsOf(b!)[0]!.annotations).toBeUndefined();
   });
 
+  it("does NOT treat intra-word underscores as emphasis", () => {
+    // Regression: `MAX_PAGE_BLOCKS` used to parse as MAX<italic>PAGE</italic>
+    // BLOCKS, corrupting every snake_case identifier written to a page — and
+    // breaking the round-trip, since rendering back produced asterisks.
+    for (const text of [
+      "MAX_PAGE_BLOCKS and MAX_CHILD_DEPTH",
+      "snake_case_name here",
+      "file_name_with_underscores.txt",
+      "path/to_file and other_thing",
+      "a_b_c_d_e",
+    ]) {
+      const [b] = markdownToBlocks(text) as Block[];
+      expect(runsOf(b!)).toHaveLength(1);
+      expect(runsOf(b!)[0]!.text.content).toBe(text);
+      expect(runsOf(b!)[0]!.annotations).toBeUndefined();
+    }
+  });
+
+  it("still treats word-boundary underscores as emphasis", () => {
+    const [b] = markdownToBlocks("an _emphasised_ word") as Block[];
+    const runs = runsOf(b!);
+    expect(runs[1]!.text.content).toBe("emphasised");
+    expect(runs[1]!.annotations).toEqual({ italic: true });
+  });
+
+  it("does not mangle arithmetic with asterisks", () => {
+    const text = "50% * 3 = 150 and 2 * 4";
+    const [b] = markdownToBlocks(text) as Block[];
+    expect(runsOf(b!)).toHaveLength(1);
+    expect(runsOf(b!)[0]!.text.content).toBe(text);
+  });
+
+  it("leaves an unclosed delimiter as literal text", () => {
+    const [b] = markdownToBlocks("**unclosed bold") as Block[];
+    expect(runsOf(b!)[0]!.text.content).toBe("**unclosed bold");
+    expect(runsOf(b!)[0]!.annotations).toBeUndefined();
+  });
+
   it("does NOT parse marks inside fenced code blocks", () => {
     const [b] = markdownToBlocks("```js\nconst a = **b**;\n```") as Block[];
     const runs = runsOf(b!);
@@ -319,7 +357,19 @@ describe("read/write round-trip (NRICH-06)", () => {
   });
 
   it("round-trips a fenced code block without touching its contents", async () => {
-    const md = "```js\nconst a = **b**;\n```";
+    // Canonical language names round-trip exactly; aliases (js, ts, sh) are
+    // normalized on the way in because Notion's `language` is a closed enum.
+    const md = "```javascript\nconst a = **b**;\n```";
+    expect(await roundTrip(md)).toBe(md);
+  });
+
+  it("round-trips prose containing snake_case identifiers", async () => {
+    const md = "Set MAX_PAGE_BLOCKS and check other_thing in to_file.txt";
+    expect(await roundTrip(md)).toBe(md);
+  });
+
+  it("round-trips a paragraph mixing marks and identifiers", async () => {
+    const md = "The **MAX_CHILD_DEPTH** bound guards `fetch_block_tree` calls";
     expect(await roundTrip(md)).toBe(md);
   });
 });

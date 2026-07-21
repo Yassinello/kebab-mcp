@@ -215,6 +215,15 @@ export async function searchNotion(
 
 // --- Read page content ---
 
+/**
+ * Appended to a page's markdown when a read bound cut it short. Deliberately
+ * free of inline-mark characters so it round-trips as plain text, and
+ * recognized by markdownToBlocks so an edited read isn't written back into
+ * the page as content.
+ */
+export const TRUNCATION_MARKER =
+  "[Kebab: page truncated at the read bound — content below this point was not read.]";
+
 /** A block as returned by Notion, with the fields readPage cares about. */
 interface RawBlock {
   id: string;
@@ -258,24 +267,40 @@ async function fetchAllChildren(
   const out: RawBlock[] = [];
   let cursor: string | undefined;
 
-  do {
-    if (budget.remaining <= 0) {
-      budget.truncated = true;
-      break;
-    }
+  for (;;) {
     const page: BlockPage = await fetchChildrenPage(tokens, blockId, cursor);
-    for (const block of page.results) {
+
+    for (let i = 0; i < page.results.length; i++) {
       if (budget.remaining <= 0) {
+        // Blocks remain in THIS page that we're dropping — genuine truncation.
         budget.truncated = true;
-        break;
+        return out;
       }
       budget.remaining--;
-      out.push(block);
+      out.push(page.results[i]!);
     }
-    cursor = page.has_more && page.next_cursor ? page.next_cursor : undefined;
-  } while (cursor);
 
-  return out;
+    if (!page.has_more) return out;
+
+    // has_more with no cursor: Notion says there is more but gives us no way
+    // to ask for it. Treat as truncation, never as a clean end — otherwise
+    // deleteAllBlocks would believe it saw the whole page and replace_content
+    // would leave orphaned blocks above the new content.
+    if (!page.next_cursor) {
+      budget.truncated = true;
+      return out;
+    }
+
+    // Budget exhausted exactly at a page boundary AND more pages exist: the
+    // next page would be dropped, so this IS truncation. (When has_more is
+    // false we returned above, so an exact-fit page is not falsely flagged.)
+    if (budget.remaining <= 0) {
+      budget.truncated = true;
+      return out;
+    }
+
+    cursor = page.next_cursor;
+  }
 }
 
 /** A block plus its recursively-fetched children. */
@@ -389,7 +414,11 @@ function renderBlock(block: RawBlock): string | null {
       // cells and are emitted by renderTree.
       return null;
     case "table_row": {
-      const cells = (payload?.cells || []).map((cell) => renderRichText(cell));
+      // Escape pipes inside a cell, otherwise the rendered row re-parses with
+      // more columns than the table actually has.
+      const cells = (payload?.cells || []).map((cell) =>
+        renderRichText(cell).replace(/\|/g, "\\|")
+      );
       return `| ${cells.join(" | ")} |`;
     }
 
@@ -414,8 +443,8 @@ function indent(text: string, level: number): string {
  * feeding table_row through the generic indent path would break it.
  */
 function renderTable(node: BlockNode): string | null {
-  const rows = node.children
-    .filter((child) => child.block.type === "table_row")
+  const rowNodes = node.children.filter((child) => child.block.type === "table_row");
+  const rows = rowNodes
     .map((child) => renderBlock(child.block))
     .filter((line): line is string => line !== null);
 
@@ -424,10 +453,15 @@ function renderTable(node: BlockNode): string | null {
   const table = node.block[node.block.type] as { has_column_header?: boolean } | undefined;
   if (!table?.has_column_header) return rows.join("\n");
 
-  // With a header row, insert the markdown separator so the round-trip keeps
-  // the header flag.
-  const columns = (rows[0]!.match(/\|/g)?.length ?? 2) - 1;
-  const separator = `|${" --- |".repeat(Math.max(columns, 1))}`;
+  // Column count comes from the first row's actual cell array — counting `|`
+  // in the rendered string would over-count whenever a cell contains a pipe,
+  // and the wrong separator width makes the re-parsed table_width disagree
+  // with the row cell counts (which Notion rejects).
+  const firstRow = rowNodes[0]!.block[rowNodes[0]!.block.type] as
+    | { cells?: NotionRichText[][] }
+    | undefined;
+  const columns = Math.max(firstRow?.cells?.length ?? 1, 1);
+  const separator = `|${" --- |".repeat(columns)}`;
   return [rows[0]!, separator, ...rows.slice(1)].join("\n");
 }
 
@@ -471,9 +505,10 @@ export async function readPage(
   // converter parses) so a truncated read that gets written back doesn't
   // smuggle a bogus block into the page.
   if (budget.truncated) {
-    lines.push(
-      `_[Kebab: page truncated — hit the ${MAX_PAGE_BLOCKS}-block / depth-${MAX_CHILD_DEPTH} read bound. Content below this point was not read.]_`
-    );
+    // Plain text, no `_…_` wrapper: the marker must NOT parse as a mark, or a
+    // read → edit → replace_content cycle would write it back into the page
+    // as real italic content.
+    lines.push(TRUNCATION_MARKER);
   }
 
   return { title, content: lines.join("\n\n"), truncated: budget.truncated };
@@ -742,10 +777,20 @@ async function appendBlocks(
         body: { children: chunk, ...(anchor ? { after: anchor } : {}) },
       }
     );
-    // Chain the next chunk after the last block we just wrote. If Notion
-    // didn't echo the ids back, drop the anchor: appending at the end is the
-    // correct fallback, whereas reusing the old anchor would interleave.
+    // Chain the next chunk after the last block we just wrote.
     const written = res?.results;
+    const more = i + MAX_BLOCKS_PER_REQUEST < children.length;
+    if (!written?.length && more && anchor) {
+      // We were inserting at a specific position and Notion didn't echo the
+      // created ids, so we can't anchor the next chunk. Silently dropping the
+      // anchor would put chunk 1 mid-page and the rest at the end — content
+      // split across two locations, out of order. Fail loudly instead.
+      throw new Error(
+        `Notion did not return created block ids, so the remaining ${children.length - i - MAX_BLOCKS_PER_REQUEST} ` +
+          `block(s) cannot be inserted after "${anchor}" in order. ${i + MAX_BLOCKS_PER_REQUEST} block(s) were written. ` +
+          `Retry without after_block_id to append at the end of the page.`
+      );
+    }
     anchor = written?.length ? written[written.length - 1]!.id : undefined;
   }
 }
@@ -940,14 +985,25 @@ function splitRun(run: RichTextRun): RichTextRun[] {
 // Inline marks (v0.21, NRICH-05). Ordered so that longer delimiters win:
 // `**bold**` must be tried before `*italic*`, and a code span must be matched
 // before anything inside it is interpreted (Notion treats code as opaque).
+//
+// Two CommonMark guards, both of which exist because the naive form corrupts
+// ordinary prose:
+//   · word boundaries on `_`: without them `MAX_PAGE_BLOCKS` parses as
+//     MAX<italic>PAGE</italic>BLOCKS. snake_case is everywhere in the
+//     technical docs this connector writes.
+//   · no flanking whitespace: without it "50% * 3 = 150 and 2 * 4" turns
+//     "* 3 = 150 and 2 *" into an italic run. A delimiter must hug its
+//     content to open/close a span.
+// Both also break the read/write round-trip, since rendering back re-emits
+// delimiters around text that never had them.
 const INLINE_PATTERN = new RegExp(
   [
     "`([^`]+)`", // 1: code
     "\\[([^\\]]+)\\]\\(([^)\\s]+)\\)", // 2: link text, 3: url
-    "\\*\\*([^*]+)\\*\\*", // 4: bold
-    "__([^_]+)__", // 5: bold (alt)
-    "\\*([^*]+)\\*", // 6: italic
-    "_([^_]+)_", // 7: italic (alt)
+    "\\*\\*(?!\\s)([^*]+?)(?<!\\s)\\*\\*", // 4: bold
+    "(?<![A-Za-z0-9_])__(?!\\s)([^_]+?)(?<!\\s)__(?![A-Za-z0-9_])", // 5: bold (alt)
+    "\\*(?!\\s)([^*]+?)(?<!\\s)\\*", // 6: italic
+    "(?<![A-Za-z0-9_])_(?!\\s)([^_]+?)(?<!\\s)_(?![A-Za-z0-9_])", // 7: italic (alt)
     "~~([^~]+)~~", // 8: strikethrough
   ].join("|"),
   "g"
@@ -1038,14 +1094,120 @@ function block(type: string, payload: Record<string, unknown>) {
 }
 
 /**
+ * Notion accepts at most TWO levels of nesting in a single request. A block
+ * carrying children is level 1 and those children are level 2; anything
+ * deeper is a 400.
+ *
+ * This bites without any nested toggles: a markdown table inside a toggle is
+ * toggle → table → table_row, i.e. three levels, and a table MUST carry its
+ * rows inline (Notion rejects a table created without them). So the converter
+ * tracks its own depth and, at the limit, degrades the offending construct to
+ * something valid rather than emitting a payload the API will reject.
+ */
+const MAX_NESTING_DEPTH = 2;
+
+/**
+ * Notion's block colors are a closed enum — an unknown value is a 400. The
+ * `{…}` suffix on a callout is therefore only treated as a color when it
+ * actually names one; otherwise it stays part of the text (prose ending in
+ * `{something}` is far more likely than a typo'd color).
+ */
+const BLOCK_COLORS = new Set([
+  "default",
+  "gray",
+  "brown",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "pink",
+  "red",
+  "gray_background",
+  "brown_background",
+  "orange_background",
+  "yellow_background",
+  "green_background",
+  "blue_background",
+  "purple_background",
+  "pink_background",
+  "red_background",
+]);
+
+/**
+ * `code.language` is a closed enum too. We map the common fence aliases an
+ * agent actually writes and fall back to "plain text" for anything unknown,
+ * so a ```sh or ```notalang fence degrades instead of failing the request.
+ */
+const CODE_LANGUAGE_ALIASES: Record<string, string> = {
+  sh: "shell",
+  zsh: "shell",
+  bash: "bash",
+  shell: "shell",
+  console: "shell",
+  js: "javascript",
+  jsx: "javascript",
+  javascript: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  typescript: "typescript",
+  py: "python",
+  python: "python",
+  rb: "ruby",
+  ruby: "ruby",
+  go: "go",
+  rust: "rust",
+  rs: "rust",
+  java: "java",
+  c: "c",
+  cpp: "c++",
+  "c++": "c++",
+  cs: "c#",
+  "c#": "c#",
+  php: "php",
+  swift: "swift",
+  kotlin: "kotlin",
+  scala: "scala",
+  sql: "sql",
+  json: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  toml: "toml",
+  xml: "xml",
+  html: "html",
+  css: "css",
+  scss: "scss",
+  markdown: "markdown",
+  md: "markdown",
+  diff: "diff",
+  docker: "docker",
+  dockerfile: "docker",
+  graphql: "graphql",
+  makefile: "makefile",
+  "plain text": "plain text",
+  text: "plain text",
+  txt: "plain text",
+};
+
+function normalizeCodeLanguage(fence: string): string {
+  if (!fence) return "plain text";
+  return CODE_LANGUAGE_ALIASES[fence.toLowerCase()] ?? "plain text";
+}
+
+/**
  * Parse a markdown string into Notion block objects. Recognizes the same
  * constructs readPage() emits:
  *   #/##/### → heading_1/2/3 · - → bulleted_list_item · 1. → numbered_list_item
  *   [ ]/[x] → to_do (checked) · ```lang fenced → code · --- → divider
- *   blank-line-separated runs → paragraph
+ *   `> [!icon] text` → callout · `<details> summary` + indented body → toggle
+ *   `| a | b |` runs → table · `![cap](url)` → image · blank-line runs → paragraph
  * Anything unrecognized falls through to a paragraph.
+ *
+ * `depth` is internal: it tracks how deep in the block tree we already are so
+ * children that would exceed Notion's 2-level limit are flattened instead of
+ * producing an invalid payload.
  */
-export function markdownToBlocks(md: string): unknown[] {
+export function markdownToBlocks(md: string, depth = 1): unknown[] {
   const blocks: unknown[] = [];
   const lines = md.replace(/\r\n/g, "\n").split("\n");
 
@@ -1068,7 +1230,7 @@ export function markdownToBlocks(md: string): unknown[] {
     const fence = trimmed.match(/^```(\w*)\s*$/);
     if (fence) {
       flushParagraph();
-      const language = fence[1] || "plain text";
+      const language = normalizeCodeLanguage(fence[1] || "");
       const code: string[] = [];
       i++;
       while (i < lines.length && !(lines[i] ?? "").trim().startsWith("```")) {
@@ -1084,6 +1246,14 @@ export function markdownToBlocks(md: string): unknown[] {
 
     // Blank line → paragraph boundary.
     if (trimmed === "") {
+      flushParagraph();
+      i++;
+      continue;
+    }
+
+    // Drop our own truncation marker: it is a read-side annotation, not page
+    // content, so a read → edit → replace_content cycle must not persist it.
+    if (trimmed === TRUNCATION_MARKER) {
       flushParagraph();
       i++;
       continue;
@@ -1106,29 +1276,48 @@ export function markdownToBlocks(md: string): unknown[] {
           i++;
           continue;
         }
+        // Split on unescaped pipes only, then unescape — mirrors the `\|`
+        // emitted by renderBlock for cells that contain a literal pipe.
         rows.push(
           raw
             .slice(1, -1)
-            .split("|")
-            .map((cell) => cell.trim())
+            .split(/(?<!\\)\|/)
+            .map((cell) => cell.trim().replace(/\\\|/g, "|"))
         );
         i++;
       }
 
-      if (rows.length > 0) {
+      // A lone separator line (`| --- |`) yields no rows. Don't drop it —
+      // emit it as text so nothing silently vanishes from the page.
+      if (rows.length === 0) {
+        blocks.push(block("paragraph", { rich_text: richText(trimmed) }));
+        continue;
+      }
+
+      {
         const width = rows[0]!.length;
-        blocks.push(
-          block("table", {
-            table_width: width,
-            has_column_header: hasHeader,
-            has_row_header: false,
-            children: rows.map((cells) =>
-              block("table_row", {
-                cells: Array.from({ length: width }, (_, c) => richText(cells[c] ?? "")),
-              })
-            ),
-          })
-        );
+        // A table is table → table_row, so it needs two levels of its own. At
+        // the depth limit we can't emit one; fall back to paragraphs holding
+        // the original pipe syntax, which stays readable and round-trips back
+        // into a real table when written at top level.
+        if (depth + 1 > MAX_NESTING_DEPTH) {
+          for (const cells of rows) {
+            blocks.push(block("paragraph", { rich_text: richText(`| ${cells.join(" | ")} |`) }));
+          }
+        } else {
+          blocks.push(
+            block("table", {
+              table_width: width,
+              has_column_header: hasHeader,
+              has_row_header: false,
+              children: rows.map((cells) =>
+                block("table_row", {
+                  cells: Array.from({ length: width }, (_, c) => richText(cells[c] ?? "")),
+                })
+              ),
+            })
+          );
+        }
       }
       continue;
     }
@@ -1141,7 +1330,9 @@ export function markdownToBlocks(md: string): unknown[] {
       let text = callout[2]!.trim();
       let color = "default";
       const colorMatch = text.match(/\s*\{([a-z_]+)\}$/);
-      if (colorMatch) {
+      // Only strip the suffix when it names a real color — otherwise prose
+      // like "set {my_var}" would lose its tail AND send an invalid color.
+      if (colorMatch && BLOCK_COLORS.has(colorMatch[1]!)) {
         color = colorMatch[1]!;
         text = text.slice(0, colorMatch.index).trim();
       }
@@ -1183,7 +1374,15 @@ export function markdownToBlocks(md: string): unknown[] {
         i++;
       }
 
-      const children = markdownToBlocks(body.join("\n"));
+      // At the depth limit a toggle can't carry children — emit the summary as
+      // a paragraph and hoist the body to this level so no content is lost.
+      if (depth + 1 > MAX_NESTING_DEPTH) {
+        blocks.push(block("paragraph", { rich_text: richText(summary) }));
+        blocks.push(...markdownToBlocks(body.join("\n"), depth));
+        continue;
+      }
+
+      const children = markdownToBlocks(body.join("\n"), depth + 1);
       blocks.push(
         block("toggle", {
           rich_text: richText(summary),
