@@ -432,6 +432,12 @@ function renderBlock(block: RawBlock): string | null {
     case "toggle":
       // Children are rendered by renderTree as indented blocks underneath.
       return `<details> ${text}`;
+    case "quote":
+      // Prefix every line so a multi-line quote re-parses as one quote block.
+      return text
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n");
     case "image":
     case "embed":
     case "bookmark": {
@@ -1025,6 +1031,13 @@ export async function updatePage(
 // │   · `_em_`/`__bold__` normalize to `*em*`/`**bold**` on read-back      │
 // │   · code fence aliases normalize (```ts → ```typescript), since        │
 // │     Notion's `language` is a closed enum                               │
+// │   · `> [!NOTE]` normalizes to `> [!💡] … {blue_background}` — the      │
+// │     keyword is an INPUT convenience (it's what authors write), the     │
+// │     emoji is what Notion stores and what we render back                │
+// │   · the HTML toggle form (`<details>` / `<summary>` / `</details>`)    │
+// │     normalizes to the compact `<details> Title` + indented body        │
+// │   Each normalization is IDEMPOTENT: a second round-trip is a no-op,    │
+// │   which is what keeps repeated read→edit→write cycles stable.          │
 // │   · constructs deeper than Notion's 2-level nesting limit degrade to   │
 // │     flatter blocks rather than emitting a payload the API rejects      │
 // │                                                                        │
@@ -1222,6 +1235,35 @@ const BLOCK_COLORS = new Set([
 ]);
 
 /**
+ * GitHub-flavoured admonition keywords → the emoji + colour Notion needs.
+ *
+ * `> [!NOTE]` is how essentially every LLM and every markdown author writes a
+ * callout, because that is GitHub's syntax. Notion's `icon.emoji` field takes
+ * an actual emoji, so passing the bare word through produced
+ * `{"emoji": "note"}` and a hard 400. Mapping them keeps the syntax people
+ * already know working, and picks a sensible colour per severity.
+ *
+ * A label that isn't in this table is passed through as-is, which is what
+ * makes `> [!💡] text` (the form renderBlock emits) keep round-tripping.
+ */
+const ADMONITIONS: Record<string, { emoji: string; color: string }> = {
+  note: { emoji: "💡", color: "blue_background" },
+  info: { emoji: "ℹ️", color: "blue_background" },
+  tip: { emoji: "✅", color: "green_background" },
+  success: { emoji: "✅", color: "green_background" },
+  check: { emoji: "✅", color: "green_background" },
+  important: { emoji: "❗", color: "purple_background" },
+  warning: { emoji: "⚠️", color: "yellow_background" },
+  caution: { emoji: "⚠️", color: "orange_background" },
+  danger: { emoji: "🚨", color: "red_background" },
+  error: { emoji: "❌", color: "red_background" },
+  bug: { emoji: "🐛", color: "red_background" },
+  question: { emoji: "❓", color: "gray_background" },
+  example: { emoji: "📋", color: "gray_background" },
+  quote: { emoji: "💬", color: "gray_background" },
+};
+
+/**
  * `code.language` is a closed enum too. We map the common fence aliases an
  * agent actually writes and fall back to "plain text" for anything unknown,
  * so a ```sh or ```notalang fence degrades instead of failing the request.
@@ -1410,13 +1452,34 @@ export function markdownToBlocks(md: string, depth = 1): unknown[] {
       continue;
     }
 
-    // Callout (NRICH-01) — `> [!emoji] text`, optionally with a trailing
-    // `{color}` attribute. Mirrors renderBlock's callout emission.
+    // Callout (NRICH-01) — `> [!emoji] text` or GitHub's `> [!NOTE] text`,
+    // with any following `>` lines folded into the same callout, plus an
+    // optional trailing `{color}`.
     const callout = trimmed.match(/^>\s*\[!([^\]]*)\]\s*(.*)$/);
     if (callout) {
       flushParagraph();
-      let text = callout[2]!.trim();
-      let color = "default";
+
+      // Fold the continuation lines: GitHub-style admonitions put the body on
+      // subsequent `>` lines, and an author writing one naturally expects them
+      // to belong to the same box rather than becoming loose paragraphs that
+      // still carry a literal ">".
+      const parts = callout[2]!.trim() ? [callout[2]!.trim()] : [];
+      i++;
+      while (i < lines.length) {
+        const next = (lines[i] ?? "").trim();
+        if (!next.startsWith(">")) break;
+        // A new `[!…]` marker starts a NEW callout — don't swallow it.
+        if (/^>\s*\[!/.test(next)) break;
+        parts.push(next.replace(/^>\s?/, "").trim());
+        i++;
+      }
+
+      let text = parts.join("\n").trim();
+      const label = callout[1]!.trim();
+      const admonition = ADMONITIONS[label.toLowerCase()];
+      // An admonition keyword implies its own colour; an explicit {color}
+      // suffix still wins.
+      let color = admonition?.color ?? "default";
       const colorMatch = text.match(/\s*\{([a-z_]+)\}$/);
       // Only strip the suffix when it names a real color — otherwise prose
       // like "set {my_var}" would lose its tail AND send an invalid color.
@@ -1424,7 +1487,9 @@ export function markdownToBlocks(md: string, depth = 1): unknown[] {
         color = colorMatch[1]!;
         text = text.slice(0, colorMatch.index).trim();
       }
-      const emoji = callout[1]!.trim();
+      // `[!NOTE]` must become an emoji: Notion's icon.emoji field rejects a
+      // word like "note" with a 400.
+      const emoji = admonition?.emoji ?? label;
       blocks.push(
         block("callout", {
           rich_text: richText(text),
@@ -1432,34 +1497,85 @@ export function markdownToBlocks(md: string, depth = 1): unknown[] {
           color,
         })
       );
-      i++;
       continue;
     }
 
-    // Toggle (NRICH-02) — `<details> summary`, with the following indented
-    // lines becoming its children. Notion allows 2 levels of nesting per
-    // request, which a toggle plus its children fits exactly.
+    // Plain blockquote — `> text` with no `[!…]` marker. Notion has a native
+    // `quote` block; without this the line kept its literal ">" in a paragraph.
+    if (trimmed.startsWith(">")) {
+      flushParagraph();
+      const parts: string[] = [];
+      while (i < lines.length) {
+        const next = (lines[i] ?? "").trim();
+        if (!next.startsWith(">") || /^>\s*\[!/.test(next)) break;
+        parts.push(next.replace(/^>\s?/, "").trim());
+        i++;
+      }
+      blocks.push(block("quote", { rich_text: richText(parts.join("\n").trim()) }));
+      continue;
+    }
+
+    // Toggle (NRICH-02). TWO accepted forms, because the one this connector
+    // emits is not the one authors write:
+    //
+    //   real HTML (what LLMs and humans produce)   compact (what renderBlock emits)
+    //   <details>                                   <details> Summary
+    //   <summary>Summary</summary>                    indented body
+    //   body
+    //   </details>
+    //
+    // v0.21 shipped only the compact form, so the HTML form fell through to
+    // paragraphs and the tags showed up as literal text on the page. Both are
+    // supported now; body lines are taken until `</details>` for the HTML form
+    // and by indentation for the compact one.
     const toggle = trimmed.match(/^<details>\s*(.*)$/);
     if (toggle) {
       flushParagraph();
-      const summary = toggle[1]!.replace(/<\/?summary>/g, "").trim();
+      let summary = toggle[1]!.replace(/<\/?summary>/g, "").trim();
       i++;
 
-      // Consume the indented body that follows.
       const body: string[] = [];
-      while (i < lines.length) {
-        const next = lines[i] ?? "";
-        if (next.trim() === "") {
-          // A blank line only ends the toggle if the next content is not indented.
-          const after = lines[i + 1] ?? "";
-          if (after.trim() !== "" && !/^\s{2,}/.test(after)) break;
-          body.push("");
+      const htmlForm = summary === "";
+
+      if (htmlForm) {
+        // `<details>` alone on its line: the summary is the next `<summary>`
+        // line (or, failing that, the first body line), and the body runs to
+        // the closing tag.
+        while (i < lines.length) {
+          const raw = lines[i] ?? "";
+          const next = raw.trim();
+          if (next === "</details>") {
+            i++;
+            break;
+          }
+          const summaryTag = next.match(/^<summary>\s*(.*?)\s*<\/summary>$/);
+          if (summaryTag && summary === "") {
+            summary = summaryTag[1]!;
+            i++;
+            continue;
+          }
+          body.push(raw.replace(/^\s{2}/, ""));
           i++;
-          continue;
         }
-        if (!/^\s{2,}/.test(next)) break;
-        body.push(next.replace(/^\s{2}/, ""));
-        i++;
+        // No <summary> tag at all — promote the first body line so the toggle
+        // isn't headless.
+        if (summary === "" && body.length > 0) summary = body.shift()!.trim();
+      } else {
+        // Compact form: the indented run below is the body.
+        while (i < lines.length) {
+          const next = lines[i] ?? "";
+          if (next.trim() === "") {
+            // A blank line only ends the toggle if the next content is not indented.
+            const after = lines[i + 1] ?? "";
+            if (after.trim() !== "" && !/^\s{2,}/.test(after)) break;
+            body.push("");
+            i++;
+            continue;
+          }
+          if (!/^\s{2,}/.test(next)) break;
+          body.push(next.replace(/^\s{2}/, ""));
+          i++;
+        }
       }
 
       // At the depth limit a toggle can't carry children — emit the summary as
