@@ -17,6 +17,7 @@ import {
   markdownToBlocks,
   MAX_BLOCKS_PER_REQUEST,
   MAX_RICH_TEXT_LENGTH,
+  MAX_REPLACE_BLOCKS,
 } from "../notion-api";
 
 const TOKENS = { NOTION_API_KEY: "ntn-test" };
@@ -130,6 +131,37 @@ describe("replace_content (NWRITE-01)", () => {
     expect(
       fetchSpy.mock.calls.some((c) => methodOf(c) === "PATCH" && urlOf(c).includes("/children"))
     ).toBe(false);
+  });
+
+  it("refuses a page too large to replace within the lambda budget", async () => {
+    // One DELETE per block at ~3 req/s: 200 blocks is already ~68s, past the
+    // 60s Hobby clamp. Being killed mid-delete would half-empty the page AND
+    // swallow the message saying where the blocks went — so refuse up front.
+    const many = Array.from({ length: MAX_REPLACE_BLOCKS + 1 }, (_, i) => ({
+      id: `b${i}`,
+      type: "paragraph",
+    }));
+    fetchSpy.mockResolvedValueOnce(jsonRes({ results: many, has_more: false }));
+
+    await expect(updatePage(TOKENS, "p1", { replaceContent: "new" })).rejects.toThrow(
+      /capped at 150/
+    );
+    // Nothing was touched.
+    expect(fetchSpy.mock.calls.filter((c) => methodOf(c) === "DELETE")).toHaveLength(0);
+  });
+
+  it("allows a page exactly at the replace cap", async () => {
+    const atCap = Array.from({ length: MAX_REPLACE_BLOCKS }, (_, i) => ({
+      id: `b${i}`,
+      type: "paragraph",
+    }));
+    fetchSpy.mockResolvedValueOnce(jsonRes({ results: atCap, has_more: false }));
+    for (let i = 0; i < MAX_REPLACE_BLOCKS; i++) fetchSpy.mockResolvedValueOnce(jsonRes({}));
+    fetchSpy.mockResolvedValueOnce(jsonRes({ results: [{ id: "n" }] }));
+    fetchSpy.mockResolvedValueOnce(FINAL_PAGE);
+
+    const res = await updatePage(TOKENS, "p1", { replaceContent: "new" });
+    expect(res.deletedBlocks).toBe(MAX_REPLACE_BLOCKS);
   });
 
   it("handles replacing an empty page (no blocks to delete)", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { updatePage } from "../lib/notion-api";
+import { updatePage, MAX_REPLACE_BLOCKS } from "../lib/notion-api";
+import { MARKDOWN_SYNTAX_HELP } from "../lib/markdown-syntax";
 import { resolveNotionTokens } from "../lib/resolve-account";
 import { toMsg } from "@/core/error-utils";
 
@@ -15,19 +16,19 @@ export const notionUpdateSchema = {
     .string()
     .optional()
     .describe(
-      "Markdown to ADD to the end of the page, keeping existing content. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code, dividers (---), tables (| a | b | with a | --- | header row), callouts (> [!💡] text, optional trailing {blue_background}), toggles (<details> summary + 2-space-indented body), images (![caption](url)), [bookmark](url), [embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / [links](url). Mutually exclusive with replace_content."
+      `ADD to the end of the page, keeping existing content. ${MARKDOWN_SYNTAX_HELP} Mutually exclusive with replace_content.`
     ),
   replace_content: z
     .string()
     .optional()
     .describe(
-      "Markdown that REPLACES the entire page body: every existing block is deleted, then this content is written. Use it to rewrite a document instead of appending to it — this is the tool for iterating on a generated doc. Deleted blocks go to the Notion trash and stay recoverable. Same markdown syntax as append_content. Mutually exclusive with append_content."
+      `REPLACE the entire page body: every existing block is deleted, then this content is written — use it to iterate on a generated document instead of appending to it. Deleted blocks go to the Notion trash and stay recoverable. Capped at ${MAX_REPLACE_BLOCKS} existing top-level blocks (Notion deletes one per request); above that the call is refused without changing anything. Same syntax as append_content. Mutually exclusive with append_content.`
     ),
   after_block_id: z
     .string()
     .optional()
     .describe(
-      "Insert append_content directly AFTER this block (must be a direct child of the page) instead of at the end. Notion has no 'prepend' — anchoring is always after an existing block."
+      "Insert append_content directly AFTER this block (must be a direct child of the page) instead of at the end. Notion has no 'prepend' — anchoring is always after an existing block. Ignored when replace_content is used."
     ),
   icon: z
     .string()

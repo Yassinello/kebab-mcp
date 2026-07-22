@@ -22,6 +22,22 @@ export const MAX_BLOCKS_PER_REQUEST = 100;
 export const MAX_RICH_TEXT_LENGTH = 2000;
 /** Safety bound on how many blocks readPage will pull for one page. */
 export const MAX_PAGE_BLOCKS = 5000;
+
+/**
+ * Ceiling on how many top-level blocks `replace_content` will delete.
+ *
+ * This is a WALL-CLOCK bound, not a correctness one. Notion has no batch
+ * delete, so replacing a page costs one request per block against a ~3 req/s
+ * budget: ~200 blocks already takes ~68s, and the MCP transport route runs
+ * under `maxDuration = 90` (silently clamped to 60s on Vercel Hobby). Past
+ * that the lambda is killed MID-DELETE — the page is left half-cleared and the
+ * caller never even receives the error explaining the blocks are in the trash.
+ *
+ * 150 keeps the whole operation inside the 60s floor with headroom for a
+ * retry. Refusing up front is strictly better than a truncated massacre: the
+ * page is untouched and the message says what to do.
+ */
+export const MAX_REPLACE_BLOCKS = 150;
 /** How deep readPage recurses into blocks that have children. */
 export const MAX_CHILD_DEPTH = 5;
 
@@ -232,6 +248,14 @@ export async function searchNotion(
  */
 export const TRUNCATION_MARKER =
   "[Kebab: page truncated at the read bound — content below this point was not read.]";
+
+/**
+ * Prefix of the warning `notion_read` puts ABOVE a truncated page. Like
+ * TRUNCATION_MARKER it is a read-side annotation, so markdownToBlocks drops it
+ * — otherwise a read → edit → replace_content cycle would write our own
+ * warning into the user's page as a paragraph.
+ */
+export const TRUNCATION_WARNING_PREFIX = "> WARNING: this page was only partially read";
 
 /** A block as returned by Notion, with the fields readPage cares about. */
 interface RawBlock {
@@ -836,8 +860,22 @@ async function deleteAllBlocks(tokens: AccountTokenSet, pageId: string): Promise
 
   if (budget.truncated) {
     throw new Error(
-      `Page has more than ${MAX_PAGE_BLOCKS} top-level blocks — refusing to replace_content, ` +
-        `as it would leave the page partially cleared. Trim the page in Notion first.`
+      `Could not read the full list of blocks on this page, so replace_content would leave it ` +
+        `partially cleared. Aborted before deleting anything.`
+    );
+  }
+
+  // Wall-clock guard: one DELETE per block at ~3 req/s outruns the lambda
+  // budget well before it outruns MAX_PAGE_BLOCKS. Refuse up front rather than
+  // be killed halfway through, which would half-empty the page AND swallow the
+  // message telling the caller where the blocks went.
+  if (blocks.length > MAX_REPLACE_BLOCKS) {
+    throw new Error(
+      `This page has ${blocks.length} top-level blocks; replace_content is capped at ` +
+        `${MAX_REPLACE_BLOCKS} because Notion has no batch delete (~3 requests/second, one per ` +
+        `block) and the request would time out mid-delete, leaving the page half-cleared. ` +
+        `Nothing was changed. Either edit the page in sections with append_content, or clear it ` +
+        `in Notion first and then write the new content.`
     );
   }
 
@@ -964,12 +1002,35 @@ export async function updatePage(
 
 // --- Markdown → Notion blocks ---
 //
-// Inverse of the readPage() switch above (heading_1/2/3, paragraph,
-// bulleted_list_item, numbered_list_item, to_do, code, divider). Keeping the
-// two in lockstep means content written by notion_create / notion_update and
-// then read back by notion_read round-trips without surprises. Inline marks
-// (bold/italic/links) are intentionally NOT parsed — readPage flattens them
-// too, so a single rich_text run per block keeps write/read symmetric.
+// ┌─ THE READ/WRITE SYMMETRY CONTRACT ─────────────────────────────────────┐
+// │                                                                        │
+// │ Every construct is defined TWICE:                                      │
+// │   · markdownToBlocks()  (below)  — markdown → Notion blocks   [WRITE]  │
+// │   · renderBlock()       (above)  — Notion blocks → markdown   [READ]   │
+// │                                                                        │
+// │ The invariant: md → blocks → render → md is STABLE. Content written    │
+// │ by notion_create/notion_update reads back through notion_read as the   │
+// │ same markdown, so an agent can read a page, edit the text, and write   │
+// │ it back with replace_content without the page degrading a little on    │
+// │ every cycle.                                                           │
+// │                                                                        │
+// │ ADDING A BLOCK TYPE means touching BOTH functions plus a round-trip    │
+// │ case in rich-blocks.test.ts. If you can parse something you can't      │
+// │ render back, you have silently made every edit cycle lossy — so when   │
+// │ in doubt, DON'T parse it. That is why inline marks were absent before  │
+// │ v0.21: the renderer flattened them, so the writer refused to create    │
+// │ them. v0.21 added both sides together (NRICH-05).                      │
+// │                                                                        │
+// │ Deliberate asymmetries (safe, because they lose no content):           │
+// │   · `_em_`/`__bold__` normalize to `*em*`/`**bold**` on read-back      │
+// │   · code fence aliases normalize (```ts → ```typescript), since        │
+// │     Notion's `language` is a closed enum                               │
+// │   · constructs deeper than Notion's 2-level nesting limit degrade to   │
+// │     flatter blocks rather than emitting a payload the API rejects      │
+// │                                                                        │
+// │ Known hole: nested LIST children render indented but re-parse flat —   │
+// │ 2-space indentation is only structural inside <details>.               │
+// └────────────────────────────────────────────────────────────────────────┘
 
 /** One rich_text run as we build it for the API. */
 interface RichTextRun {
@@ -1277,9 +1338,10 @@ export function markdownToBlocks(md: string, depth = 1): unknown[] {
       continue;
     }
 
-    // Drop our own truncation marker: it is a read-side annotation, not page
-    // content, so a read → edit → replace_content cycle must not persist it.
-    if (trimmed === TRUNCATION_MARKER) {
+    // Drop our own truncation annotations: both the trailing marker and the
+    // leading warning are read-side additions, not page content, so a
+    // read → edit → replace_content cycle must not persist either of them.
+    if (trimmed === TRUNCATION_MARKER || trimmed.startsWith(TRUNCATION_WARNING_PREFIX)) {
       flushParagraph();
       i++;
       continue;

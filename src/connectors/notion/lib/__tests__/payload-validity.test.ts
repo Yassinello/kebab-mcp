@@ -13,7 +13,12 @@
  *   · every table_row carries exactly table_width cells
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { markdownToBlocks, readPage, TRUNCATION_MARKER } from "../notion-api";
+import {
+  markdownToBlocks,
+  readPage,
+  TRUNCATION_MARKER,
+  TRUNCATION_WARNING_PREFIX,
+} from "../notion-api";
 
 const TOKENS = { NOTION_API_KEY: "ntn-test" };
 
@@ -226,5 +231,15 @@ describe("truncation detection (guards replace_content)", () => {
     const blocks = markdownToBlocks(`real content\n\n${TRUNCATION_MARKER}`) as Block[];
     expect(blocks).toHaveLength(1);
     expect(JSON.stringify(blocks)).not.toContain("truncated");
+  });
+
+  it("the leading truncation WARNING is also dropped on write-back", () => {
+    // notion_read prefixes a partial read with this warning. Like the trailing
+    // marker it is our annotation, not the user's content — a read → edit →
+    // replace_content cycle must not write it into their page.
+    const warned = `${TRUNCATION_WARNING_PREFIX} (read bound reached). Do NOT rewrite it.\n\nreal content`;
+    const blocks = markdownToBlocks(warned) as Block[];
+    expect(blocks).toHaveLength(1);
+    expect(JSON.stringify(blocks)).not.toContain("WARNING");
   });
 });

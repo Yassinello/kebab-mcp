@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createPage } from "../lib/notion-api";
+import { MARKDOWN_SYNTAX_HELP } from "../lib/markdown-syntax";
 import { resolveNotionTokens } from "../lib/resolve-account";
 import { toMsg } from "@/core/error-utils";
 
@@ -21,12 +22,7 @@ export const notionCreateSchema = {
     .optional()
     .describe("Optional override to skip parent auto-detection ('page' or 'database')."),
   title: z.string().describe("Page title"),
-  content: z
-    .string()
-    .optional()
-    .describe(
-      "Page body as Markdown, converted to native Notion blocks. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code (```lang), dividers (---), tables (| a | b | with a | --- | header row), callouts (> [!💡] text, optional trailing {blue_background}), toggles (<details> summary + 2-space-indented body), images (![caption](url)), [bookmark](url), [embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / [links](url)."
-    ),
+  content: z.string().optional().describe(`Page body. ${MARKDOWN_SYNTAX_HELP}`),
   icon: z.string().optional().describe('Page icon: an emoji ("🎯") or an external image URL.'),
   cover: z
     .string()
