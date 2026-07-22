@@ -153,7 +153,112 @@ describe("callouts (NRICH-01)", () => {
   });
 });
 
+describe("GitHub admonition callouts (field feedback)", () => {
+  it("maps [!NOTE]-style keywords to an emoji instead of sending the word", () => {
+    // Regression: `> [!note] x` sent {"emoji": "note"} and Notion 400'd. This
+    // is the syntax essentially every LLM writes, because it's GitHub's.
+    for (const [label, emoji] of [
+      ["note", "💡"],
+      ["NOTE", "💡"],
+      ["warning", "⚠️"],
+      ["tip", "✅"],
+      ["danger", "🚨"],
+      ["important", "❗"],
+    ] as const) {
+      const [b] = markdownToBlocks(`> [!${label}] Contenu`) as Block[];
+      expect(b!.type).toBe("callout");
+      expect((b!.callout as { icon: { emoji: string } }).icon.emoji).toBe(emoji);
+      expect(textOf(b!)).toBe("Contenu");
+    }
+  });
+
+  it("gives each admonition a sensible colour", () => {
+    const warn = markdownToBlocks("> [!warning] careful")[0] as Block;
+    expect((warn.callout as { color: string }).color).toBe("yellow_background");
+    const danger = markdownToBlocks("> [!danger] stop")[0] as Block;
+    expect((danger.callout as { color: string }).color).toBe("red_background");
+  });
+
+  it("an explicit {color} still overrides the admonition default", () => {
+    const [b] = markdownToBlocks("> [!warning] careful {purple_background}") as Block[];
+    expect((b!.callout as { color: string }).color).toBe("purple_background");
+    expect(textOf(b!)).toBe("careful");
+  });
+
+  it("folds continuation `>` lines into the same callout", () => {
+    // Regression: the body lines became separate paragraphs that kept a
+    // literal ">" prefix.
+    const [b, ...rest] = markdownToBlocks("> [!note] Ligne un\n> Ligne deux") as Block[];
+    expect(rest).toHaveLength(0);
+    expect(b!.type).toBe("callout");
+    expect(textOf(b!)).toBe("Ligne un\nLigne deux");
+  });
+
+  it("a second [!marker] starts a NEW callout rather than being swallowed", () => {
+    const blocks = markdownToBlocks("> [!note] one\n> [!warning] two") as Block[];
+    expect(blocks.map((b) => b.type)).toEqual(["callout", "callout"]);
+    expect(blocks.map(textOf)).toEqual(["one", "two"]);
+  });
+
+  it("an unknown label passes through (keeps `> [!💡]` round-tripping)", () => {
+    const [b] = markdownToBlocks("> [!💡] direct emoji") as Block[];
+    expect((b!.callout as { icon: { emoji: string } }).icon.emoji).toBe("💡");
+  });
+});
+
+describe("plain blockquotes (field feedback)", () => {
+  it("maps `> text` with no marker to a native quote block", () => {
+    // Regression: this kept its literal ">" inside a paragraph.
+    const [b] = markdownToBlocks("> juste une citation") as Block[];
+    expect(b!.type).toBe("quote");
+    expect(textOf(b!)).toBe("juste une citation");
+  });
+
+  it("folds a multi-line quote into one block", () => {
+    const blocks = markdownToBlocks("> line one\n> line two") as Block[];
+    expect(blocks).toHaveLength(1);
+    expect(textOf(blocks[0]!)).toBe("line one\nline two");
+  });
+});
+
 describe("toggles (NRICH-02)", () => {
+  it("parses the real HTML form authors actually write", () => {
+    // v0.21 only accepted the compact `<details> Summary` form, so this —
+    // the form every LLM emits — leaked the tags as literal text.
+    const [b, ...rest] = markdownToBlocks(
+      "<details>\n<summary>Titre</summary>\nContenu\n</details>"
+    ) as Block[];
+    expect(rest).toHaveLength(0);
+    expect(b!.type).toBe("toggle");
+    expect(textOf(b!)).toBe("Titre");
+    const children = (b!.toggle as { children: Block[] }).children;
+    expect(children.map((c) => c.type)).toEqual(["paragraph"]);
+  });
+
+  it("handles the HTML form with no <summary> tag", () => {
+    const [b] = markdownToBlocks("<details>\nFirst line\nSecond\n</details>") as Block[];
+    expect(b!.type).toBe("toggle");
+    expect(textOf(b!)).toBe("First line");
+  });
+
+  it("keeps parsing content that follows a closed </details>", () => {
+    const blocks = markdownToBlocks(
+      "<details>\n<summary>T</summary>\nbody\n</details>\n\nafter"
+    ) as Block[];
+    expect(blocks.map((b) => b.type)).toEqual(["toggle", "paragraph"]);
+    expect(textOf(blocks[1]!)).toBe("after");
+  });
+
+  it("parses rich children inside the HTML form", () => {
+    const [b] = markdownToBlocks(
+      "<details>\n<summary>FAQ</summary>\n- one\n- two\n</details>"
+    ) as Block[];
+    const children = (b!.toggle as { children: Block[] }).children;
+    expect(children.map((c) => c.type)).toEqual(["bulleted_list_item", "bulleted_list_item"]);
+  });
+});
+
+describe("toggles — compact form (NRICH-02)", () => {
   it("parses <details> with indented children", () => {
     const [b] = markdownToBlocks("<details> Summary here\n  inner text\n  - a bullet") as Block[];
     expect(b!.type).toBe("toggle");
@@ -361,6 +466,26 @@ describe("read/write round-trip (NRICH-06)", () => {
     // normalized on the way in because Notion's `language` is a closed enum.
     const md = "```javascript\nconst a = **b**;\n```";
     expect(await roundTrip(md)).toBe(md);
+  });
+
+  it("round-trips a plain quote", async () => {
+    expect(await roundTrip("> juste une citation")).toBe("> juste une citation");
+  });
+
+  it("normalizes an admonition to its emoji form on read-back", async () => {
+    // `[!note]` is an INPUT convenience; the canonical form we render is the
+    // emoji, which re-parses to the same callout. Colour is preserved via the
+    // {…} suffix so the second pass produces identical blocks.
+    const out = await roundTrip("> [!note] Contenu");
+    expect(out).toBe("> [!💡] Contenu {blue_background}");
+    // The normalized form is stable — a second pass changes nothing.
+    expect(await roundTrip(out)).toBe(out);
+  });
+
+  it("normalizes the HTML toggle form to the compact one, then holds stable", async () => {
+    const out = await roundTrip("<details>\n<summary>Titre</summary>\nContenu\n</details>");
+    expect(out).toBe("<details> Titre\n\n  Contenu");
+    expect(await roundTrip(out)).toBe(out);
   });
 
   it("round-trips prose containing snake_case identifiers", async () => {

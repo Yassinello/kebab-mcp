@@ -18,7 +18,8 @@
 export const MARKDOWN_SYNTAX_HELP =
   "Markdown → native Notion blocks: headings (#/##/###), bulleted/numbered lists, " +
   "checkboxes ([ ]/[x]), fenced code (```lang), dividers (---), tables (| a | b | with a " +
-  "| --- | header row), callouts (> [!💡] text, optional trailing {blue_background}), " +
-  "toggles (<details> summary + 2-space-indented body), images (![caption](url)), " +
-  "[bookmark](url), [embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / " +
-  "[links](url).";
+  "| --- | header row), quotes (> text), callouts (GitHub style: > [!NOTE] / [!WARNING] / " +
+  "[!TIP] / [!IMPORTANT] / [!DANGER], or a literal emoji > [!💡] text; continuation > lines " +
+  "join the same callout; optional trailing {blue_background}), toggles (<details> + " +
+  "<summary>Title</summary> + body + </details>), images (![caption](url)), [bookmark](url), " +
+  "[embed](url), and inline **bold** / *italic* / `code` / ~~strike~~ / [links](url).";
