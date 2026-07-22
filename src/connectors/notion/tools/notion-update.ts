@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { updatePage } from "../lib/notion-api";
+import { updatePage, MAX_REPLACE_BLOCKS } from "../lib/notion-api";
+import { MARKDOWN_SYNTAX_HELP } from "../lib/markdown-syntax";
 import { resolveNotionTokens } from "../lib/resolve-account";
+import { toMsg } from "@/core/error-utils";
 
 export const notionUpdateSchema = {
   page_id: z.string().describe("Notion page ID to update"),
@@ -14,7 +16,31 @@ export const notionUpdateSchema = {
     .string()
     .optional()
     .describe(
-      "Markdown to append to the page — supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks, dividers (---), and paragraphs. Converted to native Notion blocks."
+      `ADD to the end of the page, keeping existing content. ${MARKDOWN_SYNTAX_HELP} Mutually exclusive with replace_content.`
+    ),
+  replace_content: z
+    .string()
+    .optional()
+    .describe(
+      `REPLACE the entire page body: every existing block is deleted, then this content is written — use it to iterate on a generated document instead of appending to it. Deleted blocks go to the Notion trash and stay recoverable. Capped at ${MAX_REPLACE_BLOCKS} existing top-level blocks (Notion deletes one per request); above that the call is refused without changing anything. Same syntax as append_content. Mutually exclusive with append_content.`
+    ),
+  after_block_id: z
+    .string()
+    .optional()
+    .describe(
+      "Insert append_content directly AFTER this block (must be a direct child of the page) instead of at the end. Notion has no 'prepend' — anchoring is always after an existing block. Ignored when replace_content is used."
+    ),
+  icon: z
+    .string()
+    .optional()
+    .describe(
+      'Page icon: an emoji ("🎯") or an external image URL. Pass "none" to remove the current icon.'
+    ),
+  cover: z
+    .string()
+    .optional()
+    .describe(
+      'Page cover: an external image URL. Pass "none" to remove the current cover. Emojis are not valid covers.'
     ),
   archive: z
     .boolean()
@@ -32,19 +58,37 @@ export async function handleNotionUpdate(params: {
   page_id: string;
   properties?: Record<string, string | number | boolean> | undefined;
   append_content?: string | undefined;
+  replace_content?: string | undefined;
+  after_block_id?: string | undefined;
+  icon?: string | undefined;
+  cover?: string | undefined;
   archive?: boolean | undefined;
   account?: string | undefined;
 }) {
   const resolved = await resolveNotionTokens(params.account);
   if (!resolved.ok) return resolved.result;
 
-  const result = await updatePage(
-    resolved.tokens,
-    params.page_id,
-    params.properties,
-    params.append_content,
-    params.archive
-  );
+  // The api layer throws on conflicting/invalid input (append+replace, a
+  // non-URL cover) and on a partial replace_content. Surface those as an
+  // isError envelope — the message carries the recovery path — instead of
+  // letting them bubble up as an unhandled tool crash.
+  let result;
+  try {
+    result = await updatePage(resolved.tokens, params.page_id, {
+      properties: params.properties,
+      appendContent: params.append_content,
+      replaceContent: params.replace_content,
+      afterBlockId: params.after_block_id,
+      icon: params.icon,
+      cover: params.cover,
+      archive: params.archive,
+    });
+  } catch (err) {
+    return {
+      content: [{ type: "text" as const, text: toMsg(err) }],
+      isError: true,
+    };
+  }
 
   if (params.archive) {
     return {
@@ -55,7 +99,13 @@ export async function handleNotionUpdate(params: {
   const actions: string[] = [];
   if (params.properties)
     actions.push(`${Object.keys(params.properties).length} properties updated`);
+  if (params.replace_content !== undefined)
+    // "top-level": deleting a parent trashes its subtree, so the count is of
+    // blocks we issued a DELETE for, not of every block that went away.
+    actions.push(`content replaced (${result.deletedBlocks ?? 0} top-level blocks removed)`);
   if (params.append_content) actions.push("content appended");
+  if (params.icon !== undefined) actions.push("icon set");
+  if (params.cover !== undefined) actions.push("cover set");
 
   return {
     content: [

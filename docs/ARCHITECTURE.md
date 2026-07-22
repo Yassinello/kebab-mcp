@@ -24,7 +24,7 @@ src/connectors/google/manifest.ts        — Google Workspace connector (18 tool
 src/connectors/vault/manifest.ts          — Obsidian Vault connector (14 tools)
 src/connectors/browser/manifest.ts        — Browser Automation connector (7 tools)
 src/connectors/slack/manifest.ts          — Slack connector (6 tools)
-src/connectors/notion/manifest.ts         — Notion connector (5 tools)
+src/connectors/notion/manifest.ts         — Notion connector (6 tools)
 src/connectors/apify/manifest.ts          — Apify / LinkedIn scraping connector (10 tools)
 src/connectors/unipile/manifest.ts        — Unipile LinkedIn + WhatsApp connector (10 tools)
 src/connectors/github/manifest.ts         — GitHub Issues connector (6 tools)

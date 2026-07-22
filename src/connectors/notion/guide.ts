@@ -5,7 +5,7 @@
  *
  * Source of truth lives here; the manifest re-exports it as `guide`.
  */
-export const notionGuide = `Search pages, read/append content, and query databases in your Notion workspace via an internal integration token.
+export const notionGuide = `Search pages, read and write page content (append or full rewrite), set page icons/covers, and query databases in your Notion workspace via an internal integration token.
 
 ### Prerequisites
 A Notion workspace where you can install integrations. Notion integrations only see pages that have been _explicitly shared_ with them — there is no workspace-wide permission.

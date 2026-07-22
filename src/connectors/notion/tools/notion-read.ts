@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { readPage } from "../lib/notion-api";
+import { readPage, TRUNCATION_WARNING_PREFIX } from "../lib/notion-api";
 import { resolveNotionTokens } from "../lib/resolve-account";
 
 export const notionReadSchema = {
@@ -18,11 +18,20 @@ export async function handleNotionRead(params: { page_id: string; account?: stri
 
   const page = await readPage(resolved.tokens, params.page_id);
 
+  // Surface truncation as a leading warning, not just as the inline marker at
+  // the bottom — an agent that acts on a partial read (e.g. rewriting the page
+  // with replace_content) would otherwise drop everything it never saw.
+  // Built from the shared prefix so markdownToBlocks can recognize and drop it
+  // — otherwise this warning gets written into the page on the next rewrite.
+  const warning = page.truncated
+    ? `${TRUNCATION_WARNING_PREFIX} (read bound reached). Do NOT rewrite it with replace_content — the unread content would be lost.\n\n`
+    : "";
+
   return {
     content: [
       {
         type: "text" as const,
-        text: `# ${page.title}\n\n${page.content || "(empty page)"}`,
+        text: `# ${page.title}\n\n${warning}${page.content || "(empty page)"}`,
       },
     ],
   };

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createPage } from "../lib/notion-api";
+import { MARKDOWN_SYNTAX_HELP } from "../lib/markdown-syntax";
 import { resolveNotionTokens } from "../lib/resolve-account";
+import { toMsg } from "@/core/error-utils";
 
 export const notionCreateSchema = {
   parent_id: z
@@ -20,12 +22,12 @@ export const notionCreateSchema = {
     .optional()
     .describe("Optional override to skip parent auto-detection ('page' or 'database')."),
   title: z.string().describe("Page title"),
-  content: z
+  content: z.string().optional().describe(`Page body. ${MARKDOWN_SYNTAX_HELP}`),
+  icon: z.string().optional().describe('Page icon: an emoji ("🎯") or an external image URL.'),
+  cover: z
     .string()
     .optional()
-    .describe(
-      "Page body as Markdown. Supports headings (#/##/###), bulleted/numbered lists, checkboxes ([ ]/[x]), fenced code blocks (```lang), dividers (---), and paragraphs — converted to native Notion blocks."
-    ),
+    .describe("Page cover: an external image URL. Emojis are not valid covers."),
   account: z
     .string()
     .optional()
@@ -40,6 +42,8 @@ export async function handleNotionCreate(params: {
   parent_type?: "page" | "database" | undefined;
   title: string;
   content?: string | undefined;
+  icon?: string | undefined;
+  cover?: string | undefined;
   account?: string | undefined;
 }) {
   const parentId = (params.parent_id ?? params.database_id)?.trim();
@@ -58,15 +62,26 @@ export async function handleNotionCreate(params: {
   const resolved = await resolveNotionTokens(params.account);
   if (!resolved.ok) return resolved.result;
 
-  const page = await createPage(resolved.tokens, {
-    parentId,
-    title: params.title,
-    content: params.content,
-    // database_id alias implies a database parent; otherwise honor an explicit
-    // parent_type, else auto-detect inside createPage.
-    parentType:
-      params.parent_type ?? (params.database_id && !params.parent_id ? "database" : undefined),
-  });
+  // createPage throws on an invalid cover (non-URL) before creating anything.
+  let page;
+  try {
+    page = await createPage(resolved.tokens, {
+      parentId,
+      title: params.title,
+      content: params.content,
+      // database_id alias implies a database parent; otherwise honor an explicit
+      // parent_type, else auto-detect inside createPage.
+      parentType:
+        params.parent_type ?? (params.database_id && !params.parent_id ? "database" : undefined),
+      icon: params.icon,
+      cover: params.cover,
+    });
+  } catch (err) {
+    return {
+      content: [{ type: "text" as const, text: toMsg(err) }],
+      isError: true,
+    };
+  }
 
   return {
     content: [

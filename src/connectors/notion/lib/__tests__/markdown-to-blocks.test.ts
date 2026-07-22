@@ -53,7 +53,8 @@ describe("markdownToBlocks", () => {
       language: string;
       rich_text: { text: { content: string } }[];
     };
-    expect(code.language).toBe("ts");
+    // `ts` is normalized to Notion's enum value — the API rejects "ts".
+    expect(code.language).toBe("typescript");
     expect(code.rich_text[0]!.text.content).toBe("const a = 1;\nconst b = 2;");
   });
 
