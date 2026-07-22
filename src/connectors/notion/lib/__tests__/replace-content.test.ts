@@ -293,6 +293,38 @@ describe("positioned insert (NWRITE-04)", () => {
     expect(bodyOf(append).after).toBe("anchor-block");
   });
 
+  it("explains that after_block_id must be a direct child when Notion rejects it", async () => {
+    // Notion's validation error never names the anchor, so an agent that
+    // passed a nested block id would get no clue what to fix.
+    fetchSpy.mockResolvedValueOnce(
+      jsonRes({ message: "body failed validation" }, { ok: false, status: 400 })
+    );
+
+    await expect(
+      updatePage(TOKENS, "p1", { appendContent: "text", afterBlockId: "nested-block" })
+    ).rejects.toThrow(/must be a DIRECT child/);
+  });
+
+  it("does not rewrite unrelated append errors", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonRes({ message: "rate limited" }, { ok: false, status: 403 })
+    );
+
+    await expect(
+      updatePage(TOKENS, "p1", { appendContent: "text", afterBlockId: "anchor" })
+    ).rejects.toThrow(/403/);
+  });
+
+  it("annotates a 400 on block writes with the likely payload causes", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonRes({ message: "body failed validation" }, { ok: false, status: 400 })
+    );
+
+    await expect(updatePage(TOKENS, "p1", { appendContent: "text" })).rejects.toThrow(
+      /nests more than 2 levels/
+    );
+  });
+
   it("fails loudly rather than scattering content when the anchor echo is lost", async () => {
     // >100 blocks with an anchor: if Notion doesn't echo the created ids we
     // cannot place chunk 2, and silently dropping the anchor would put chunk 1

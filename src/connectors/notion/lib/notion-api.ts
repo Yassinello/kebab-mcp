@@ -88,6 +88,15 @@ async function notionFetch<T>(
     const data = (await res.json().catch(() => ({}))) as { message?: string };
     lastError = `Notion API ${res.status}: ${data.message || res.statusText}`;
 
+    // A 400 on a block-write is almost always a payload the API rejects: a
+    // block shape that differs on this API version, an out-of-enum value, or
+    // nesting past the 2-level limit. Notion's message alone ("body failed
+    // validation") doesn't say which block, so name the request that failed —
+    // this is the failure mode most likely to surface on a Notion-Version bump.
+    if (res.status === 400 && opts.method && opts.method !== "GET") {
+      lastError += ` — while ${opts.method} ${path}. If this started after an API-version change, check the block shapes (callout/toggle/table), enum values (color, code language), and that no payload nests more than 2 levels.`;
+    }
+
     const retryable = res.status === 429 || res.status === 529;
     if (!retryable || attempt === MAX_RETRIES) throw new Error(lastError);
 
@@ -769,14 +778,31 @@ async function appendBlocks(
 
   for (let i = 0; i < children.length; i += MAX_BLOCKS_PER_REQUEST) {
     const chunk = children.slice(i, i + MAX_BLOCKS_PER_REQUEST);
-    const res = await notionFetch<{ results?: { id: string }[] }>(
-      tokens,
-      `/blocks/${blockId}/children`,
-      {
-        method: "PATCH",
-        body: { children: chunk, ...(anchor ? { after: anchor } : {}) },
+    let res: { results?: { id: string }[] };
+    try {
+      res = await notionFetch<{ results?: { id: string }[] }>(
+        tokens,
+        `/blocks/${blockId}/children`,
+        {
+          method: "PATCH",
+          body: { children: chunk, ...(anchor ? { after: anchor } : {}) },
+        }
+      );
+    } catch (err) {
+      // Notion's docs never state it outright, but `after` appears to require
+      // a DIRECT child of the target block. The resulting error doesn't name
+      // the anchor, so an agent that passed a nested block id gets a validation
+      // failure with no clue what to fix.
+      if (anchor && i === 0 && /validation|invalid|not found/i.test(toMsg(err))) {
+        throw new Error(
+          `Append failed while inserting after block "${anchor}": ${toMsg(err)}. ` +
+            `after_block_id must be a DIRECT child of the page — a block nested inside a ` +
+            `toggle, column or list item won't work. Omit it to append at the end.`,
+          { cause: err }
+        );
       }
-    );
+      throw err;
+    }
     // Chain the next chunk after the last block we just wrote.
     const written = res?.results;
     const more = i + MAX_BLOCKS_PER_REQUEST < children.length;
