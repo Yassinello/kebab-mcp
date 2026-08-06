@@ -1,4 +1,3 @@
-import type { GoogleAuthContext } from "./google-auth";
 import { googleFetch, googleFetchJSON } from "./google-fetch";
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -129,18 +128,14 @@ function extractAttachments(payload: GmailMessagePart | undefined): EmailFull["a
 
 // --- List emails (metadata only) ---
 
-export async function listEmails(
-  ctx: GoogleAuthContext,
-  opts: {
-    maxResults?: number | undefined;
-    query?: string | undefined;
-  }
-): Promise<EmailSummary[]> {
+export async function listEmails(opts: {
+  maxResults?: number | undefined;
+  query?: string | undefined;
+}): Promise<EmailSummary[]> {
   const maxResults = opts.maxResults || 10;
   const q = opts.query || "";
 
   const listData = await googleFetchJSON<GmailMessageList>(
-    ctx,
     `${GMAIL}/messages?maxResults=${maxResults}&q=${encodeURIComponent(q)}`
   );
   if (!listData.messages || listData.messages.length === 0) return [];
@@ -148,7 +143,6 @@ export async function listEmails(
   return Promise.all(
     listData.messages.map(async (msg) => {
       const m = await googleFetchJSON<GmailMessage>(
-        ctx,
         `${GMAIL}/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`
       );
       const headers = m.payload?.headers || [];
@@ -168,8 +162,8 @@ export async function listEmails(
 
 // --- Read full email ---
 
-export async function readEmail(ctx: GoogleAuthContext, messageId: string): Promise<EmailFull> {
-  const m = await googleFetchJSON<GmailMessage>(ctx, `${GMAIL}/messages/${messageId}?format=full`);
+export async function readEmail(messageId: string): Promise<EmailFull> {
+  const m = await googleFetchJSON<GmailMessage>(`${GMAIL}/messages/${messageId}?format=full`);
   const headers = m.payload?.headers || [];
 
   return {
@@ -207,18 +201,14 @@ export async function readEmail(ctx: GoogleAuthContext, messageId: string): Prom
 
 export type SearchBodyMode = "full" | "metadata";
 
-export async function searchEmails(
-  ctx: GoogleAuthContext,
-  opts: {
-    query: string;
-    maxResults?: number | undefined;
-    bodyMode?: SearchBodyMode | undefined;
-  }
-): Promise<EmailFull[]> {
-  const maxResults = Math.min(opts.maxResults || 5, 10);
+export async function searchEmails(opts: {
+  query: string;
+  maxResults?: number | undefined;
+  bodyMode?: SearchBodyMode | undefined;
+}): Promise<EmailFull[]> {
+  const maxResults = Math.min(opts.maxResults || 5, 50);
   const bodyMode: SearchBodyMode = opts.bodyMode || "full";
   const listData = await googleFetchJSON<GmailMessageList>(
-    ctx,
     `${GMAIL}/messages?maxResults=${maxResults}&q=${encodeURIComponent(opts.query)}`
   );
   if (!listData.messages || listData.messages.length === 0) return [];
@@ -227,7 +217,6 @@ export async function searchEmails(
     return Promise.all(
       listData.messages.map(async (msg: { id: string }) => {
         const m = await googleFetchJSON<GmailMessage>(
-          ctx,
           `${GMAIL}/messages/${msg.id}?format=metadata` +
             `&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc` +
             `&metadataHeaders=Bcc&metadataHeaders=Subject&metadataHeaders=Date` +
@@ -254,13 +243,13 @@ export async function searchEmails(
     );
   }
 
-  return Promise.all(listData.messages.map(async (msg: { id: string }) => readEmail(ctx, msg.id)));
+  return Promise.all(listData.messages.map(async (msg: { id: string }) => readEmail(msg.id)));
 }
 
 // --- Trash email ---
 
-export async function trashEmail(ctx: GoogleAuthContext, messageId: string): Promise<boolean> {
-  const res = await googleFetch(ctx, `${GMAIL}/messages/${messageId}/trash`, {
+export async function trashEmail(messageId: string): Promise<boolean> {
+  const res = await googleFetch(`${GMAIL}/messages/${messageId}/trash`, {
     method: "POST",
   });
   return res.ok;
@@ -268,26 +257,23 @@ export async function trashEmail(ctx: GoogleAuthContext, messageId: string): Pro
 
 // --- Send email ---
 
-export async function sendEmail(
-  ctx: GoogleAuthContext,
-  opts: {
-    to: string;
-    subject: string;
-    body: string;
-    cc?: string | undefined;
-    bcc?: string | undefined;
-    threadId?: string | undefined;
-    inReplyTo?: string | undefined;
-    references?: string | undefined;
-  }
-): Promise<{ id: string; threadId: string }> {
+export async function sendEmail(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string | undefined;
+  bcc?: string | undefined;
+  threadId?: string | undefined;
+  inReplyTo?: string | undefined;
+  references?: string | undefined;
+}): Promise<{ id: string; threadId: string }> {
   const hdrs = buildEmailHeaders(opts);
   const raw = Buffer.from(hdrs.join("\r\n") + "\r\n\r\n" + opts.body).toString("base64url");
 
   const payload: { raw: string; threadId?: string } = { raw };
   if (opts.threadId) payload.threadId = opts.threadId;
 
-  return googleFetchJSON(ctx, `${GMAIL}/messages/send`, {
+  return googleFetchJSON(`${GMAIL}/messages/send`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -296,18 +282,15 @@ export async function sendEmail(
 
 // --- Reply to email ---
 
-export async function replyToEmail(
-  ctx: GoogleAuthContext,
-  opts: {
-    messageId: string;
-    body: string;
-    cc?: string | undefined;
-  }
-): Promise<{ id: string; threadId: string }> {
-  const original = await readEmail(ctx, opts.messageId);
+export async function replyToEmail(opts: {
+  messageId: string;
+  body: string;
+  cc?: string | undefined;
+}): Promise<{ id: string; threadId: string }> {
+  const original = await readEmail(opts.messageId);
   const subject = original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`;
 
-  return sendEmail(ctx, {
+  return sendEmail({
     to: original.from,
     subject,
     body: opts.body,
@@ -321,12 +304,11 @@ export async function replyToEmail(
 // --- Modify labels ---
 
 export async function modifyLabels(
-  ctx: GoogleAuthContext,
   messageId: string,
   addLabels: string[],
   removeLabels: string[]
 ): Promise<boolean> {
-  const res = await googleFetch(ctx, `${GMAIL}/messages/${messageId}/modify`, {
+  const res = await googleFetch(`${GMAIL}/messages/${messageId}/modify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -339,20 +321,17 @@ export async function modifyLabels(
 
 // --- Create draft ---
 
-export async function createDraft(
-  ctx: GoogleAuthContext,
-  opts: {
-    to: string;
-    subject: string;
-    body: string;
-    cc?: string | undefined;
-    bcc?: string | undefined;
-  }
-): Promise<{ id: string; messageId: string }> {
+export async function createDraft(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string | undefined;
+  bcc?: string | undefined;
+}): Promise<{ id: string; messageId: string }> {
   const hdrs = buildEmailHeaders(opts);
   const raw = Buffer.from(hdrs.join("\r\n") + "\r\n\r\n" + opts.body).toString("base64url");
 
-  const data = await googleFetchJSON<GmailDraftResponse>(ctx, `${GMAIL}/drafts`, {
+  const data = await googleFetchJSON<GmailDraftResponse>(`${GMAIL}/drafts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: { raw } }),
@@ -363,9 +342,8 @@ export async function createDraft(
 // --- Get attachment ---
 
 export async function getAttachment(
-  ctx: GoogleAuthContext,
   messageId: string,
   attachmentId: string
 ): Promise<{ data: string; size: number }> {
-  return googleFetchJSON(ctx, `${GMAIL}/messages/${messageId}/attachments/${attachmentId}`);
+  return googleFetchJSON(`${GMAIL}/messages/${messageId}/attachments/${attachmentId}`);
 }
