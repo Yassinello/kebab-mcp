@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 const scrollSchema = z
-  .union([z.number().int().min(0).max(50), z.literal("auto")])
+  .union([z.literal("auto"), z.coerce.number().int().min(0).max(50)])
   .optional()
   .describe(
     "Scroll before extracting. Number = fixed scroll steps. 'auto' = scroll until the page stops growing (recommended for infinite-scroll feeds). Default: 0 (no scroll)."
