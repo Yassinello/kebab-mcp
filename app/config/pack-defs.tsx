@@ -355,7 +355,7 @@ export const PACKS: ConnectorDef[] = [
     id: "airtable",
     name: "Airtable",
     description: "Read, write, and search records across Airtable bases and tables",
-    toolCount: 7,
+    toolCount: 9,
     icon: "A",
     setupGuide: [
       "Open airtable.com/create/tokens and click Create new token",
