@@ -20,6 +20,9 @@
     "url": "https://github.com/Yassinello/kebab-mcp"
   },
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "predev": "node scripts/check-updates.js",
     "dev": "next dev",

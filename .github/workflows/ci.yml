@@ -21,14 +21,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # CI-01 (v0.11 Phase 43): test on both the current LTS (20) and current
-    # stable (22) so Node-22-only syntax or Node-20-only bugs are caught
-    # pre-merge. `fail-fast: false` so a per-version failure still produces
-    # the other job's log for triage.
+    # CI-03 (2026-11 audit): test on the maintenance LTS (22) and the active
+    # LTS (24). Node 20 reached EOL in April 2026 and the OTel 0.301 cluster
+    # requires >=22.15; package.json `engines` enforces the same floor.
+    # `fail-fast: false` so a per-version failure still produces the other
+    # job's log for triage.
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0

@@ -4,7 +4,7 @@ Build a connector from zero to live in under 30 minutes.
 
 ## Prerequisites
 
-- Node 20+, Kebab MCP checked out, `npm install` done.
+- Node 22+, Kebab MCP checked out, `npm install` done.
 - Read [CONNECTORS.md](CONNECTORS.md) §§ Architecture + Pipeline first — this doc skips the conceptual model.
 - A target service (e.g. Linear, HackerNews, an internal REST API). You'll need its base URL, auth scheme, and rate-limit behavior.
 
