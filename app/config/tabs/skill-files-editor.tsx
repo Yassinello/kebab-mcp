@@ -47,6 +47,7 @@ export function SkillFilesEditor({ skillId, agentName }: { skillId: string; agen
   }, [skillId]);
 
   useEffect(() => {
+    // fire-and-forget OK: mount-time load; failures surface in the error line.
     void load();
   }, [load]);
 

@@ -111,7 +111,6 @@ const ALLOWLIST: readonly string[] = [
   // Skills export format: claude-skills JSON carries `source: "mymcp"`
   // as an external identifier; rename would break Claude Desktop's
   // round-trip import/export cycle.
-  "src/connectors/skills/lib/export-claude.ts",
   // Connector docs UI copy: connector manifests cite "MyMCP" as the
   // suggested token label in external provider dashboards (Airtable,
   // Linear, Notion). User-facing text, not identifier.

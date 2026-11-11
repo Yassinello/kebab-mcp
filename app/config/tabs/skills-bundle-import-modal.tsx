@@ -154,6 +154,7 @@ export function BundleImportModal({
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
+              // fire-and-forget OK: drop handler; onFile reports errors via setError.
               void onFile(e.dataTransfer.files[0]);
             }}
           >
