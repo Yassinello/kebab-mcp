@@ -33,6 +33,14 @@ updates:
           - minor
           - patch
 
+  # Keeps the digest-pinned base image in the Dockerfile current.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+
   # Keeps the SHA-pinned actions in .github/workflows current (Dependabot
   # updates both the SHA and the `# vX.Y.Z` comment).
   - package-ecosystem: github-actions
