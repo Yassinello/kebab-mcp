@@ -111,3 +111,30 @@ La v1 a été relue par un ingénieur indépendant contre le code. Corrections r
 - Découpage `notion-api.ts`, `kv-store.ts`, gros onglets UI ; pipeline `runGuardedWrite` Unipile ; `fetchWithRetry` commun — structurels, sans gain de sûreté immédiat.
 - `preview_id` serveur pour Unipile — change le contrat des agents existants ; garde-fous actuels (rate limit, dédup, audit, kill switch) jugés suffisants à court terme.
 - Isolation des outils browser dans une route dédiée.
+
+## 7. Bilan de réalisation
+
+| Exigence | Statut | Commit / note |
+|---|---|---|
+| SEC-01 à SEC-06 (backup, scope admin, renommage, en-tête tenant, Custom Tools, rotation) | ✅ | `fix(security): close MCP token privilege escalations` |
+| SEC-07 (first-run) | ✅ | Claim persisté (SETNX), cookie v2 à expiration serveur, `KEBAB_SETUP_TOKEN` |
+| SEC-08 (safeFetch, IPv6, point final) | ✅ sauf épinglage DNS | Épinglage reporté (cf. §6) |
+| SEC-09, SEC-10 | ✅ | Encodage chemin/corps, portée des cookies |
+| SEC-11 à SEC-15 | ✅ | Webhooks, proxy, browser, vault, faibles |
+| SEC-16 (Apify) | ✅ déjà conforme | `run_actor` était déjà `destructive: true` |
+| REL-01, REL-02, REL-04, REL-05 | ✅ | Caches par tenant, révision KV, migration, `after()` |
+| REL-03 (CAS sur les collections) | ⏸ reporté | Voir arbitrage ci-dessous |
+| REL-06 à REL-08, REL-10 | ✅ | Métriques durables, avertissement rate limit, compteur LinkedIn en KV, TTL outbox |
+| REL-09 | ✅ partiel | `SCAN` au lieu de `KEYS` + timeout Upstash ; cache du registre laissé tel quel |
+| CI-01 à CI-09 | ✅ | Gate d'audit (0 vulnérabilité prod), workflows durcis, Node 22/24, tests hermétiques, UI en CI, couverture `app/` + `proxy.ts`, ESLint typé, knip réel, Docker |
+| Q-01, Q-02, Q-03 | ✅ | Stores sans perte silencieuse, JSON Schema public, alias `KEBAB_*` |
+| DOC-01 | ✅ | `ARCHITECTURE.md`, `SECURITY.md`, `.env.example`, `content/docs/storage.md` |
+
+### Arbitrages pris pendant l'implémentation
+
+- **REL-03 (CAS)** reporté : les écritures concernées sont rares et réservées à l'admin (dashboard mono-opérateur). La lecture corrompue → `[]` → écrasement, le vrai risque de perte de données, est corrigée par Q-01. Un CAS Lua introduirait une rupture de format côté FilesystemKV pour un gain marginal.
+- **Cache du registre** : la reconstruction à chaque requête ne refait que le filtrage par variables d'env (sans E/S, manifests déjà mis en cache) ; le gain est négligeable.
+- **Timeout outil vs plan Vercel** : aucune variable ne permet de détecter le plafond Hobby (60 s). Le défaut de 80 s est conservé et documenté.
+- **`process.exit` sur variables destructives** : conservé, c'est un arrêt volontaire (fail-fast) documenté.
+- **URI de redirection OAuth basée sur `VERCEL_URL`** : inchangée ; la modifier casserait les URI déjà enregistrées chez Google par les utilisateurs.
+- **Régression évitée** : la règle « plus aucun cookie de claim dès que `MCP_AUTH_TOKEN` existe » bloquait le propriétaire légitime sur Docker (le welcome écrit lui-même cette variable). La règle finale ne garde que le claim qui a émis le jeton bootstrap.

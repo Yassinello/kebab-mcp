@@ -86,6 +86,24 @@ When self-hosting Kebab MCP, follow these guidelines:
 - Do not reuse your admin token as a user token.
 - Restrict admin endpoints (`/api/admin/*`) at the network level if possible (e.g., Vercel's IP allowlist).
 
+### Hardening defaults (2026-11 audit)
+
+These behaviours are on by default; each has an explicit opt-out documented in `.env.example`.
+
+| Area | Default | Opt-out |
+|---|---|---|
+| MCP backup tools | `mcp_backup_export` / `mcp_backup_import` are not exposed over MCP; even when enabled they never export or import `cred:*`, first-run material, API connection auth or `devices:*` | `KEBAB_MCP_BACKUP_TOOLS=1` (still redacted) |
+| Scoped tokens | `admin` is only reachable when listed in the token's scope; scopes apply whatever tenant header is sent; corrupt scope entries fail closed; rotated/revoked tokens are refused immediately (tombstone) | — |
+| Custom Tools | Every step re-checks the caller's connector scope, the per-tool toggles and the target tool's schema | — |
+| First run | Claims are persisted atomically in KV; claim cookies expire server-side and stop working once another claim owns the instance | `KEBAB_SETUP_TOKEN` adds a deploy-time secret |
+| Outbound fetches | Redirects re-validated hop by hop (SSRF guard incl. IPv6 embeddings); credentials dropped on origin change; templated paths/bodies encoded | `KEBAB_API_CONN_ALLOW_LOCAL=1` (dev only) |
+| Webhooks | Signature required | `KEBAB_WEBHOOK_ALLOW_UNSIGNED=1` |
+| Dashboard | In production `MCP_AUTH_TOKEN` is not an admin credential | `KEBAB_ADMIN_TOKEN_FALLBACK=1` |
+| Browser | `web_act` / `web_agent` refuse the logged-in `linkedin` context | `KEBAB_BROWSER_LINKEDIN_WRITE=1` |
+| Vault | No writes under `.github/` or `.git*`; GitHub search qualifiers stripped | — |
+
+Known accepted risks: DNS rebinding between the SSRF check and the socket connect (no IP pinning); tool output from external sources is returned to the LLM without an untrusted-content envelope. See `docs/audits/2026-11-cdc-remediation.md`.
+
 ### OAuth Credentials
 
 - Register your OAuth app with the minimal required scopes.

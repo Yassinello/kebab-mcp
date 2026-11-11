@@ -20,7 +20,7 @@ Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 
 
 ```
 src/core/                        — Framework: types, registry, config, auth, logging, events, tracing
-src/connectors/google/manifest.ts        — Google Workspace connector (18 tools)
+src/connectors/google/manifest.ts        — Google Workspace connector (21 tools)
 src/connectors/vault/manifest.ts          — Obsidian Vault connector (14 tools)
 src/connectors/browser/manifest.ts        — Browser Automation connector (7 tools)
 src/connectors/slack/manifest.ts          — Slack connector (6 tools)
@@ -39,7 +39,7 @@ src/connectors/custom-tools/manifest.ts   — Custom Tools — composed from exi
 src/connectors/admin/manifest.ts          — Admin connector (5 tools)
 src/connectors/*/tools/               — Individual tool handlers
 src/connectors/*/lib/                 — API wrappers and helpers
-app/api/[transport]/route.ts     — MCP endpoint (~30 lines, reads from registry)
+app/api/[transport]/route.ts     — MCP endpoint (builds the per-request MCP server from the registry; enforces token scope + tool toggles)
 app/api/health/route.ts          — Public liveness: { ok, version }
 app/api/admin/status/route.ts    — Private diagnostics (auth-gated)
 app/api/webhook/[name]/route.ts  — Inbound webhook receiver
@@ -69,11 +69,21 @@ which injects a distinct `Authorization: Bearer <token>` per agent.
 
 Semantics (opt-in, **fail-open** — see `src/core/token-scope.ts`):
 
-- **No allowlist** on a token (absent field / missing / corrupt entry) → full
-  access. Existing single-token deployments are unaffected; scoping is opt-in.
-- **Allowlist present** → strict: only those connectors, plus `core`
-  connectors (`admin`, `skills`) which are framework primitives always exposed.
-  An empty allowlist therefore means "core connectors only".
+- **No allowlist** on a token (absent field / missing entry) → full access.
+  Existing single-token deployments are unaffected; scoping is opt-in. The
+  KV-only bootstrap token never has an entry and keeps full access.
+- **Corrupt entry** (invalid JSON, `connectors` not a string array) → fail
+  closed (`skills` only).
+- **Revoked / rotated token** (`revokedAt` tombstone) → the transport refuses
+  the request with 401, even while the token still sits in a not-yet-redeployed
+  env.
+- **Allowlist present** → strict: only those connectors, plus `skills` (always
+  exposed). `admin` is core (always loaded, hidden from the Connectors tab) but
+  must be listed explicitly to be reachable by a scoped token. An empty
+  allowlist therefore means "skills only".
+- The scope is read from the **root namespace and the tenant namespace**; the
+  most restrictive answer wins, so an arbitrary tenant header cannot shed a
+  scope (2026-11 audit, SEC-04).
 - **No caller token** (loopback / dev without `MCP_AUTH_TOKEN`) → full access.
 
 Enforcement happens at **two points** in `app/api/[transport]/route.ts`, using
@@ -82,7 +92,9 @@ the caller's `tokenId` resolved by the auth step:
 1. **Listing** — out-of-scope connectors' tools/prompts/resources are never
    registered, so they don't appear in `tools/list`.
 2. **Invocation** — a tool whose connector is out of scope is rejected with an
-   `isError` envelope (defense-in-depth: `buildHandler` runs per request, so a
+   `isError` envelope. The scope is also published in an AsyncLocalStorage
+   context (`runWithToolAccess`) so the Custom Tools runner re-checks it — and
+   the per-tool toggles and target schema — on every composed step (defense-in-depth: `buildHandler` runs per request, so a
    `tools/call` re-resolves the scope — a client calling an unlisted tool, or
    one that fell out of scope after the operator tightened it, is still blocked).
 
@@ -277,7 +289,7 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 | `KEBAB_UNIPILE_RATELIMIT_FAIL_MODE` | No | `closed` (default — refuse on quota-store error) or `open` (allow) |
 | `MYMCP_WEBHOOKS` | Webhook connector | Comma-separated webhook names |
 | `INSTANCE_MODE` | No | Set to `showcase` to render the marketing landing on `/`. Otherwise `/` redirects to `/welcome` (no token) or `/config` (token present). |
-| `MYMCP_TOOL_TIMEOUT` | No | Tool timeout in ms (default: 30000) |
+| `KEBAB_TOOL_TIMEOUT` | No | Tool timeout in ms (default: 80000; keep it below the platform's function max duration). Legacy `MYMCP_TOOL_TIMEOUT` still read |
 | `MYMCP_ERROR_WEBHOOK_URL` | No | Webhook URL for error alerts |
 | `MYMCP_DURABLE_LOGS` | No | Persist logs to KV store (default: false) |
 | `MYMCP_RATE_LIMIT_ENABLED` | No | Enable per-token rate limiting (default: false) |
@@ -301,3 +313,20 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 - Admin token isolation enforced in production (see `KEBAB_ADMIN_TOKEN_FALLBACK`)
 
 For the responsible disclosure process, see [SECURITY.md](SECURITY.md).
+
+## Serverless state & invalidation (2026-11)
+
+- Process-wide caches of tenant-owned data (skills, API tools, custom tools,
+  transport prime cache) are keyed by tenant (`src/core/tenant-cache.ts`).
+- Writers bump a per-tenant revision counter in KV (`kebab:rev:config`,
+  `src/core/config-revision.ts`); readers compare it at most every 2s and drop
+  their caches — including hydrated credentials, so a credential deleted on one
+  lambda stops being served by the others.
+- Work that must outlive the response (durable log append, error webhook) runs
+  through `runAfterResponse()` (Next `after()`).
+- Outbound fetches driven by tool arguments or operator-defined connections go
+  through `safeFetch()` (`src/core/safe-fetch.ts`): manual redirects re-checked
+  by the SSRF guard, credentials dropped on origin change.
+- `UpstashKV.list()` iterates `SCAN` (never `KEYS`); every Upstash call has an
+  8s timeout.
+
