@@ -59,8 +59,3 @@ export async function bumpConfigRevision(): Promise<void> {
     console.warn(`[Kebab MCP] config revision bump failed: ${toMsg(err)}`);
   }
 }
-
-/** Test-only. */
-export function __resetConfigRevisionCacheForTests(): void {
-  readCache.clear();
-}

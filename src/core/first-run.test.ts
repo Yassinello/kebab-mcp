@@ -368,7 +368,7 @@ describe("SEC-07 — claim hardening", () => {
     expect(again.isClaimer).toBe(true);
   });
 
-  it("EXPLOIT: once MCP_AUTH_TOKEN is configured, a claim cookie no longer grants anything", async () => {
+  it("EXPLOIT: on an env-configured instance (no bootstrap), a claim cookie grants nothing", async () => {
     const c = await getOrCreateClaim(makeRequest());
     process.env.MCP_AUTH_TOKEN = "x".repeat(32);
     expect(await isClaimer(withCookie(c.cookieToSet ?? ""))).toBe(false);

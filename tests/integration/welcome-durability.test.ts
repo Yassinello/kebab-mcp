@@ -284,15 +284,14 @@ describe("TEST-01 Welcome durability — cross-lambda rehydrate", () => {
     const lambdaA = await importFirstRunFresh();
     lambdaA.__resetFirstRunForTests();
 
-    const claimId = "c".repeat(64);
-    // Access the internal encoder used by getOrCreateClaim. The
-    // encode path calls getSigningSecret() which writes the secret
-    // into sharedKv on first use.
-    const encodedCookie = await (
-      lambdaA.__internals as unknown as {
-        encodeCookie: (id: string) => Promise<string>;
-      }
-    ).encodeCookie(claimId);
+    // SEC-07 (2026-11 audit): go through the real claim path so the claim
+    // is persisted in the shared KV — a signed cookie alone (for a claim
+    // that was never minted) is no longer enough.
+    const minted = await lambdaA.getOrCreateClaim(
+      new Request("https://test.local/api/welcome/claim", { method: "POST" })
+    );
+    expect(minted.isClaimer).toBe(true);
+    const encodedCookie = minted.cookieToSet ?? "";
     expect(encodedCookie.includes(".")).toBe(true);
 
     // ── Lambda B boots. No in-memory claim, no active bootstrap, no
@@ -303,8 +302,9 @@ describe("TEST-01 Welcome durability — cross-lambda rehydrate", () => {
     clearColdLambdaTmp();
     vi.resetModules();
     clearBootstrapEnv();
+    // Fresh module instance = cold lambda; no reset call (it would also
+    // release the persisted claim in the shared KV).
     const lambdaB = await importFirstRunFresh();
-    lambdaB.__resetFirstRunForTests();
 
     const request = new Request("https://test.local/api/welcome/init", {
       method: "POST",

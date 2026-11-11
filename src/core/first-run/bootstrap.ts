@@ -248,8 +248,8 @@ async function readPersistedClaimId(): Promise<PersistedClaim> {
  *    visitor is the claimer, across lambdas;
  *  - once the instance is INITIALIZED, only the claim that minted the
  *    bootstrap token keeps working (the last welcome steps, e.g. starter
- *    skills), and only within the cookie TTL. Deployments whose token
- *    comes from MCP_AUTH_TOKEN never accept claim cookies again.
+ *    skills), and only within the cookie TTL. Deployments configured
+ *    purely through MCP_AUTH_TOKEN (no bootstrap record) have no claimer.
  *
  * Rotation: `MYMCP_RECOVERY_RESET=1` rotates the signing secret via
  * `rotateSigningSecret()`, so any pre-reset cookies no longer verify.
@@ -260,7 +260,11 @@ export async function isClaimer(request: Request): Promise<boolean> {
   if (claimId === null) return false;
 
   if (!isFirstRunMode()) {
-    if (process.env.MCP_AUTH_TOKEN) return false;
+    // Only the claim that minted the bootstrap token keeps working. On
+    // filesystem deploys welcome/init also writes MCP_AUTH_TOKEN to the
+    // env, so "token present" alone must not lock the legitimate claimer
+    // out of the last welcome steps. Deployments configured purely through
+    // MCP_AUTH_TOKEN have no bootstrap record → no claimer.
     const bootstrapClaimId =
       activeBootstrap?.claimId ?? (await loadBootstrapFromKv())?.claimId ?? null;
     return bootstrapClaimId !== null && bootstrapClaimId === claimId;
