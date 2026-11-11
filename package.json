@@ -74,7 +74,7 @@
     "mcp-handler": "^1.1.0",
     "next": "^16.2.4",
     "react": "^19.2.6",
-    "react-dom": "^19.2.5",
+    "react-dom": "^19.2.6",
     "recharts": "^2.15.4",
     "tailwindcss": "^4.2.4",
     "turndown": "^7.2.4",
@@ -126,6 +126,9 @@
     "ws": "^8.21.1",
     "vite": "^8.1.5",
     "@hono/node-server": "^2.0.11",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "jsdom": {
+      "undici": "^7.30.2"
+    }
   }
 }

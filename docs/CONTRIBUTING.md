@@ -371,7 +371,7 @@ npm test                # All tests
 
 ### What we do instead
 
-Nine **priority paths** carry a hard `≥ 65%` line-coverage floor, measured via `npx vitest run --coverage`:
+Nine **priority paths** carry a `≥ 65%` line-coverage **target**, measured via `npx vitest run --coverage`. It is reviewed by hand — it is **not** enforced by a per-path vitest threshold yet:
 
 | Path | Rationale |
 | --- | --- |
@@ -385,7 +385,7 @@ Nine **priority paths** carry a hard `≥ 65%` line-coverage floor, measured via
 | `src/core/rate-limit.ts` | Per-tenant bucket isolation (Phase 42) |
 | `src/core/credential-store.ts` | Encrypt/decrypt roundtrip, corrupt ciphertext |
 
-Everything else carries the global `≥ 50` ratchet (`vitest.config.ts`). Phase 51+ may ratchet upward once post-refactor churn settles.
+The CI-enforced gate is the global ratchet in `vitest.config.ts` (statements / branches / functions / lines, measured over `src/`, `app/` and `proxy.ts`).
 
 ### Behavioral tests, not grep-contracts
 
@@ -393,7 +393,7 @@ Proxy / middleware / welcome-flow tests must exercise real branches, not regex-m
 
 ### Ratchet discipline
 
-`vitest.config.ts` locks `lines: 50` (the current `floor(actual)` with safety margin). CI fails when a PR drops below. **No bumping down.** Adding net-new code that misses the floor means the PR adds tests before merging.
+`vitest.config.ts` locks all four global metrics at `floor(measured) - 1` (re-baselined in 2026-11 when `app/` and `proxy.ts` joined the coverage scope). CI fails when a PR drops below. **No bumping down.** Adding net-new code that misses the floor means the PR adds tests before merging.
 
 ### Connector lib policy
 

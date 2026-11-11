@@ -67,12 +67,14 @@ jobs:
       # Runs immediately after build so regressions surface early.
       - name: Bundle size check (size-limit)
         run: npm run size:check
-      # CI-02 (v0.11 Phase 43): coverage threshold is enforced by vitest
-      # (see `vitest.config.ts` thresholds.lines = 46). The prior
-      # "Verify coverage thresholds" echo step was a placeholder; removed
-      # now that the real threshold is enforced. Threshold is set to
-      # `floor(actual coverage)` as a ratchet — v0.12 target is 80%.
+      # Coverage thresholds (statements/branches/functions/lines) are
+      # enforced by vitest — see `coverage.thresholds` in vitest.config.ts
+      # (src/ + app/ + proxy.ts, floor(measured) - 1 ratchet).
       - run: npm run test:coverage
+      # CI-06 (2026-11 audit): jsdom render/component suite (tests/ui,
+      # tests/components) — separate forked-pool config, previously never
+      # run in CI.
+      - run: npm run test:ui
       - run: npm run test:registry
       - run: npm run test:contract
       # Integration test — starts a real Next.js server and hits health + MCP endpoints.

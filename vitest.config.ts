@@ -68,25 +68,32 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
-      include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/**/test-utils.ts"],
+      include: ["src/**/*.ts", "app/**/*.{ts,tsx}", "proxy.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/test-utils.ts",
+        "app/**/*.test.{ts,tsx}",
+        "app/**/__tests__/**",
+      ],
+      // CI-06 (2026-11 audit): coverage now spans the API routes and pages
+      // under app/ plus proxy.ts, not just src/. Client components under
+      // app/ are mostly exercised by the jsdom suite (`npm run test:ui`,
+      // separate config, not merged into this report), so they count as
+      // uncovered here — that is why the global numbers dropped vs. the
+      // src-only baseline.
       thresholds: {
-        // Phase 50 / COV-02: ratchet raised to 50. Measured global
-        // lines=55.01% post-Phase-50 (after vault/apify/slack/google
-        // connector-lib backfill + proxy behavioral + BRAND/*
-        // tests = +60 new tests). floor(actual) = 55 is the aggressive
-        // ratchet; 50 is the conservative floor that still catches
-        // net-new-code regressions without fighting connector churn.
-        //
-        // Priority-path coverage (welcome / auth / first-run /
-        // signing-secret / kv-store / pipeline / rate-limit /
-        // credential-store / transport) is enforced by the
-        // risk-weighted approach documented in CONTRIBUTING.md —
-        // see also the per-path assertion in the coverage verify step.
-        //
-        // Ratchet discipline (Phase 43 precedent): every PR keeps the
-        // line ratio >= 50 or adds tests. Phase 51+ may ratchet upward.
-        lines: 50,
+        // Measured 2026-11-11 on this include set (unit run only):
+        //   statements 49.64 · branches 39.77 · functions 43.61 · lines 50.78
+        // Thresholds = floor(measured) - 1: a global ratchet that catches
+        // net regressions, nothing more. There is NO per-path threshold for
+        // the critical paths (auth / first-run / kv-store / pipeline …) —
+        // add `thresholds["src/core/auth.ts"]`-style entries if you need one.
+        // Ratchet discipline: raise these when coverage goes up; never lower
+        // them to make a PR pass.
+        statements: 48,
+        branches: 38,
+        functions: 42,
+        lines: 49,
       },
     },
   },
