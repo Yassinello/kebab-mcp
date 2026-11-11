@@ -61,22 +61,59 @@ const JSON_SCALAR_RE = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/;
  * longer inject keys.
  */
 function interpolateJsonBody(template: string, args: Record<string, unknown>): string {
-  return template.replace(
-    /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g,
-    (match, name: string, offset: number) => {
-      const has = Object.prototype.hasOwnProperty.call(args, name);
-      const v = has ? args[name] : undefined;
-      const str =
-        v === null || v === undefined ? "" : typeof v === "string" ? v : JSON.stringify(v);
-      const inString = template[offset - 1] === '"' && template[offset + match.length] === '"';
-      if (inString) return JSON.stringify(str).slice(1, -1);
-      if (v === undefined || v === null) return "null";
-      if (typeof v === "number" || typeof v === "boolean") return String(v);
-      if (typeof v === "string" && JSON_SCALAR_RE.test(v.trim())) return v.trim();
-      if (typeof v === "object") return JSON.stringify(v);
-      return JSON.stringify(str);
+  const PLACEHOLDER = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/y;
+  let out = "";
+  let inString = false;
+  let i = 0;
+  while (i < template.length) {
+    PLACEHOLDER.lastIndex = i;
+    const m = PLACEHOLDER.exec(template);
+    if (m) {
+      out += renderJsonPlaceholder(args, m[1] as string, inString);
+      i += m[0].length;
+      continue;
     }
-  );
+    const ch = template[i] as string;
+    // Track whether we are inside a JSON string literal (quotes + escapes),
+    // so "Hello {{name}}!" is recognised as a string context.
+    if (inString && ch === "\\") {
+      out += ch + (template[i + 1] ?? "");
+      i += 2;
+      continue;
+    }
+    if (ch === '"') inString = !inString;
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+function renderJsonPlaceholder(
+  args: Record<string, unknown>,
+  name: string,
+  inString: boolean
+): string {
+  const has = Object.prototype.hasOwnProperty.call(args, name);
+  const v = has ? args[name] : undefined;
+  const str = v === null || v === undefined ? "" : typeof v === "string" ? v : JSON.stringify(v);
+  // Inside a string literal: JSON-escape (quotes, backslashes, control chars).
+  if (inString) return JSON.stringify(str).slice(1, -1);
+  // Bare position: exactly ONE JSON value, never raw text.
+  if (v === undefined || v === null) return "null";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "object") return JSON.stringify(v);
+  const trimmed = str.trim();
+  if (JSON_SCALAR_RE.test(trimmed)) return trimmed;
+  // A string that is itself a JSON object/array (pre-audit behaviour) is
+  // re-serialized — still a single value, so it cannot add sibling keys.
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return JSON.stringify(JSON.parse(trimmed));
+    } catch {
+      // not JSON — quote it below
+    }
+  }
+  return JSON.stringify(str);
 }
 
 function looksLikeJson(template: string): boolean {

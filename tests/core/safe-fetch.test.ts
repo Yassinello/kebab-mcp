@@ -132,6 +132,22 @@ describe("API connector interpolation — SEC-09", () => {
     expect(JSON.parse(body)).toEqual({ n: 42, flag: true, s: '1, "role": "admin"' });
   });
 
+  it("REVIEW: placeholders inside longer strings stay valid JSON", () => {
+    const body = interpolateJsonBody('{"text": "Hello {{name}}! \\"q\\" {{x}}", "n": {{n}}}', {
+      name: 'Bob "the" builder',
+      x: "a\\b",
+      n: 3,
+    });
+    expect(JSON.parse(body)).toEqual({ text: 'Hello Bob "the" builder! "q" a\\b', n: 3 });
+  });
+
+  it("a bare placeholder given a JSON object string keeps it as one JSON value", () => {
+    const body = interpolateJsonBody('{"payload": {{obj}}}', { obj: '{"a":1}' });
+    expect(JSON.parse(body)).toEqual({ payload: { a: 1 } });
+    const evil = interpolateJsonBody('{"payload": {{obj}}}', { obj: '{"a":1}, "role": "admin"' });
+    expect(JSON.parse(evil)).toEqual({ payload: '{"a":1}, "role": "admin"' });
+  });
+
   it("missing values become null in bare positions and empty in strings", () => {
     const body = interpolateJsonBody('{"a": {{a}}, "b": "{{b}}"}', {});
     expect(JSON.parse(body)).toEqual({ a: null, b: "" });

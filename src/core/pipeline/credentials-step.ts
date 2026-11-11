@@ -23,9 +23,17 @@ import { runWithCredentials } from "../request-context";
 
 export const hydrateCredentialsStep: Step = async (ctx, next) => {
   // REL-02: re-hydrate when another lambda changed credentials.
+  const previous = getHydratedCredentialSnapshot();
   invalidateCredentialsIfRevisionChanged(await getConfigRevision());
   await hydrateCredentialsFromKV();
-  const snapshot = { ...getHydratedCredentialSnapshot() };
+  let current = getHydratedCredentialSnapshot();
+  // If the re-hydration failed (KV blip) or a concurrent invalidation left
+  // an empty snapshot, serve the last good one rather than no credentials;
+  // the next request retries.
+  if (Object.keys(current).length === 0 && Object.keys(previous).length > 0) {
+    current = previous;
+  }
+  const snapshot = { ...current };
   ctx.credentials = snapshot;
   // Wrap `next()` so downstream steps + the handler resolve credentials via
   // the request-scoped override map. Note: `runWithCredentials` preserves

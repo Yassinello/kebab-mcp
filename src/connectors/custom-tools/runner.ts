@@ -659,33 +659,24 @@ function validateStepArgs(
   const objectSchema = z.object(schema as z.ZodRawShape).loose();
   const first = objectSchema.safeParse(args);
   if (first.success) return first.data as Record<string, unknown>;
-  const coerced: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(args)) {
-    if (typeof v === "string") {
-      try {
-        coerced[k] = JSON.parse(v);
-        continue;
-      } catch {
-        // not JSON — keep the string
-      }
-    }
-    coerced[k] = v;
-  }
-  // Only keep a coerced value when the field's schema accepts it; strings
-  // that the schema wants as strings stay strings.
+  // Retry per field: (1) an empty string rendered from a missing optional
+  // variable counts as "not provided"; (2) JSON-decode templated strings,
+  // recursively inside arrays/objects ("5" → 5, ["1","2"] → [1,2]). A
+  // candidate is kept only when the raw value fails and the candidate
+  // passes that field's schema.
   const shape = schema as z.ZodRawShape;
   const merged: Record<string, unknown> = { ...args };
-  for (const [k, v] of Object.entries(coerced)) {
-    const raw = shape[k];
-    if (!raw) continue;
-    const field = z.object({ v: raw as z.ZodType });
-    if (
-      v !== args[k] &&
-      !field.safeParse({ v: args[k] }).success &&
-      field.safeParse({ v }).success
-    ) {
-      merged[k] = v;
+  for (const [k, raw] of Object.entries(args)) {
+    const fieldSchema = shape[k];
+    if (!fieldSchema) continue;
+    const field = z.object({ v: fieldSchema as z.ZodType });
+    if (field.safeParse({ v: raw }).success) continue;
+    if (raw === "" && field.safeParse({}).success) {
+      delete merged[k];
+      continue;
     }
+    const candidate = deepJsonDecode(raw);
+    if (field.safeParse({ v: candidate }).success) merged[k] = candidate;
   }
   const second = objectSchema.safeParse(merged);
   if (second.success) return second.data as Record<string, unknown>;
@@ -694,6 +685,23 @@ function validateStepArgs(
     .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
     .join("; ");
   throw new Error(`invalid arguments for tool "${toolName}": ${issues}`);
+}
+
+function deepJsonDecode(v: unknown): unknown {
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v;
+    }
+  }
+  if (Array.isArray(v)) return v.map(deepJsonDecode);
+  if (v && typeof v === "object") {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, deepJsonDecode(x)])
+    );
+  }
+  return v;
 }
 
 function toolResultToText(result: ToolResult): string {

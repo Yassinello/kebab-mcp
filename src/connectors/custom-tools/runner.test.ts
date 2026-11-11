@@ -814,4 +814,34 @@ describe("runner — SEC-05 caller scope, toggles and arg validation", () => {
     expect(bad.ok).toBe(false);
     expect(bad.error).toMatch(/invalid arguments for tool "vault_list"/);
   });
+
+  it("REVIEW: an empty optional templated arg is treated as not provided; nested numbers coerced", async () => {
+    const { z } = await import("zod");
+    let received: unknown;
+    mockTools.push({
+      name: "vault_tree",
+      description: "tree",
+      destructive: false,
+      schema: {
+        depth: z.number().optional(),
+        mode: z.enum(["a", "b"]).optional(),
+        ids: z.array(z.number()).optional(),
+      },
+      handler: async (args) => {
+        received = args;
+        return { content: [{ type: "text", text: "ok" }] };
+      },
+    });
+    const res = await runCustomTool(
+      oneStep("vault_tree", { depth: "{{n}}", mode: "{{m}}", ids: ["{{n}}", "7"] }),
+      { n: "" }
+    );
+    expect(res.ok).toBe(false); // ids: [""] is not a number array → still refused
+    const ok = await runCustomTool(
+      oneStep("vault_tree", { depth: "{{n}}", mode: "{{m}}", ids: ["3", "7"] }),
+      {}
+    );
+    expect(ok.ok).toBe(true);
+    expect(received).toEqual({ ids: [3, 7] });
+  });
 });

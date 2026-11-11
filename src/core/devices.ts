@@ -273,21 +273,24 @@ export async function listDevices(): Promise<DeviceRow[]> {
     let createdAt = "unknown";
     let connectors: string[] | null = null;
     let skillTags: string[] | null = null;
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
-        if (typeof parsed.label === "string" && parsed.label.length > 0) label = parsed.label;
-        if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
-          createdAt = parsed.createdAt;
-        }
-        if (Array.isArray(parsed.connectors)) {
-          connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
-        }
-        if (Array.isArray(parsed.skillTags)) {
-          skillTags = parsed.skillTags.filter((c): c is string => typeof c === "string");
-        }
-      } catch {
-        // Corrupt entry — fall back to defaults (full access).
+    // Display what resolution enforces: a corrupt entry is fail-closed and a
+    // tombstoned token (rotated/revoked, still in a not-yet-redeployed env)
+    // is refused — never show either as "All connectors".
+    const state = parseDeviceEntry(raw);
+    if (state.kind === "corrupt") {
+      label = "corrupt entry";
+      connectors = [];
+      skillTags = [];
+    } else if (state.kind === "ok") {
+      const e = state.entry;
+      if (typeof e.label === "string" && e.label.length > 0) label = e.label;
+      if (typeof e.createdAt === "string" && e.createdAt.length > 0) createdAt = e.createdAt;
+      connectors = e.connectors ?? null;
+      skillTags = e.skillTags ?? null;
+      if (isRevoked(e)) {
+        label = `${label} (revoked — pending redeploy)`;
+        connectors = [];
+        skillTags = [];
       }
     }
     const lastSeenAt = await getLastSeenAt(t);
