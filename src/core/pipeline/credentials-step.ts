@@ -13,10 +13,17 @@
  */
 
 import type { Step } from "./types";
-import { hydrateCredentialsFromKV, getHydratedCredentialSnapshot } from "../credential-store";
+import {
+  hydrateCredentialsFromKV,
+  getHydratedCredentialSnapshot,
+  invalidateCredentialsIfRevisionChanged,
+} from "../credential-store";
+import { getConfigRevision } from "../config-revision";
 import { runWithCredentials } from "../request-context";
 
 export const hydrateCredentialsStep: Step = async (ctx, next) => {
+  // REL-02: re-hydrate when another lambda changed credentials.
+  invalidateCredentialsIfRevisionChanged(await getConfigRevision());
   await hydrateCredentialsFromKV();
   const snapshot = { ...getHydratedCredentialSnapshot() };
   ctx.credentials = snapshot;

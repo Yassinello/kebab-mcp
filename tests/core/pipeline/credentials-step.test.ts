@@ -13,6 +13,7 @@ const snapshotMock = vi.fn(() => ({}) as Record<string, string>);
 
 vi.mock("@/core/credential-store", () => ({
   hydrateCredentialsFromKV: () => hydrateMock(),
+  invalidateCredentialsIfRevisionChanged: vi.fn(),
   getHydratedCredentialSnapshot: () => snapshotMock(),
 }));
 

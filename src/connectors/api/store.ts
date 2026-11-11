@@ -1,4 +1,7 @@
 import { randomBytes } from "crypto";
+import { TenantCache } from "@/core/tenant-cache";
+import { bumpConfigRevision } from "@/core/config-revision";
+import { toMsg } from "@/core/error-utils";
 import { z } from "zod";
 import { getContextKVStore } from "@/core/request-context";
 
@@ -165,46 +168,68 @@ async function readConnectionsRaw(): Promise<ApiConnection[]> {
   const kv = getContextKVStore();
   const raw = await kv.get(CONN_KEY);
   if (!raw) return [];
+  // Q-01 (2026-11 audit): never read a corrupt blob as [] — the next write
+  // would persist [] over the whole collection.
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const out: ApiConnection[] = [];
-    for (const row of parsed) {
-      const res = apiConnectionSchema.safeParse(row);
-      if (res.success) out.push(res.data);
-    }
-    return out;
+    parsed = JSON.parse(raw);
   } catch {
-    return [];
+    throw new Error(`API connections store is not valid JSON — refusing to continue`);
   }
+  if (!Array.isArray(parsed)) throw new Error(`API connections store is not an array`);
+  const out: ApiConnection[] = [];
+  let dropped = 0;
+  for (const row of parsed) {
+    const res = apiConnectionSchema.safeParse(row);
+    if (res.success) out.push(res.data);
+    else dropped++;
+  }
+  if (dropped > 0) {
+    console.warn(
+      `[Kebab MCP] API connections: ${dropped} stored row(s) failed validation and were skipped`
+    );
+  }
+  return out;
 }
 
 async function writeConnectionsRaw(rows: ApiConnection[]): Promise<void> {
   const kv = getContextKVStore();
   await kv.set(CONN_KEY, JSON.stringify(rows));
+  await bumpConfigRevision(); // REL-02
 }
 
 async function readToolsRaw(): Promise<ApiTool[]> {
   const kv = getContextKVStore();
   const raw = await kv.get(TOOL_KEY);
   if (!raw) return [];
+  // Q-01 (2026-11 audit): never read a corrupt blob as [] — the next write
+  // would persist [] over the whole collection.
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const out: ApiTool[] = [];
-    for (const row of parsed) {
-      const res = apiToolSchema.safeParse(row);
-      if (res.success) out.push(res.data);
-    }
-    return out;
+    parsed = JSON.parse(raw);
   } catch {
-    return [];
+    throw new Error(`API tools store is not valid JSON — refusing to continue`);
   }
+  if (!Array.isArray(parsed)) throw new Error(`API tools store is not an array`);
+  const out: ApiTool[] = [];
+  let dropped = 0;
+  for (const row of parsed) {
+    const res = apiToolSchema.safeParse(row);
+    if (res.success) out.push(res.data);
+    else dropped++;
+  }
+  if (dropped > 0) {
+    console.warn(
+      `[Kebab MCP] API tools: ${dropped} stored row(s) failed validation and were skipped`
+    );
+  }
+  return out;
 }
 
 async function writeToolsRaw(rows: ApiTool[]): Promise<void> {
   const kv = getContextKVStore();
   await kv.set(TOOL_KEY, JSON.stringify(rows));
+  await bumpConfigRevision(); // REL-02
 }
 
 function genId(prefix: string): string {
@@ -306,24 +331,27 @@ export function listApiToolsSync(): ApiTool[] {
   // does an async registry resolve via resolveRegistryAsync() anyway —
   // we rely on primeApiToolsCache() below. The synchronous getter returns
   // a cached snapshot populated at registry resolve time.
-  return _syncCache;
+  return _syncCache.get() ?? [];
 }
 
 // Populated by primeApiToolsCache(), called at registry resolve time.
-let _syncCache: ApiTool[] = [];
+// REL-01: keyed by tenant.
+const _syncCache = new TenantCache<ApiTool[]>();
 
 /** Refresh the sync cache used by listApiToolsSync. Idempotent. */
 export async function primeApiToolsCache(): Promise<void> {
   try {
-    _syncCache = await readToolsRaw();
-  } catch {
-    _syncCache = [];
+    _syncCache.set(await readToolsRaw());
+  } catch (err) {
+    // Q-01: keep the last good snapshot on transient failures.
+    console.error(`[Kebab MCP] API tools cache refresh failed: ${toMsg(err)}`);
+    if (_syncCache.get() === undefined) _syncCache.set([]);
   }
 }
 
 /** Reset the sync cache. Exposed for tests — prevents cross-test bleed. */
 export function _resetApiToolsCacheForTests(): void {
-  _syncCache = [];
+  _syncCache.clear();
 }
 
 export function createApiTool(input: ApiToolCreateInput): Promise<ApiTool> {
@@ -355,7 +383,7 @@ export function createApiTool(input: ApiToolCreateInput): Promise<ApiTool> {
     };
     all.push(tool);
     await writeToolsRaw(all);
-    _syncCache = all;
+    _syncCache.set(all);
     return tool;
   });
 }
@@ -386,7 +414,7 @@ export function updateApiTool(id: string, patch: ApiToolUpdateInput): Promise<Ap
     };
     all[idx] = next;
     await writeToolsRaw(all);
-    _syncCache = all;
+    _syncCache.set(all);
     return next;
   });
 }
@@ -397,7 +425,7 @@ export function deleteApiTool(id: string): Promise<boolean> {
     const next = all.filter((t) => t.id !== id);
     if (next.length === all.length) return false;
     await writeToolsRaw(next);
-    _syncCache = next;
+    _syncCache.set(next);
     return true;
   });
 }
@@ -410,7 +438,7 @@ export function deleteApiToolsForConnection(connectionId: string): Promise<numbe
     const removed = all.length - next.length;
     if (removed > 0) {
       await writeToolsRaw(next);
-      _syncCache = next;
+      _syncCache.set(next);
     }
     return removed;
   });

@@ -51,7 +51,10 @@ export async function runV010TenantPrefixMigration(): Promise<void> {
   try {
     const kv = getKVStore();
     const already = await kv.get(MIGRATION_KEY);
-    if (already === "completed") return;
+    // REL-04 (2026-11 audit): the marker is written as JSON
+    // ({status:"completed",...}) — comparing it to the bare string never
+    // matched, so every cold start re-scanned cred:* and skills:*.
+    if (isCompletedMarker(already)) return;
 
     // Count how many legacy un-prefixed keys exist for logging
     // purposes. The null-tenant code path (getContextKVStore with no
@@ -88,6 +91,16 @@ export async function runV010TenantPrefixMigration(): Promise<void> {
   } catch (err) {
     // Never fail boot — migration is idempotent best-effort.
     logger.info(`v0.10-tenant-prefix: skipped (${toMsg(err)})`);
+  }
+}
+
+function isCompletedMarker(raw: string | null): boolean {
+  if (!raw) return false;
+  if (raw === "completed") return true;
+  try {
+    return (JSON.parse(raw) as { status?: unknown }).status === "completed";
+  } catch {
+    return false;
   }
 }
 

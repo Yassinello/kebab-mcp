@@ -34,6 +34,7 @@ vi.mock("@/core/pipeline", async () => {
 // Same mock graph as config-update-credential-hydration.test.ts:
 vi.mock("@/core/credential-store", () => ({
   hydrateCredentialsFromKV: vi.fn().mockResolvedValue(undefined),
+  invalidateCredentialsIfRevisionChanged: vi.fn(),
   getHydratedCredentialSnapshot: vi.fn(() => ({})),
 }));
 vi.mock("@/core/with-bootstrap-rehydrate", () => ({

@@ -5,6 +5,8 @@ import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
+import { getCurrentTenantId } from "@/core/request-context";
+import { getConfigRevision } from "@/core/config-revision";
 import {
   resolveTokenAccess,
   isConnectorAllowed,
@@ -49,7 +51,7 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
       );
       // PERF-A-03: env edit may have changed the connector list and any
       // tool-store contents; force the next transport request to re-prime.
-      lastPrimeAt = 0;
+      primeEpoch++;
     });
   }
 }
@@ -62,42 +64,47 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
 // (env.changed, skill/tool CRUD) reset the cache to keep dashboard
 // edits visible on the next request.
 const PRIME_CACHE_TTL_MS = 30_000;
-let lastPrimeAt = 0;
-let lastPrimePromise: Promise<void> | null = null;
+// REL-01 / REL-02 (2026-11 audit): one entry per tenant, invalidated as soon
+// as the shared config revision moves (a skill / API tool / custom tool was
+// edited on ANY lambda). The previous single global slot let tenant B
+// skip its own refresh for 30s after tenant A primed.
+const primeCache = new Map<string, { at: number; rev: string; promise: Promise<void> }>();
+let primeEpoch = 0;
 
 async function primeDynamicCaches(
   packs: { manifest: { refresh?: (() => Promise<void>) | undefined } }[]
 ): Promise<void> {
   const now = Date.now();
-  if (lastPrimePromise && now - lastPrimeAt < PRIME_CACHE_TTL_MS) {
-    return lastPrimePromise;
+  const tenantKey = getCurrentTenantId() ?? "__root__";
+  const rev = `${primeEpoch}:${await getConfigRevision()}`;
+  const cached = primeCache.get(tenantKey);
+  if (cached && cached.rev === rev && now - cached.at < PRIME_CACHE_TTL_MS) {
+    return cached.promise;
   }
-  lastPrimeAt = now;
   // The per-connector refresh() is wrapped in .catch() so individual failures
   // never reject the Promise.all. Outer .catch() is defense-in-depth: if
   // the whole pipeline somehow throws (e.g. a connector with a bad manifest
   // shape), invalidate the cache so the next request retries instead of
   // forever holding a rejected promise.
-  lastPrimePromise = Promise.all(
+  const promise = Promise.all(
     packs.map((p) =>
       p.manifest.refresh?.().catch(() => {
         // refresh failure should not block transport startup; the connector
-        // will simply expose whatever the cached sync view sees (possibly []).
+        // will simply expose whatever the cached sync view sees.
       })
     )
   )
     .then(() => undefined)
     .catch(() => {
-      lastPrimeAt = 0;
-      lastPrimePromise = null;
+      primeCache.delete(tenantKey);
     });
-  return lastPrimePromise;
+  primeCache.set(tenantKey, { at: now, rev, promise });
+  return promise;
 }
 
 /** Test-only: reset the prime cache. */
 export function __resetPrimeCacheForTests(): void {
-  lastPrimeAt = 0;
-  lastPrimePromise = null;
+  primeCache.clear();
 }
 
 /**

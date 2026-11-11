@@ -19,6 +19,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 // Same mock graph as config-update-credential-hydration.test.ts:
 vi.mock("@/core/credential-store", () => ({
   hydrateCredentialsFromKV: vi.fn().mockResolvedValue(undefined),
+  invalidateCredentialsIfRevisionChanged: vi.fn(),
   getHydratedCredentialSnapshot: vi.fn(() => ({ KEBAB_UPDATE_PAT: "ghp_test" })),
 }));
 vi.mock("@/core/with-bootstrap-rehydrate", () => ({

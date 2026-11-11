@@ -1,3 +1,4 @@
+import { runAfterResponse } from "./after-response";
 import { getLogStore, type LogEntry } from "./log-store";
 import { McpToolError } from "./errors";
 import type { ToolResult } from "./types";
@@ -181,9 +182,8 @@ export function logToolCall(log: ToolLog) {
         message: `${log.tool} (${log.durationMs}ms)`,
         meta: { ...log },
       };
-      store
-        .append(entry)
-        .catch((err: Error) => console.error("[Kebab MCP] Durable log write failed:", err.message));
+      // REL-05: keep the lambda alive until the write lands.
+      runAfterResponse(() => store.append(entry), "Durable log write");
     } catch (err) {
       console.error("[Kebab MCP] Durable log store unavailable:", toMsg(err));
     }
@@ -193,21 +193,24 @@ export function logToolCall(log: ToolLog) {
   if (log.status === "error") {
     const webhookUrl = getConfig("KEBAB_ERROR_WEBHOOK_URL");
     if (webhookUrl) {
-      fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: `[Kebab MCP] Tool error: ${log.tool} — ${log.error} (${log.durationMs}ms)`,
-          tool: log.tool,
-          error: log.error,
-          errorCode: log.errorCode,
-          retryable: log.retryable,
-          durationMs: log.durationMs,
-          timestamp: log.timestamp,
-        }),
-      }).catch(() => {
-        /* best effort — don't crash on webhook failure */
-      });
+      // REL-05: best effort, but not dropped by the lambda freeze.
+      runAfterResponse(
+        () =>
+          fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: `[Kebab MCP] Tool error: ${log.tool} — ${log.error} (${log.durationMs}ms)`,
+              tool: log.tool,
+              error: log.error,
+              errorCode: log.errorCode,
+              retryable: log.retryable,
+              durationMs: log.durationMs,
+              timestamp: log.timestamp,
+            }),
+          }),
+        "Error webhook"
+      );
     }
   }
 }

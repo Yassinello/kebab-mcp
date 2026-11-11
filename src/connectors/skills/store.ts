@@ -1,4 +1,6 @@
 import { promises as fs, readFileSync, existsSync } from "fs";
+import { TenantCache } from "@/core/tenant-cache";
+import { bumpConfigRevision } from "@/core/config-revision";
 import path from "path";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -179,7 +181,9 @@ async function writeRaw(skills: Skill[]): Promise<void> {
   // Keep the sync cache in lock-step so the MCP transport picks up
   // newly-created/edited skills on the next tools iteration in this
   // lambda — without waiting for the next `primeSkillsCache()` roundtrip.
-  _skillsCache = skills;
+  _skillsCache.set(skills);
+  // REL-02: other lambdas re-prime.
+  await bumpConfigRevision();
 }
 
 // ── Write mutex ─────────────────────────────────────────────────────────
@@ -214,7 +218,8 @@ export async function listSkills(): Promise<Skill[]> {
 // clients on cold lambdas until /api/admin/status (which calls `diagnose()`)
 // happened to fire first. The ConnectorManifest.refresh hook in the
 // transport primes this cache before iterating `tools`.
-let _skillsCache: Skill[] | null = null;
+// REL-01: keyed by tenant.
+const _skillsCache = new TenantCache<Skill[]>();
 
 /**
  * Populate the sync cache from the authoritative async store. Called by
@@ -223,15 +228,16 @@ let _skillsCache: Skill[] | null = null;
  */
 export async function primeSkillsCache(): Promise<void> {
   try {
-    _skillsCache = await readRaw();
-  } catch {
-    _skillsCache = _skillsCache ?? [];
+    _skillsCache.set(await readRaw());
+  } catch (err) {
+    console.error(`[Kebab MCP] skills cache refresh failed: ${toMsg(err)}`);
+    if (_skillsCache.get() === undefined) _skillsCache.set([]);
   }
 }
 
 /** Reset the sync cache. Exposed for tests — prevents cross-test bleed. */
 export function _resetSkillsCacheForTests(): void {
-  _skillsCache = null;
+  _skillsCache.clear();
 }
 
 /** Synchronous snapshot — used by the pack manifest at registry scan time.
@@ -243,7 +249,8 @@ export function _resetSkillsCacheForTests(): void {
  *   3. Else (Upstash without a warm cache), return [] — callers that need
  *      a guaranteed fresh read must use the async `listSkills()` API. */
 export function listSkillsSync(): Skill[] {
-  if (_skillsCache !== null) return _skillsCache;
+  const cached = _skillsCache.get();
+  if (cached !== undefined) return cached;
   const legacy = getLegacySkillsPath();
   const filePath =
     legacy ?? (hasUpstashCreds() ? null : path.resolve(process.cwd(), "data", "kv.json"));

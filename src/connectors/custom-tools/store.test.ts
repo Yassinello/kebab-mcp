@@ -314,3 +314,56 @@ describe("custom-tools store CRUD", () => {
     expect(after).toBeFalsy();
   });
 });
+
+// ── REL-01 / Q-01 (2026-11 audit) ────────────────────────────────────
+describe("custom-tools store — tenant isolation and corruption safety", () => {
+  const baseTool = {
+    id: "todo_add",
+    description: "Add a task",
+    destructive: true,
+    inputs: [],
+    steps: [{ kind: "transform" as const, template: "- [ ] x", saveAs: "line" }],
+  };
+  let tmp: string;
+  const prevKv = process.env["MYMCP_KV_PATH"];
+
+  beforeEach(async () => {
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "kebab-custom-tools-rel-"));
+    process.env["MYMCP_KV_PATH"] = path.join(tmp, "kv.json");
+    resetKVStoreCache();
+    _resetCustomToolsCacheForTests();
+  });
+
+  afterEach(async () => {
+    if (prevKv === undefined) delete process.env["MYMCP_KV_PATH"];
+    else process.env["MYMCP_KV_PATH"] = prevKv;
+    resetKVStoreCache();
+    _resetCustomToolsCacheForTests();
+    await fs.rm(tmp, { recursive: true, force: true });
+  });
+
+  it("REL-01: the sync snapshot of tenant A is never served to tenant B", async () => {
+    const { runWithTenant } = await import("@/core/request-context");
+    await runWithTenant("alpha", async () => {
+      await createCustomTool({ ...baseTool, id: "alpha_tool" });
+      await primeCustomToolsCache();
+      expect(listCustomToolsSync().map((t) => t.id)).toEqual(["alpha_tool"]);
+    });
+    await runWithTenant("beta", async () => {
+      expect(listCustomToolsSync()).toEqual([]);
+    });
+  });
+
+  it("Q-01: a corrupt blob is an error, never an empty list (no silent overwrite)", async () => {
+    await getContextKVStore().set("custom-tools:all", "{not json");
+    await expect(listCustomTools()).rejects.toThrow(/not valid JSON/);
+  });
+
+  it("Q-01: a transient refresh failure keeps the last good snapshot", async () => {
+    await createCustomTool({ ...baseTool, id: "keep_me" });
+    await primeCustomToolsCache();
+    await getContextKVStore().set("custom-tools:all", "{broken");
+    await primeCustomToolsCache();
+    expect(listCustomToolsSync().map((t) => t.id)).toEqual(["keep_me"]);
+  });
+});
