@@ -61,9 +61,9 @@
     "@composio/core": "^0.13.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mozilla/readability": "^0.6.0",
-    "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
-    "@opentelemetry/sdk-node": "^0.215.0",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.1",
+    "@opentelemetry/sdk-node": "^0.301.1",
     "@tailwindcss/postcss": "^4.3.2",
     "arctic": "^3.7.0",
     "js-yaml": "^4.3.0",
@@ -123,7 +123,6 @@
     "ws": "^8.21.1",
     "vite": "^8.1.5",
     "@hono/node-server": "^2.0.11",
-    "sharp": "^0.35.3",
-    "@opentelemetry/propagator-jaeger": "^2.10.0"
+    "sharp": "^0.35.3"
   }
 }

@@ -9,70 +9,87 @@
 //   WARN on transitive-dep moderate (usually can't be fixed without upstream action)
 //
 // Allowlist entries must cite a GHSA/CVE or equivalent advisory plus a reason
-// and a review-by date. The gate prints allowlisted items on every run so they
-// stay visible. Allowlisting a high/critical is a deliberate risk-acceptance —
-// keep the reason specific (why the vulnerable code path is unreachable) and the
-// reviewBy short.
+// and a review-by date (YYYY-MM-DD). The gate prints allowlisted items on
+// every run so they stay visible. Allowlisting a high/critical is a
+// deliberate risk-acceptance — keep the reason specific (why the vulnerable
+// code path is unreachable) and the reviewBy short.
+//
+// CI-01 — reviewBy is ENFORCED:
+//   FAIL when an entry's reviewBy is in the past (expired risk-acceptance)
+//   FAIL when an entry's reviewBy is more than MAX_REVIEW_HORIZON_DAYS ahead
+//   FAIL when an entry's reason is missing / too short
+//   WARN when an entry no longer matches any reported advisory (stale — delete it)
+//
+// History: the 2026-11 audit found 7 expired entries (Stagehand/langsmith,
+// the OpenTelemetry cluster, next/postcss). The OTel cluster was bumped to
+// sdk-node / exporter-trace-otlp-http 0.301.x and the other advisories no
+// longer reproduce against the lockfile, so the allowlist is now empty.
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
-const ALLOWLIST = [
-  {
-    pkg: "@browserbasehq/stagehand",
-    reason:
-      "HIGH inherited via @langchain/core → langsmith (GHSA-3644-q5cj-c5c7 untrusted prompt-manifest deserialization, plus 3 moderate langsmith advisories: SSRF GHSA-v34v-rq6j-cj6p, prototype pollution GHSA-fw9q-39r9-c252, output-redaction bypass GHSA-rr7j-v2q5-chgv). Mitigation: the only fix npm offers is a MAJOR downgrade to Stagehand 2.5.8, which would break the browser connector (web_browse/act/extract/observe/agent + linkedin_feed). Stagehand 3.2.x pulls langsmith transitively but Kebab never calls LangSmith tracing or prompt-pull — the vulnerable code paths (LangSmith client SDK) are not exercised. Allowlist until Stagehand upstream ships a clean @langchain/core peer.",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "@langchain/core",
-    reason:
-      "HIGH — transitive parent of langsmith (see @browserbasehq/stagehand entry). Same advisory chain (GHSA-3644-q5cj-c5c7). Pulled in only via Stagehand 3.2.x; Kebab does not import @langchain/core directly and never invokes LangSmith. Fixable only by the breaking Stagehand 2.5.8 downgrade. Tracked with the Stagehand entry.",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "langsmith",
-    reason:
-      "HIGH GHSA-3644-q5cj-c5c7 (public prompt pull deserializes untrusted manifests) + moderates. Transitive via @langchain/core via Stagehand. Kebab never calls the LangSmith SDK (no tracing client, no prompt pull), so the vulnerable surface is unreachable. Fix = breaking Stagehand 2.5.8 downgrade. Tracked with the Stagehand entry.",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "@opentelemetry/sdk-node",
-    reason:
-      "HIGH inherited via its bundled @opentelemetry/exporter-prometheus (GHSA-q7rr-3cgh-j5r3 — Prometheus exporter process crash on malformed HTTP request). Kebab uses the OTLP-HTTP trace exporter (@opentelemetry/exporter-trace-otlp-http / OTLPTraceExporter in src/core/tracing.ts) and NEVER instantiates the Prometheus exporter — verified by grep: zero references to exporter-prometheus / PrometheusExporter in src or app. The vulnerable HTTP listener is never started. Only fix is a MAJOR bump to sdk-node 0.218.0 which churns the whole OTel peer set; deferred. Tracing is also opt-in (off unless OTEL_SERVICE_NAME is set).",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "@opentelemetry/exporter-prometheus",
-    reason:
-      "HIGH GHSA-q7rr-3cgh-j5r3 — the vulnerable package itself, pulled in transitively by @opentelemetry/sdk-node. Kebab never imports or starts the Prometheus exporter (OTLP-HTTP only). Unreachable. Tracked with the sdk-node entry.",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "@opentelemetry/exporter-trace-otlp-http",
-    reason:
-      "MODERATE inherited via its bundled OTel deps (@opentelemetry/core, otlp-exporter-base, otlp-transformer, resources, sdk-trace-base — all <2.x advisories). This IS the OTLP-HTTP trace exporter Kebab uses (src/core/tracing.ts), but the advisory is in the transitive @opentelemetry/* peer set, not the exporter logic. Only fix is the breaking major bump to 0.219.0, which churns the entire OTel peer set in lockstep with @opentelemetry/sdk-node (already allowlisted, same 2026-08-20 review). Tracing is opt-in — disabled unless OTEL_SERVICE_NAME is set — so even the exercised path is off by default. Bump the whole OTel cluster together at review time.",
-    reviewBy: "2026-08-20",
-  },
-  {
-    pkg: "next",
-    reason:
-      "Moderate advisory inherited via postcss <8.5.10 (XSS via unescaped </style> in CSS Stringify). Next.js 16.x ships postcss 8.5.6 internally; the vulnerable path requires server-rendered CSS-in-JS with attacker-controlled style strings, which Kebab MCP does not expose (all styles are static Tailwind/PostCSS at build time, never user-controlled). Allowlist until Next.js bumps its bundled postcss; npm audit fix --force would downgrade Next.js to 9.3.3 which would break the entire app.",
-    reviewBy: "2026-07-31",
-  },
-];
+const MAX_REVIEW_HORIZON_DAYS = 90;
+
+/** @type {Array<{ pkg: string; reason: string; reviewBy: string }>} */
+const ALLOWLIST = [];
+
+/**
+ * Resolve how to invoke npm WITHOUT a shell. On Windows `npm` is a .cmd
+ * shim that execFileSync cannot spawn without `shell: true`, so we run
+ * npm's JS entry point with the current node binary instead.
+ */
+function npmCommand() {
+  const execPath = process.env.npm_execpath;
+  if (execPath && /\.c?js$/.test(execPath) && existsSync(execPath)) {
+    return { file: process.execPath, prefix: [execPath] };
+  }
+  if (process.platform === "win32") {
+    const cli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+    if (existsSync(cli)) return { file: process.execPath, prefix: [cli] };
+  }
+  return { file: "npm", prefix: [] };
+}
 
 function runAudit() {
+  const { file, prefix } = npmCommand();
   try {
     const out = execFileSync(
-      "npm",
-      ["audit", "--audit-level=moderate", "--omit=dev", "--json"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: true },
+      file,
+      [...prefix, "audit", "--audit-level=moderate", "--omit=dev", "--json"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 },
     );
     return JSON.parse(out);
   } catch (err) {
     if (err.stdout) return JSON.parse(err.stdout);
     throw err;
   }
+}
+
+/** Validate allowlist entries against today (UTC). Returns failure messages. */
+function checkAllowlistEntries(now = new Date()) {
+  const today = now.toISOString().slice(0, 10);
+  const horizon = new Date(now.getTime() + MAX_REVIEW_HORIZON_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const problems = [];
+  for (const entry of ALLOWLIST) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.reviewBy ?? "")) {
+      problems.push(`${entry.pkg}: reviewBy "${entry.reviewBy}" is not a YYYY-MM-DD date`);
+    } else if (entry.reviewBy < today) {
+      problems.push(
+        `${entry.pkg}: reviewBy ${entry.reviewBy} has EXPIRED (today is ${today}) — re-review the risk or remove the entry`,
+      );
+    } else if (entry.reviewBy > horizon) {
+      problems.push(
+        `${entry.pkg}: reviewBy ${entry.reviewBy} is more than ${MAX_REVIEW_HORIZON_DAYS} days ahead (max ${horizon})`,
+      );
+    }
+    if (!entry.reason || entry.reason.trim().length < 40) {
+      problems.push(`${entry.pkg}: reason is missing or too short to be a real justification`);
+    }
+  }
+  return problems;
 }
 
 const report = runAudit();
@@ -124,6 +141,21 @@ if (failures.length > 0) {
     "\nFix path: bump the dependency, file a GHSA if non-public, or add to ALLOWLIST with reason + reviewBy.",
   );
   exitCode = 1;
+}
+
+const entryProblems = checkAllowlistEntries();
+if (entryProblems.length > 0) {
+  console.error("❌ audit gate FAIL — allowlist entries:");
+  for (const p of entryProblems) console.error(`   ${p}`);
+  exitCode = 1;
+}
+
+const stale = ALLOWLIST.filter((a) => !Object.prototype.hasOwnProperty.call(vulns, a.pkg));
+if (stale.length > 0) {
+  console.warn(
+    `⚠️  audit gate WARN — ${stale.length} stale allowlist entries (no matching advisory, delete them):`,
+  );
+  for (const a of stale) console.warn(`   ${a.pkg}`);
 }
 
 if (warnings.length > 0) {

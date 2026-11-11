@@ -4,12 +4,14 @@ const config: KnipConfig = {
   entry: ["app/**/*.{ts,tsx}", "src/**/*.ts"],
   project: ["app/**/*.{ts,tsx}", "src/**/*.ts"],
   ignoreDependencies: [
-    // @opentelemetry/sdk-node provides sdk-trace-node, sdk-trace-base, resources
-    // as transitive deps. tracing.ts imports from sub-packages via dynamic require.
+    // @opentelemetry/sdk-node provides sdk-trace, resources, core and
+    // context-async-hooks as transitive deps (OTel JS v3). tracing.ts imports
+    // these sub-packages via dynamic require.
     "@opentelemetry/sdk-node",
-    "@opentelemetry/sdk-trace-node",
-    "@opentelemetry/sdk-trace-base",
+    "@opentelemetry/sdk-trace",
     "@opentelemetry/resources",
+    "@opentelemetry/core",
+    "@opentelemetry/context-async-hooks",
     // postcss is a transitive dep of @tailwindcss/postcss, loaded via config
     "postcss",
     // Tailwind v4 loaded via CSS @import, not a JS import
