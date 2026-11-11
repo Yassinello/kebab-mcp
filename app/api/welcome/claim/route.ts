@@ -14,6 +14,34 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
+import { safeCompare } from "@/core/auth";
+import { readClaimCookie } from "@/core/first-run/claim";
+
+/**
+ * SEC-07 (2026-11 audit): optional deploy-time setup secret. When
+ * KEBAB_SETUP_TOKEN is set, a NEW claim can only be minted by a visitor who
+ * presents it (header `x-kebab-setup-token`, or `?setup=` on the welcome
+ * URL, which the welcome UI forwards). This closes the "first visitor of a
+ * public deploy URL wins" window. Requests that already carry a valid claim
+ * cookie are unaffected.
+ */
+function setupTokenRejection(request: Request): Response | null {
+  const expected = getConfig("KEBAB_SETUP_TOKEN");
+  if (!expected) return null;
+  const provided =
+    request.headers.get("x-kebab-setup-token") ??
+    new URL(request.url).searchParams.get("setup") ??
+    "";
+  if (provided && safeCompare(provided, expected)) return null;
+  return NextResponse.json(
+    {
+      status: "setup-token-required",
+      error:
+        "This instance requires its setup token. Open /welcome?setup=<KEBAB_SETUP_TOKEN> to claim it.",
+    },
+    { status: 401 }
+  );
+}
 
 /**
  * POST /api/welcome/claim
@@ -38,6 +66,10 @@ async function welcomeClaimHandler(ctx: PipelineContext): Promise<Response> {
 
   let result;
   try {
+    if ((await readClaimCookie(request)) === null) {
+      const rejection = setupTokenRejection(request);
+      if (rejection) return rejection;
+    }
     result = await getOrCreateClaim(request);
   } catch (err) {
     // SEC-05: refuse to mint claims on deploys without a durable secret.

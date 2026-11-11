@@ -114,6 +114,10 @@ const ALLOWLIST = new Set<string>([
   // at ingress — the dispatcher resolves the tenant AFTER the dedup row is
   // written, via the account-tenant reverse index above.
   "app/api/unipile/webhook/route.ts",
+  // SEC-04 (2026-11 audit): token-scope reads the ROOT namespace in addition
+  // to the tenant one, so a global token's device scope (stored at root)
+  // still applies when the caller sends an arbitrary tenant header.
+  "src/core/token-scope.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",
 ]);

@@ -187,7 +187,8 @@ describe("devices-two-device integration (DEV-05)", () => {
     expect(tokens).toContain(tokenA2);
     expect(tokens).toContain(tokenB);
     expect(tokens).not.toContain(TOKEN_A);
-    expect(kvStore.has(`devices:${tidA}`)).toBe(false);
+    // SEC-06: old tokenId keeps a revocation tombstone
+    expect(JSON.parse(kvStore.get(`devices:${tidA}`)!).revokedAt).toBeTruthy();
     expect(kvStore.has(`devices:${tidA2}`)).toBe(true);
     expect(kvStore.has(`devices:${tidB}`)).toBe(true);
 
@@ -201,7 +202,7 @@ describe("devices-two-device integration (DEV-05)", () => {
 
     tokens = parseTokens(envVars.MCP_AUTH_TOKEN);
     expect(tokens).toEqual([tokenB]);
-    expect(kvStore.has(`devices:${tidA2}`)).toBe(false);
+    expect(JSON.parse(kvStore.get(`devices:${tidA2}`)!).revokedAt).toBeTruthy();
     expect(kvStore.has(`devices:${tidB}`)).toBe(true);
 
     // Step 6: Replay invite — nonce already consumed.

@@ -152,42 +152,46 @@ describe("TEST-03 batch B.1 — kv-durability regressions", () => {
   });
 
   // ── BUG-15 — HMAC cookie trusted across cold lambdas (748161d) ──────
-  it("regression: BUG-15 isClaimer trusts HMAC signature without in-memory Map hit", async () => {
-    // Direct test: craft an HMAC-signed cookie matching the current
-    // signing secret, call isClaimer with NO in-memory claim Map hit.
-    // Pre-748161d: return false (bug). Post-fix: return true.
-    const { isClaimer, __resetFirstRunForTests, __internals } = await import("@/core/first-run");
-    __resetFirstRunForTests();
+  it("regression: BUG-15 isClaimer trusts a minted claim on a cold lambda (no in-memory Map hit)", async () => {
+    // A claim minted on lambda A must be honoured on a cold lambda B,
+    // which has neither the in-memory `claims` Map nor `activeBootstrap`.
+    // SEC-07 (2026-11 audit): the proof is the HMAC-signed cookie PLUS the
+    // claim persisted in KV — a signed cookie for a claim that was never
+    // minted (or was released) is no longer enough.
+    const first = await import("@/core/first-run");
+    await first.__resetFirstRunForTestsAsync();
+    const minted = await first.getOrCreateClaim(
+      new Request("https://test.local/api/welcome/claim", { method: "POST" })
+    );
+    expect(minted.isClaimer).toBe(true);
+    const cookie = `mymcp_firstrun_claim=${encodeURIComponent(minted.cookieToSet ?? "")}`;
 
-    // Build a valid cookie using the real encoder (reads the signing
-    // secret from /tmp via the ephemeral opt-in we set in beforeEach).
-    const claimId = "f".repeat(64);
-    const cookieValue = await (
-      __internals as unknown as {
-        encodeCookie: (id: string) => Promise<string>;
-      }
-    ).encodeCookie(claimId);
-    expect(cookieValue).toContain(".");
-
-    // After __resetFirstRunForTests the in-memory `claims` Map is
-    // empty AND `activeBootstrap` is null. A valid HMAC signature
-    // must still flip isClaimer to true.
-    __resetFirstRunForTests();
-
+    // Cold lambda: fresh module instances, same durable KV.
+    const { vi } = await import("vitest");
+    vi.resetModules();
+    const cold = await import("@/core/first-run");
     const req = new Request("https://test.local/api/welcome/init", {
       method: "POST",
-      headers: {
-        cookie: `mymcp_firstrun_claim=${encodeURIComponent(cookieValue)}`,
-      },
+      headers: { cookie },
     });
+    expect(await cold.isClaimer(req)).toBe(true);
 
-    expect(await isClaimer(req)).toBe(true);
+    // A correctly signed cookie for a claim that was never minted is refused.
+    const fabricated = await (
+      cold.__internals as unknown as { encodeCookie: (id: string) => Promise<string> }
+    ).encodeCookie("f".repeat(64));
+    const fabricatedReq = new Request("https://test.local/api/welcome/init", {
+      method: "POST",
+      headers: { cookie: `mymcp_firstrun_claim=${encodeURIComponent(fabricated)}` },
+    });
+    expect(await cold.isClaimer(fabricatedReq)).toBe(false);
 
     // Negative — an unsigned or garbage cookie is still rejected.
     const forgedReq = new Request("https://test.local/api/welcome/init", {
       method: "POST",
       headers: { cookie: `mymcp_firstrun_claim=garbage.badsig` },
     });
-    expect(await isClaimer(forgedReq)).toBe(false);
+    expect(await cold.isClaimer(forgedReq)).toBe(false);
+    await cold.__resetFirstRunForTestsAsync();
   });
 });

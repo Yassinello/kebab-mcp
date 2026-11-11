@@ -56,7 +56,7 @@ function intersect(a: string[], b: string[]): string[] {
  * Resolve the access level for a caller token.
  *
  * SEC-04 (2026-11 audit): a global `MCP_AUTH_TOKEN` is accepted for any
- * `x-mymcp-tenant` value (root-operator design). Its device entry lives in
+ * tenant-header value (root-operator design). Its device entry lives in
  * the ROOT namespace, so reading only the tenant namespace let a scoped
  * token drop its scope by sending an arbitrary tenant header. We now read
  * both the root and the current tenant namespace and keep the most
