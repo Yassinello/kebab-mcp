@@ -33,6 +33,7 @@ vi.mock("unipile-node-sdk", () => ({
 // isWritesDisabled so tests can drive probe()'s `writes_disabled` surface.
 vi.mock("./lib/kill-switch", () => ({
   isWritesDisabled: killSwitchMock,
+  isWhatsappWritesDisabled: () => false,
 }));
 
 import { unipileConnector } from "./manifest";
@@ -48,14 +49,14 @@ beforeEach(() => {
   killSwitchMock.mockReturnValue(false);
 });
 
-describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads — 10 tools wired)", () => {
+describe("unipileConnector manifest (Phase 68/69 + inbox reads + spec v2 — 23 tools wired)", () => {
   it("exposes id 'unipile' and exact requiredEnvVars per D-19", () => {
     expect(unipileConnector.id).toBe("unipile");
     expect(unipileConnector.label).toBe("Unipile (LinkedIn + WhatsApp)");
     expect(unipileConnector.requiredEnvVars).toEqual(["UNIPILE_DSN", "UNIPILE_TOKEN"]);
   });
 
-  it("exposes exactly 10 tools (6 LinkedIn write/read + 2 LinkedIn inbox + 2 WhatsApp inbox)", () => {
+  it("exposes exactly 23 tools (10 legacy + 13 spec-v2)", () => {
     const names = unipileConnector.tools.map((t) => t.name);
     expect(names).toEqual([
       "linkedin_send_connection",
@@ -68,6 +69,19 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
       "linkedin_read_messages",
       "whatsapp_list_inbox",
       "whatsapp_read_messages",
+      "whatsapp_find_chat",
+      "whatsapp_search_messages",
+      "whatsapp_send_message",
+      "linkedin_search_messages",
+      "linkedin_reply",
+      "linkedin_get_profile",
+      "linkedin_list_connections",
+      "linkedin_search",
+      "linkedin_list_posts",
+      "linkedin_react_post",
+      "linkedin_comment_post",
+      "linkedin_create_post",
+      "linkedin_cancel_invitation",
     ]);
   });
 
@@ -82,6 +96,19 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
     ["linkedin_read_messages", false],
     ["whatsapp_list_inbox", false],
     ["whatsapp_read_messages", false],
+    ["whatsapp_find_chat", false],
+    ["whatsapp_search_messages", false],
+    ["whatsapp_send_message", true],
+    ["linkedin_search_messages", false],
+    ["linkedin_reply", true],
+    ["linkedin_get_profile", false],
+    ["linkedin_list_connections", false],
+    ["linkedin_search", false],
+    ["linkedin_list_posts", false],
+    ["linkedin_react_post", true],
+    ["linkedin_comment_post", true],
+    ["linkedin_create_post", true],
+    ["linkedin_cancel_invitation", true],
   ])("%s destructive flag = %s", (name, destructive) => {
     const t = unipileConnector.tools.find((tool) => tool.name === name);
     expect(t).toBeDefined();
@@ -113,12 +140,12 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
       UNIPILE_TOKEN: "tok",
     });
     expect(r.ok).toBe(true);
-    expect(r.message).toMatch(/1 LinkedIn account/);
+    expect(r.message).toMatch(/1 LinkedIn, 1 WhatsApp account/);
     // SDK constructed with https://<dsn> (no trailing /api/v1 — SDK appends it)
     expect(ctorCalls).toEqual([["https://api.unipile.com", "tok"]]);
   });
 
-  it("testConnection returns ok:false when 0 LinkedIn accounts present (D-19)", async () => {
+  it("spec v2: testConnection returns ok:true for a WhatsApp-only token", async () => {
     getAllMock.mockResolvedValueOnce({
       items: [{ type: "WHATSAPP" }],
     });
@@ -126,8 +153,20 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
       UNIPILE_DSN: "api.unipile.com",
       UNIPILE_TOKEN: "tok",
     });
+    expect(r.ok).toBe(true);
+    expect(r.message).toMatch(/0 LinkedIn, 1 WhatsApp account/);
+  });
+
+  it("testConnection returns ok:false when neither LinkedIn nor WhatsApp is connected", async () => {
+    getAllMock.mockResolvedValueOnce({
+      items: [{ type: "GOOGLE" }],
+    });
+    const r = await unipileConnector.testConnection!({
+      UNIPILE_DSN: "api.unipile.com",
+      UNIPILE_TOKEN: "tok",
+    });
     expect(r.ok).toBe(false);
-    expect(r.message).toMatch(/No LinkedIn account/);
+    expect(r.message).toMatch(/No LinkedIn or WhatsApp account/);
   });
 
   it("testConnection returns ok:false on SDK throw (T-68-01-04 — never silent)", async () => {
@@ -182,10 +221,10 @@ describe("unipileConnector manifest (Phase 68/69 + LinkedIn/WhatsApp inbox reads
       expect(r.message).toMatch(/⚠ writes disabled/);
     });
 
-    it("kill switch set + 0 LinkedIn accounts → still surfaces writes_disabled: true on the ok:false branch", async () => {
+    it("kill switch set + 0 messaging accounts → still surfaces writes_disabled: true on the ok:false branch", async () => {
       killSwitchMock.mockReturnValue(true);
       getAllMock.mockResolvedValueOnce({
-        items: [{ type: "WHATSAPP" }],
+        items: [{ type: "GOOGLE" }],
       });
       const r = (await unipileConnector.testConnection!({
         UNIPILE_DSN: "api.unipile.com",

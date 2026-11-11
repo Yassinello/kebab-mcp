@@ -245,14 +245,16 @@ async function fetchInmailBalance(accountId: string): Promise<InmailBalance> {
       client as unknown as {
         request: {
           send: (i: {
-            path: string;
-            method: string;
+            path: string[];
+            method: "GET";
             parameters: Record<string, string>;
           }) => Promise<unknown>;
         };
       }
     ).request.send({
-      path: "/linkedin/inmail_balance",
+      // SDK RequestInput.path is string[] (joined as "/linkedin/inmail_balance").
+      // A plain string here made `path.map` throw → balance pre-flight always failed.
+      path: ["linkedin", "inmail_balance"],
       method: "GET",
       parameters: { account_id: accountId },
     })

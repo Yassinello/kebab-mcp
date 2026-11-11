@@ -267,13 +267,13 @@ export const PACKS: ConnectorDef[] = [
     id: "unipile",
     name: "Unipile (LinkedIn + WhatsApp)",
     description:
-      "Send LinkedIn connection requests + DMs + read LinkedIn/WhatsApp inboxes via Unipile",
-    toolCount: 10,
+      "LinkedIn prospection & networking + personal WhatsApp (find, read, search, send) via Unipile",
+    toolCount: 23,
     icon: "U",
     setupGuide: [
       "Sign in at dashboard.unipile.com",
       "Settings → API: copy your DSN (e.g. api41.unipile.com:17153) and API Token",
-      "Accounts → Add account: connect a LinkedIn account",
+      "Accounts → Add account: connect LinkedIn and/or WhatsApp (scan the QR code from WhatsApp → Linked devices)",
       "Paste both values below and click Test",
     ],
     vars: [

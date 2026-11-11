@@ -1,9 +1,9 @@
 # Unipile Connector
 
-LinkedIn write actions (connect, DM, InMail, engage) + LinkedIn & WhatsApp inbox reading via the [Unipile](https://www.unipile.com) hosted-browser API. WhatsApp support is read-only (inbox listing + message reading); there is no WhatsApp send tool.
+LinkedIn networking & prospection (invites, DMs, InMail, replies, profiles, search, posts) and personal WhatsApp (find chats, read, search, send to people or groups) via the [Unipile](https://www.unipile.com) hosted API.
 
-**Status:** Shipped v0.17 (2026-05-18).
-**Decision:** Chosen over Browserbase/LinkedAPI per [ADR 0001](../adr/0001-unipile-as-linkedin-whatsapp-write-provider.md).
+**Status:** Shipped v0.17 (2026-05-18); spec v2 (WhatsApp send/search + LinkedIn networking + provider interface) in v0.22.
+**Decision:** Chosen over Browserbase/LinkedAPI per [ADR 0001](../adr/0001-unipile-as-linkedin-whatsapp-write-provider.md); kept behind a provider interface per [ADR 0002](../adr/0002-messaging-provider-interface.md) ([spec](../specs/unipile-messaging-v2.md)).
 **Cost:** 49 €/mo (palier 1, up to 10 accounts, all channels).
 
 ## Quick Start (60 seconds)
@@ -26,9 +26,9 @@ npx tsx --env-file=.env scripts/smoke-unipile.ts \
 
 If `get_relationship_status` returns `{degree: 1, connection_status: "FIRST_DEGREE"}` you're live.
 
-## Tools (10)
+## Tools (23)
 
-Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**. Read tools have no quota or kill-switch gate.
+Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**. Read tools have no quota or kill-switch gate. Spec-v2 write tools (marked ✋) additionally return a **preview** and do nothing unless called with `confirm: true`.
 
 | Tool | Type | Description |
 |---|---|---|
@@ -42,6 +42,32 @@ Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-
 | `linkedin_read_messages` | READ | Reads messages from a LinkedIn chat by `chat_id`. No quota. |
 | `whatsapp_list_inbox` | READ | Lists WhatsApp conversations with `conversation_type` (single/group/channel) + last-message preview. Cursor pagination. No quota. |
 | `whatsapp_read_messages` | READ | Reads messages from a WhatsApp chat by `chat_id`. No quota. |
+| `whatsapp_find_chat` | READ | Find a group / 1:1 chat (and contacts) by name fragment or phone number → `chat_id`. Accent/case-insensitive. |
+| `whatsapp_search_messages` | READ | Keyword search over the last `since_days` (default 30) in one chat or the whole account. Scans ≤1000 messages (Unipile has no server-side search). |
+| `whatsapp_send_message` ✋ | WRITE | Send to a `chat_id` (person or group) or a `phone` (international format, starts/reuses the 1:1 chat). Attachments ≤5 × 15 MB. Cap 100/day. |
+| `linkedin_search_messages` | READ | Same keyword search on the LinkedIn inbox. |
+| `linkedin_reply` ✋ | WRITE | Reply into any existing LinkedIn conversation by `chat_id` (DM, InMail reply, group). Shares the 50/day DM cap. |
+| `linkedin_get_profile` | READ | Person (headline, location, degree, summary, positions…) or company page (industry, size, website…). |
+| `linkedin_list_connections` | READ | 1st-degree connections, optional `query` filter on name + headline. |
+| `linkedin_search` | READ | People / companies search by keywords, or replay a LinkedIn / Sales Navigator search URL. |
+| `linkedin_list_posts` | READ | Recent posts of a person or company (post_id, text, counters, url). |
+| `linkedin_react_post` ✋ | WRITE | Like / celebrate / support / love / insightful / funny. Cap 40/day shared with comments. |
+| `linkedin_comment_post` ✋ | WRITE | Comment (≤1250 chars). |
+| `linkedin_create_post` ✋ | WRITE | Publish a public text post. Cap 3/day. |
+| `linkedin_cancel_invitation` ✋ | WRITE | Withdraw a pending invitation (`invitation_id` from `linkedin_list_pending`). Cap 30/day. |
+
+Spec-v2 write envelope:
+
+```json
+{ "executed": false, "confirm_required": true,
+  "preview": { "account_id": "…", "channel": "whatsapp",
+               "to": { "chat_id": "…", "name": "Borderland 2027", "conversation_type": "group" },
+               "text": "…" },
+  "provider_ok": false, "verified": false, "dedup_hit": false,
+  "next_step": "Show this preview to the user…" }
+```
+
+After `confirm: true`: `{executed: true, provider_ok, verified, audit_id, chat_id, message_id, …}`. Identical `(tool, target, text)` within 10 minutes returns `dedup_hit: true` without re-sending. Spec-v2 error codes: `error_chat_not_found`, `error_wrong_channel`, `error_chat_account_mismatch`, `error_read_only_chat`, `error_invalid_phone`, `error_no_account`, plus the shared ones below.
 
 Tool envelope (write tools):
 
@@ -101,13 +127,22 @@ This is what makes a **shared token** (e.g. a team Brevo token wired to 5 Linked
 | `KEBAB_UNIPILE_LINKEDIN_WEEKLY_CONNECT_CAP` | 100 | linkedin_send_connection (weekly) |
 | `KEBAB_UNIPILE_LINKEDIN_DAILY_DM_CAP` | 50 | linkedin_send_message |
 | `KEBAB_UNIPILE_LINKEDIN_DAILY_INMAIL_CAP` | 15 | linkedin_send_inmail |
+| `KEBAB_UNIPILE_WHATSAPP_DAILY_SEND_CAP` | 100 | whatsapp_send_message |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_ENGAGEMENT_CAP` | 40 | linkedin_react_post + linkedin_comment_post |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_POST_CAP` | 3 | linkedin_create_post |
+| `KEBAB_UNIPILE_LINKEDIN_DAILY_WITHDRAW_CAP` | 30 | linkedin_cancel_invitation |
+
+`linkedin_reply` counts against `KEBAB_UNIPILE_LINKEDIN_DAILY_DM_CAP`.
 
 ### Kill switches
 
 | Var | Description |
 |---|---|
-| `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED=true` | Halts all 4 LinkedIn write tools globally. READS still allowed. Tools refuse with `error_writes_disabled`. |
+| `KEBAB_UNIPILE_WRITES_DISABLED=true` | Halts ALL Unipile write tools (LinkedIn + WhatsApp). READS still allowed. |
+| `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED=true` | Halts all LinkedIn write tools. READS still allowed. Tools refuse with `error_writes_disabled`. |
 | `LINKEDIN_TOOLS_DISABLED=true` | Legacy alias (same effect). |
+| `KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED=true` | Halts `whatsapp_send_message`. |
+| `KEBAB_MESSAGING_PROVIDER` | Provider adapter for the spec-v2 tools (default `unipile`; see ADR 0002 to add one). |
 | `KEBAB_UNIPILE_RATELIMIT_FAIL_MODE=open` | Optional. Flips rate-limiter from fail-closed (default, safer) to fail-open. Only use if you're OK with silent over-sending when KV is down. |
 
 ## Rate Limits
@@ -119,6 +154,10 @@ This is what makes a **shared token** (e.g. a team Brevo token wired to 5 Linked
 - Counters are per-account, per-tool — independent across LinkedIn accounts in the same tenant
 - **Fail-closed by default**: if KV is unreachable, writes are blocked. Override with `KEBAB_UNIPILE_RATELIMIT_FAIL_MODE=open` (NOT recommended).
 - When blocked, the tool returns `{blocked_by_rate_limit: true, daily_used, daily_limit, retry_after: "<ISO>"}` (never throws).
+
+### WhatsApp webhook events
+
+`message_received` events from WhatsApp accounts are acknowledged and dropped before any KV work: a personal WhatsApp with busy groups would otherwise write one idempotency key + one audit row per inbound message. Reply correlation (`last_replied_at`) is LinkedIn-only.
 
 ## Halt Flag (auto-suspend on account issues)
 

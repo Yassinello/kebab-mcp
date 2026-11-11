@@ -237,7 +237,7 @@ describe("happy path: credit bracketing (D-48 — balance before + after)", () =
     await handleLinkedinSendInmail(BASE_ARGS);
 
     expect(requestSendMock).toHaveBeenCalledWith({
-      path: "/linkedin/inmail_balance",
+      path: ["linkedin", "inmail_balance"],
       method: "GET",
       parameters: { account_id: "acct_li_1" },
     });

@@ -65,7 +65,15 @@ import { getLogger } from "@/core/logging";
 
 const log = getLogger("CONNECTOR:unipile");
 
-export type UnipileRateLimitedTool = "send_connection" | "send_message" | "send_inmail";
+export type UnipileRateLimitedTool =
+  | "send_connection"
+  | "send_message"
+  | "send_inmail"
+  // Spec v2 (ADR 0002)
+  | "whatsapp_send"
+  | "linkedin_post_engagement"
+  | "linkedin_post"
+  | "linkedin_cancel_invitation";
 
 export interface RateLimitDecision {
   blocked: boolean;
@@ -99,6 +107,27 @@ export function getCaps(tool: UnipileRateLimitedTool): { daily: number; weekly: 
     case "send_inmail":
       return {
         daily: getConfigInt("KEBAB_UNIPILE_LINKEDIN_DAILY_INMAIL_CAP", 15),
+        weekly: null,
+      };
+    // Spec v2 (ADR 0002) — conservative defaults, env-overridable.
+    case "whatsapp_send":
+      return {
+        daily: getConfigInt("KEBAB_UNIPILE_WHATSAPP_DAILY_SEND_CAP", 100),
+        weekly: null,
+      };
+    case "linkedin_post_engagement":
+      return {
+        daily: getConfigInt("KEBAB_UNIPILE_LINKEDIN_DAILY_ENGAGEMENT_CAP", 40),
+        weekly: null,
+      };
+    case "linkedin_post":
+      return {
+        daily: getConfigInt("KEBAB_UNIPILE_LINKEDIN_DAILY_POST_CAP", 3),
+        weekly: null,
+      };
+    case "linkedin_cancel_invitation":
+      return {
+        daily: getConfigInt("KEBAB_UNIPILE_LINKEDIN_DAILY_WITHDRAW_CAP", 30),
         weekly: null,
       };
   }

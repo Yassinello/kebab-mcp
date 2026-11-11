@@ -48,7 +48,11 @@ import { getConfig } from "@/core/config-facade";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
 import { verifyUnipileWebhook } from "@/connectors/unipile/webhook/verifier";
-import { dispatchEventAsync, getIdempotencyKey } from "@/connectors/unipile/webhook/dispatcher";
+import {
+  dispatchEventAsync,
+  getIdempotencyKey,
+  isIgnoredEvent,
+} from "@/connectors/unipile/webhook/dispatcher";
 // Side-effect import: Plan 02 will mutate `_handlers` from this barrel.
 // Plan 01 ships a `handlers/index.ts` that does `export {};` so the
 // import resolves cleanly without registering anything (dispatcher's
@@ -103,6 +107,12 @@ async function unipileWebhookHandler(ctx: PipelineContext): Promise<Response> {
     return Response.json({ error: "invalid_payload" }, { status: 400 });
   }
   const payload = parsed as Record<string, unknown>;
+
+  // Spec v2 R8: outbound echoes + WhatsApp inbound messages are acknowledged
+  // without any KV work (no idempotency key, no dispatch).
+  if (isIgnoredEvent(payload)) {
+    return Response.json({ ok: true, ignored: true }, { status: 200 });
+  }
 
   // D-54 idempotency. Skip dedup write when no key can be derived (malformed
   // payload) — let the dispatcher's defensive checks log + drop. Note:
