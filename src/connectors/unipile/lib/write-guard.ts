@@ -19,6 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { UnsuccessfulRequestError } from "unipile-node-sdk";
 import type { ToolResult } from "@/core/types";
 import { getContextKVStore } from "@/core/request-context";
 import { getLogger } from "@/core/logging";
@@ -97,7 +98,15 @@ export function hashMaterial(tool: string, material: Record<string, unknown>): s
   return createHash("sha256").update(JSON.stringify(sorted)).digest("hex").slice(0, 16);
 }
 
+/**
+ * R4 dedup record. `state`:
+ *  - "pending"   claimed atomically BEFORE the provider write;
+ *  - "done"      provider accepted the write;
+ *  - "ambiguous" provider failed in a way that may still have delivered
+ *                (5xx / network) — kept so a retry cannot double-send.
+ */
 interface DedupRecord {
+  state: "pending" | "done" | "ambiguous";
   at: number;
   audit_id: string;
   verified: boolean;
@@ -107,11 +116,10 @@ function dedupKey(hash: string): string {
   return `unipile:dedup-short:${hash}`;
 }
 
-/** Age is checked explicitly: the filesystem KV (dev) ignores TTLs. */
-async function readShortDedup(hash: string): Promise<DedupRecord | null> {
+/** Fresh = within the window. Age is checked explicitly: the filesystem KV (dev) ignores TTLs. */
+function parseFresh(raw: string | null): DedupRecord | null {
+  if (!raw) return null;
   try {
-    const raw = await getContextKVStore().get(dedupKey(hash));
-    if (!raw) return null;
     const rec = JSON.parse(raw) as DedupRecord;
     if (typeof rec.at !== "number") return null;
     if (Date.now() - rec.at > SHORT_DEDUP_WINDOW_SECONDS * 1000) return null;
@@ -119,6 +127,31 @@ async function readShortDedup(hash: string): Promise<DedupRecord | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Atomically claim the dedup slot. Returns the existing fresh record when the
+ * slot is taken (→ dedup hit), null when this call now owns it. Uses
+ * `setIfNotExists` (Upstash SET NX) so two concurrent identical calls cannot
+ * both proceed; falls back to read-then-set on backends without it.
+ * A stale record (dev KV without TTL) is overwritten.
+ */
+async function claimShortDedup(hash: string, rec: DedupRecord): Promise<DedupRecord | null> {
+  const kv = getContextKVStore();
+  const key = dedupKey(hash);
+  const value = JSON.stringify(rec);
+  if (typeof kv.setIfNotExists === "function") {
+    const res = await kv.setIfNotExists(key, value, { ttlSeconds: SHORT_DEDUP_WINDOW_SECONDS });
+    if (res.ok) return null;
+    const existing = parseFresh(res.existing);
+    if (existing) return existing;
+    await kv.set(key, value, SHORT_DEDUP_WINDOW_SECONDS); // stale → take over
+    return null;
+  }
+  const existing = parseFresh(await kv.get(key));
+  if (existing) return existing;
+  await kv.set(key, value, SHORT_DEDUP_WINDOW_SECONDS);
+  return null;
 }
 
 async function writeShortDedup(hash: string, rec: DedupRecord): Promise<void> {
@@ -129,8 +162,28 @@ async function writeShortDedup(hash: string, rec: DedupRecord): Promise<void> {
   }
 }
 
+async function releaseShortDedup(hash: string): Promise<void> {
+  try {
+    await getContextKVStore().delete(dedupKey(hash));
+  } catch (err) {
+    log.warn("short-dedup release failed (non-fatal)", { err: toMsg(err) });
+  }
+}
+
+/**
+ * A failure is "definite" (safe to retry) only when the provider answered
+ * with a 4xx — the request was rejected. 5xx, timeouts and network errors may
+ * have been delivered upstream.
+ */
+function isDefiniteFailure(err: unknown): boolean {
+  if (!(err instanceof UnsuccessfulRequestError)) return false;
+  const status = (err.body as { status?: unknown } | null)?.status;
+  return typeof status === "number" && status >= 400 && status < 500;
+}
+
 export async function runGuardedWrite(spec: GuardedWriteSpec): Promise<ToolResult> {
-  const paramsHash = hashMaterial(spec.tool, spec.dedupMaterial);
+  // Re-computed with the resolved account once known (dedup is per account).
+  let paramsHash = hashMaterial(spec.tool, spec.dedupMaterial);
   const base = { provider_ok: false, verified: false, dedup_hit: false } as const;
 
   const audit = async (
@@ -161,10 +214,27 @@ export async function runGuardedWrite(spec: GuardedWriteSpec): Promise<ToolResul
     }
   };
 
+  /** R6: a confirmed attempt refused before the confirm gate is still audited. */
+  const auditRefusal = async (
+    accountId: string,
+    result: AuditResult
+  ): Promise<string | undefined> => {
+    if (!spec.confirm) return undefined;
+    const id = generateAuditId();
+    await audit(id, accountId, result);
+    return id;
+  };
+
   try {
     // ── R2 kill switch (before anything else, even preview) ──
     if (isChannelWritesDisabled(spec.channel)) {
-      return envelope({ ...base, executed: false, error: "error_writes_disabled" });
+      const auditId = await auditRefusal(spec.accountId ?? "", "error_writes_disabled");
+      return envelope({
+        ...base,
+        executed: false,
+        error: "error_writes_disabled",
+        ...(auditId ? { audit_id: auditId } : {}),
+      });
     }
 
     // ── account resolve ──
@@ -173,24 +243,34 @@ export async function runGuardedWrite(spec: GuardedWriteSpec): Promise<ToolResul
       spec.accountId !== undefined ? { account_id: spec.accountId } : {}
     );
     if ("error" in acct) {
+      const auditId = await auditRefusal(spec.accountId ?? "", "error_account_restricted");
       return envelope({
         ...base,
         executed: false,
         error: acct.error,
+        ...(auditId ? { audit_id: auditId } : {}),
         ...(acct.error === "error_account_id_required"
           ? { available_accounts: acct.available_accounts }
           : {}),
       });
     }
     const accountId = acct.accountId;
+    paramsHash = hashMaterial(spec.tool, { ...spec.dedupMaterial, account_id: accountId });
 
     // ── prepare (reads only) ──
     const prep = await spec.prepare(accountId);
     if (!prep.ok) {
+      const auditId = await auditRefusal(
+        accountId,
+        prep.error === "error_attachment_too_large"
+          ? "error_attachment_too_large"
+          : "error_invalid_request"
+      );
       return envelope({
         ...base,
         executed: false,
         error: prep.error,
+        ...(auditId ? { audit_id: auditId } : {}),
         ...(prep.detail ? { detail: prep.detail } : {}),
       });
     }
@@ -223,23 +303,36 @@ export async function runGuardedWrite(spec: GuardedWriteSpec): Promise<ToolResul
       });
     }
 
-    // ── R4 short dedup ──
-    const dup = await readShortDedup(paramsHash);
+    // ── R4 short dedup — atomic claim BEFORE the write ──
+    const dup = await claimShortDedup(paramsHash, {
+      state: "pending",
+      at: Date.now(),
+      audit_id: auditId,
+      verified: false,
+    });
     if (dup) {
       await audit(auditId, accountId, "success", { dedup_hit: true, verified: dup.verified });
+      const ago = Math.round((Date.now() - dup.at) / 1000);
+      const why =
+        dup.state === "done"
+          ? `Identical action already executed ${ago}s ago`
+          : dup.state === "pending"
+            ? `An identical action started ${ago}s ago and is still in progress`
+            : `An identical action ${ago}s ago failed with an unknown outcome (it may have been delivered) — check the conversation before retrying`;
       return envelope({
         ...base,
         executed: false,
         verified: dup.verified,
         dedup_hit: true,
         audit_id: auditId,
-        detail: `Identical action already executed ${Math.round((Date.now() - dup.at) / 1000)}s ago (audit ${dup.audit_id}); not repeated. Change the content or wait ${SHORT_DEDUP_WINDOW_SECONDS / 60} min to send again.`,
+        detail: `${why} (audit ${dup.audit_id}); not repeated. Change the content or wait ${SHORT_DEDUP_WINDOW_SECONDS / 60} min to send again.`,
       });
     }
 
     // ── R5 rate limit ──
     const rl = await checkUnipileRateLimit({ account_id: accountId, tool: spec.rateKey });
     if (rl.blocked) {
+      await releaseShortDedup(paramsHash); // nothing was sent — free the slot
       await audit(auditId, accountId, "error_rate_limit_kebab");
       log.warn("rate-limit blocked write", {
         tool: spec.tool,
@@ -267,18 +360,42 @@ export async function runGuardedWrite(spec: GuardedWriteSpec): Promise<ToolResul
       res = await spec.execute(accountId);
     } catch (err) {
       const result = classifyUnipileError(err);
+      const definite = isDefiniteFailure(err);
       log.warn("provider write failed", {
         tool: spec.tool,
         account_id: accountId,
+        definite,
         err: toMsg(err),
       });
+      if (definite) {
+        await releaseShortDedup(paramsHash); // rejected upstream — retry allowed
+      } else {
+        await writeShortDedup(paramsHash, {
+          state: "ambiguous",
+          at: Date.now(),
+          audit_id: auditId,
+          verified: false,
+        });
+      }
       await audit(auditId, accountId, result);
-      return envelope({ ...base, executed: true, audit_id: auditId, error: result });
+      return envelope({
+        ...base,
+        executed: true,
+        audit_id: auditId,
+        error: result,
+        ...(definite
+          ? {}
+          : {
+              detail:
+                "Outcome unknown: the provider may have delivered it. Check the conversation before retrying; an identical retry is blocked for 10 minutes.",
+            }),
+      });
     }
 
     // ── R6 audit + R4 dedup pointer ──
     const result: AuditResult = res.verified ? "success" : "unverified_timeout";
     await writeShortDedup(paramsHash, {
+      state: "done",
       at: Date.now(),
       audit_id: auditId,
       verified: res.verified,

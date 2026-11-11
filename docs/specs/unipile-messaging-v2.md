@@ -38,9 +38,9 @@ tools/*.ts ──► provider/index.ts  getMessagingProvider()  ──►  provi
 | **R1 Confirm** | `confirm` defaults to `false` → the tool returns a **preview** (`executed:false`, resolved recipient / chat name / post, exact text) and does nothing else: no audit row, no rate-limit increment. Only `confirm:true` executes. Anything visible to other people (message, reply, comment, reaction, post, invitation withdrawal) requires it. |
 | **R2 Kill switch** | `KEBAB_UNIPILE_WRITES_DISABLED=true` stops all Unipile writes (LinkedIn + WhatsApp). Channel switches: `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` (existing) and `KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED` (new). Checked first, even before preview. |
 | **R3 Halt flag** | Account flagged by the `account_status` webhook → `error_account_halted`. |
-| **R4 Short dedup** | Same (tool, target, text) within **10 min** → `dedup_hit:true`, not re-sent. Guards against LLM retries / double tool calls. Short on purpose: "Merci !" twice in a week is legitimate on WhatsApp. |
+| **R4 Short dedup** | Same (tool, account, target, text) within **10 min** → `dedup_hit:true`, not re-sent. The slot is claimed **atomically before** the provider call (`SET NX`), so two parallel identical calls cannot both send. A definite 4xx rejection or a Kebab-side rate-limit refusal frees the slot (retry allowed); an ambiguous failure (5xx / timeout — may have been delivered) keeps it. Short on purpose: "Merci !" twice in a week is legitimate on WhatsApp. |
 | **R5 Rate limit** | Fail-closed KV counters (existing limiter). New keys and defaults: `whatsapp_send` 100/day, `linkedin_post_engagement` (comment + react) 40/day, `linkedin_post` 3/day, `linkedin_cancel_invitation` 30/day. `linkedin_reply` shares the existing `send_message` LinkedIn DM cap (50/day). Each is env-overridable. |
-| **R6 Audit** | One audit row per executed or refused attempt, 90-day TTL, **hash only** (never the text). |
+| **R6 Audit** | One audit row per confirmed attempt — executed or refused (kill switch, account, pre-flight, halt, dedup, rate limit) — 90-day TTL, **hash only** (never the text). Previews are not audited. |
 | **R7 Verify** | Message sends are verified by polling the chat (3 s, then 7 s) for an outbound message newer than the request. `verified` is strictly boolean; not seen → `verified:false, error:"unverified_timeout"`. Non-message writes are verified by the provider's 2xx. |
 | **R8 Webhook hygiene** | `message_received` events from WhatsApp accounts are dropped at the dispatcher: personal WhatsApp groups would otherwise write one KV audit row per inbound message (Upstash quota burn, no business value). |
 
@@ -93,7 +93,11 @@ No tool, guard or manifest change is needed for the 13 new tools + the 2 WhatsAp
 3. The adapter has its own tests mapping SDK payloads → normalized shapes, and asserting sends are not retried on 5xx.
 4. With real credentials: `whatsapp_find_chat("…")` → `whatsapp_read_messages` → `whatsapp_send_message` preview → `confirm:true` delivers once.
 
-## 9. Risks
+## 9. Review log
+
+Independent review (pre-merge) found and fixed: non-atomic dedup (parallel double-send), ambiguous-failure retry double-send, account missing from the dedup key, unaudited confirmed refusals, `ugcPost`/`share` post URLs not parsed (raw URL forwarded as a path segment), national-format phone search, WhatsApp kill switch not surfaced in /config.
+
+## 10. Risks
 
 - **Unverified vendor shapes** (docs unreachable from the build environment): `/linkedin/search` body and WhatsApp `@s.whatsapp.net` attendee ids follow Unipile's public docs from memory. Mitigated by defensive parsing + explicit error envelopes; to be checked on first live use (criterion 4).
 - **Account bans**: unofficial channels on both networks. Mitigated by R1–R5; defaults are conservative.

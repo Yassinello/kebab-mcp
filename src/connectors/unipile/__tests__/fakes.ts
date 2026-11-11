@@ -21,6 +21,13 @@ export function makeMemoryKV() {
     list: vi.fn(async (prefix?: string) =>
       [...store.keys()].filter((k) => (prefix ? k.startsWith(prefix) : true))
     ),
+    // Atomic in single-threaded JS: no await between the check and the write.
+    setIfNotExists: vi.fn(async (k: string, v: string) => {
+      const existing = store.get(k);
+      if (existing !== undefined) return { ok: false as const, existing };
+      store.set(k, v);
+      return { ok: true as const };
+    }),
     incr: vi.fn(async (k: string) => {
       const n = Number(store.get(k) ?? "0") + 1;
       store.set(k, String(n));

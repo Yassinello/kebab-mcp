@@ -88,6 +88,14 @@ describe("identifier helpers", () => {
       "urn:li:activity:7123456789012345678",
     ],
     ["7123456789012345678", "urn:li:activity:7123456789012345678"],
+    [
+      "https://www.linkedin.com/posts/jane_topic-ugcPost-7123456789012345678-AbCd/",
+      "urn:li:ugcPost:7123456789012345678",
+    ],
+    [
+      "https://www.linkedin.com/posts/jane_topic-share-7123456789012345678-AbCd",
+      "urn:li:share:7123456789012345678",
+    ],
   ])("parsePostReference(%s)", (i, o) => expect(parsePostReference(i)).toBe(o));
 
   it("parsePostReference returns null on garbage", () =>
@@ -366,6 +374,13 @@ describe("LinkedIn network", () => {
       account_id: "li",
       post_id: "urn:li:activity:1234567",
     });
+  });
+
+  it("resolvePostId refuses an unrecognized reference without calling the API", async () => {
+    await expect(
+      p.resolvePostId({ accountId: "li", post: "https://example.com/x" })
+    ).rejects.toBeInstanceOf(UnsuccessfulRequestError);
+    expect(sdk.users.getPost).not.toHaveBeenCalled();
   });
 
   it("comment / react / cancel invitation forward the right payloads", async () => {

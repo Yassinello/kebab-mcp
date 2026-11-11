@@ -14,6 +14,7 @@
  * tool that now routes through the provider.
  */
 
+import { UnsuccessfulRequestError } from "unipile-node-sdk";
 import { getUnipileClient } from "../lib/client";
 import { withRetry, WRITE_RETRYABLE } from "../lib/retry";
 import { getLogger } from "@/core/logging";
@@ -190,15 +191,15 @@ export function isCompanyUrl(input: string): boolean {
 /**
  * Normalize a post reference to a Unipile post id. Accepts a urn
  * (`urn:li:activity:123`, `urn:li:ugcPost:123`, `urn:li:share:123`), a bare
- * numeric activity id, or a post URL containing `activity-<id>` /
- * `urn:li:activity:<id>` (also URL-encoded). Returns null when nothing matches.
+ * numeric activity id, or a post URL containing `activity-<id>`,
+ * `ugcPost-<id>`, `share-<id>` or a urn (also URL-encoded). Returns null when nothing matches.
  */
 export function parsePostReference(input: string): string | null {
   const s = decodeURIComponent(input.trim());
   const urn = s.match(/urn:li:(activity|ugcPost|share):(\d{6,})/);
   if (urn) return `urn:li:${urn[1]}:${urn[2]}`;
-  const act = s.match(/activity[-:](\d{6,})/);
-  if (act) return `urn:li:activity:${act[1]}`;
+  const inUrl = s.match(/(activity|ugcPost|share)[-:](\d{6,})/);
+  if (inUrl) return `urn:li:${inUrl[1]}:${inUrl[2]}`;
   if (/^\d{6,}$/.test(s)) return `urn:li:activity:${s}`;
   return null;
 }
@@ -513,7 +514,15 @@ export class UnipileMessagingProvider implements FullProvider {
   }
 
   async resolvePostId(q: { accountId: string; post: string }): Promise<string> {
-    const ref = parsePostReference(q.post) ?? q.post.trim();
+    const ref = parsePostReference(q.post);
+    if (!ref) {
+      // Never forward a raw URL as a path segment (the SDK does not encode it).
+      throw new UnsuccessfulRequestError({
+        status: 400,
+        type: "errors/invalid_parameters",
+        title: "Unrecognized LinkedIn post reference",
+      } as never);
+    }
     // Unipile's comment/react endpoints want the post's `social_id`; getPost
     // resolves any accepted id form to it.
     const resp = await withRetry(() =>

@@ -119,6 +119,13 @@ describe("whatsapp_find_chat", () => {
     expect(env.chats).toEqual([expect.objectContaining({ chat_id: "d1", phone: "+33611112222" })]);
   });
 
+  it("national-format phone query matches the international id", async () => {
+    const env = parse<{ chats: Array<{ chat_id: string }> }>(
+      await handleWhatsappFindChat({ query: "06 11 11 22 22", include_contacts: false })
+    );
+    expect(env.chats.map((c) => c.chat_id)).toEqual(["d1"]);
+  });
+
   it("contact listing failure is non-fatal", async () => {
     provider.listContacts.mockRejectedValue(new Error("x"));
     const env = parse<{ chats: unknown[]; contacts: unknown[] }>(

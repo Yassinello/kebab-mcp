@@ -3,7 +3,7 @@ import { defineTool, type ConnectorManifest, type ToolDefinition } from "@/core/
 import { getConfig } from "@/core/config-facade";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
-import { isWritesDisabled } from "./lib/kill-switch";
+import { isWritesDisabled, isWhatsappWritesDisabled } from "./lib/kill-switch";
 
 function normalizeDsnForProbe(dsn: string): string {
   return /^https?:\/\//i.test(dsn) ? dsn : `https://${dsn}`;
@@ -158,7 +158,7 @@ async function probe(
   // default-account picker. Populated on the success path only.
   accounts?: Array<{ id: string; name: string; type: string }>;
 }> {
-  const writes_disabled = isWritesDisabled();
+  const writes_disabled = isWritesDisabled() || isWhatsappWritesDisabled();
   try {
     const client = new UnipileClient(normalizeDsnForProbe(dsn), token);
     const resp = (await client.account.getAll()) as UnipileAccountListResponse;

@@ -4,6 +4,7 @@
  * limiter, audit) over an in-memory KV and a fake provider.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { UnsuccessfulRequestError } from "unipile-node-sdk";
 import { makeMemoryKV, makeFakeProvider, chat, parse } from "../../__tests__/fakes";
 
 const { kv, config } = vi.hoisted(() => ({
@@ -199,7 +200,7 @@ describe("whatsapp_send_message — targets & pre-flight", () => {
     expect(env.error).toBe("error_read_only_chat");
   });
 
-  it("oversized attachment refused pre-flight (no send, no audit)", async () => {
+  it("oversized attachment refused pre-flight (no send; confirmed attempt audited)", async () => {
     const big = "A".repeat(21 * 1024 * 1024); // ~15.75 MB decoded
     const env = parse<Env>(
       await handleWhatsappSendMessage({
@@ -211,7 +212,10 @@ describe("whatsapp_send_message — targets & pre-flight", () => {
     );
     expect(env.error).toBe("error_attachment_too_large");
     expect(provider.sendToChat).not.toHaveBeenCalled();
-    expect(auditRows()).toHaveLength(0);
+    expect(auditRows()).toEqual([
+      expect.objectContaining({ result: "error_attachment_too_large" }),
+    ]);
+    expect(kv.current.incr).not.toHaveBeenCalled();
   });
 
   it("attachments are decoded to [filename, Buffer] tuples", async () => {
@@ -330,20 +334,107 @@ describe("whatsapp_send_message — guards", () => {
     expect(provider.sendToChat).toHaveBeenCalledTimes(1);
   });
 
-  it("provider failure → executed:true, provider_ok:false, classified + audited, no dedup pointer", async () => {
-    provider.sendToChat.mockRejectedValueOnce(new Error("boom"));
+  it("definite 4xx provider failure → audited, slot released so a retry is allowed", async () => {
+    provider.sendToChat.mockRejectedValueOnce(
+      new UnsuccessfulRequestError({ status: 422, type: "errors/invalid_recipient" } as never)
+    );
     const env = parse<Env>(
       await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
     );
-    expect(env).toMatchObject({ executed: true, provider_ok: false, error: "error_unipile_5xx" });
-    expect(auditRows()[0]).toMatchObject({ result: "error_unipile_5xx" });
-    // a retry is allowed (no dedup pointer written on failure)
-    provider.sendToChat.mockResolvedValueOnce({ messageId: "m-new" });
+    expect(env).toMatchObject({
+      executed: true,
+      provider_ok: false,
+      error: "error_recipient_unreachable",
+    });
+    expect(auditRows()[0]).toMatchObject({ result: "error_recipient_unreachable" });
     const retry = parse<Env>(
       await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
     );
     expect(retry.executed).toBe(true);
     expect(retry.dedup_hit).toBe(false);
+    expect(provider.sendToChat).toHaveBeenCalledTimes(2);
+  });
+
+  it("ambiguous failure (5xx / network) keeps the slot: an identical retry is blocked (no double-send)", async () => {
+    provider.sendToChat.mockRejectedValueOnce(
+      new UnsuccessfulRequestError({ status: 504 } as never)
+    );
+    const env = parse<Env>(
+      await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
+    );
+    expect(env).toMatchObject({ executed: true, provider_ok: false, error: "error_unipile_5xx" });
+    expect(String(env.detail)).toMatch(/Outcome unknown/);
+    const retry = parse<Env>(
+      await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
+    );
+    expect(retry.dedup_hit).toBe(true);
+    expect(String(retry.detail)).toMatch(/unknown outcome/);
+    expect(provider.sendToChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("R4: two identical calls in parallel → exactly one send", async () => {
+    let release!: () => void;
+    provider.sendToChat.mockImplementationOnce(
+      () => new Promise((r) => (release = () => r({ messageId: "m-new" })))
+    );
+    const a = handleWhatsappSendMessage({ chat_id: "chat1", text: "Go", confirm: true });
+    await vi.waitFor(() => expect(provider.sendToChat).toHaveBeenCalledTimes(1));
+    const b = parse<Env>(
+      await handleWhatsappSendMessage({ chat_id: "chat1", text: "Go", confirm: true })
+    );
+    expect(b.dedup_hit).toBe(true);
+    expect(String(b.detail)).toMatch(/in progress/);
+    release();
+    expect(parse<Env>(await a).executed).toBe(true);
+    expect(provider.sendToChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("R4: dedup is per account — same phone + text from two accounts both go out", async () => {
+    provider.listAccounts.mockResolvedValue([
+      { id: "wa1", name: "a", type: "WHATSAPP" },
+      { id: "wa2", name: "b", type: "WHATSAPP" },
+    ]);
+    provider.listChatMessages.mockResolvedValue([]);
+    await handleWhatsappSendMessage({
+      phone: "+33612345678",
+      text: "Hi",
+      confirm: true,
+      account_id: "wa1",
+    });
+    const second = parse<Env>(
+      await handleWhatsappSendMessage({
+        phone: "+33612345678",
+        text: "Hi",
+        confirm: true,
+        account_id: "wa2",
+      })
+    );
+    expect(second.dedup_hit).toBe(false);
+    expect(provider.startChat).toHaveBeenCalledTimes(2);
+  });
+
+  it("R5: a rate-limit refusal frees the dedup slot (nothing was sent)", async () => {
+    config.set("KEBAB_UNIPILE_WHATSAPP_DAILY_SEND_CAP", "0");
+    await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true });
+    config.delete("KEBAB_UNIPILE_WHATSAPP_DAILY_SEND_CAP");
+    const env = parse<Env>(
+      await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
+    );
+    expect(env.executed).toBe(true);
+  });
+
+  it("R6: confirmed attempts refused by the kill switch are audited; previews are not", async () => {
+    config.set("KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED", "true");
+    await handleWhatsappSendMessage({ chat_id: "chat1", text: "x" });
+    expect(auditRows()).toHaveLength(0);
+    const env = parse<Env>(
+      await handleWhatsappSendMessage({ chat_id: "chat1", text: "x", confirm: true })
+    );
+    expect(env.audit_id).toBeDefined();
+    expect(auditRows()[0]).toMatchObject({
+      result: "error_writes_disabled",
+      tool: "whatsapp_send_message",
+    });
   });
 
   it("R7: message never seen → verified:false + unverified_timeout", async () => {

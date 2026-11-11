@@ -33,6 +33,7 @@ vi.mock("unipile-node-sdk", () => ({
 // isWritesDisabled so tests can drive probe()'s `writes_disabled` surface.
 vi.mock("./lib/kill-switch", () => ({
   isWritesDisabled: killSwitchMock,
+  isWhatsappWritesDisabled: () => false,
 }));
 
 import { unipileConnector } from "./manifest";

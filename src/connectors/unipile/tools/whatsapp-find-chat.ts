@@ -75,7 +75,10 @@ export async function handleWhatsappFindChat(args: Args): Promise<ToolResult> {
     }
 
     const terms = queryTerms(args.query);
-    const qDigits = digitsOnly(args.query);
+    // National format ("06 12 …") → drop the trunk 0 so it matches the
+    // international provider id ("33612…@s.whatsapp.net").
+    const rawDigits = digitsOnly(args.query);
+    const qDigits = rawDigits.replace(/^0+/, "");
     const byPhone = qDigits.length >= 5;
     const phoneHit = (...ids: Array<string | null>) =>
       byPhone && ids.some((id) => id !== null && digitsOnly(id).includes(qDigits));
