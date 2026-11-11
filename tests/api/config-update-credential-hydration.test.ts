@@ -18,6 +18,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 // Mock the KV-credential-store so hydrate returns a known snapshot
 vi.mock("@/core/credential-store", () => ({
   hydrateCredentialsFromKV: vi.fn().mockResolvedValue(undefined),
+  invalidateCredentialsIfRevisionChanged: vi.fn(),
   getHydratedCredentialSnapshot: vi.fn(() => ({ KEBAB_UPDATE_PAT: "ghp_from_kv" })),
 }));
 

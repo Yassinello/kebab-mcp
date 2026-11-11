@@ -1,4 +1,7 @@
 import { getContextKVStore } from "@/core/request-context";
+import { toMsg } from "@/core/error-utils";
+import { TenantCache } from "@/core/tenant-cache";
+import { bumpConfigRevision } from "@/core/config-revision";
 import {
   customToolSchema,
   customToolWriteSchema,
@@ -153,24 +156,39 @@ async function readRaw(): Promise<CustomTool[]> {
   const kv = getContextKVStore();
   const raw = await kv.get(KV_KEY);
   if (!raw) return [];
+  // Q-01 (2026-11 audit): a corrupt blob used to read as [] — and the next
+  // read-modify-write then persisted [] over the whole collection. Fail
+  // loudly instead so nothing is overwritten.
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const out: CustomTool[] = [];
-    for (const row of parsed) {
-      const res = customToolSchema.safeParse(row);
-      if (res.success) out.push(res.data);
-    }
-    return out;
+    parsed = JSON.parse(raw);
   } catch {
-    return [];
+    throw new Error(`custom tools store (${KV_KEY}) is not valid JSON — refusing to continue`);
   }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`custom tools store (${KV_KEY}) is not an array — refusing to continue`);
+  }
+  const out: CustomTool[] = [];
+  let dropped = 0;
+  for (const row of parsed) {
+    const res = customToolSchema.safeParse(row);
+    if (res.success) out.push(res.data);
+    else dropped++;
+  }
+  if (dropped > 0) {
+    console.warn(
+      `[Kebab MCP] custom tools: ${dropped} stored row(s) failed validation and were skipped`
+    );
+  }
+  return out;
 }
 
 async function writeRaw(rows: CustomTool[]): Promise<void> {
   const kv = getContextKVStore();
   await kv.set(KV_KEY, JSON.stringify(rows));
-  _syncCache = rows;
+  _syncCache.set(rows);
+  // REL-02: other lambdas re-prime their tool lists.
+  await bumpConfigRevision();
 }
 
 // ── Validation helper ─────────────────────────────────────────────────
@@ -745,24 +763,29 @@ export function rollbackCustomTool(id: string, versionIndex: number): Promise<Cu
 
 // ── Sync cache (for the manifest's synchronous `tools` getter) ────────
 
-let _syncCache: CustomTool[] = [];
+// REL-01: keyed by tenant — a single global slot leaked one tenant's tools
+// into another tenant's tools/list on a warm lambda.
+const _syncCache = new TenantCache<CustomTool[]>();
 
 /** Return the in-memory snapshot. The manifest reads this on every
  *  access; the registry's `refresh` hook keeps it warm. */
 export function listCustomToolsSync(): CustomTool[] {
-  return _syncCache;
+  return _syncCache.get() ?? [];
 }
 
 /** Refresh the sync cache from the authoritative store. Idempotent. */
 export async function primeCustomToolsCache(): Promise<void> {
   try {
-    _syncCache = await readRaw();
-  } catch {
-    _syncCache = [];
+    _syncCache.set(await readRaw());
+  } catch (err) {
+    // Q-01: keep the last good snapshot on a transient KV error instead of
+    // making every custom tool vanish from tools/list.
+    console.error(`[Kebab MCP] custom tools cache refresh failed: ${toMsg(err)}`);
+    if (_syncCache.get() === undefined) _syncCache.set([]);
   }
 }
 
 /** Test-only — drop the cache so tests don't leak state across files. */
 export function _resetCustomToolsCacheForTests(): void {
-  _syncCache = [];
+  _syncCache.clear();
 }

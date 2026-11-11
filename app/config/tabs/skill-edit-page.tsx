@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { InfoTooltip } from "./settings/info-tooltip";
 import { SkillFilesEditor } from "./skill-files-editor";

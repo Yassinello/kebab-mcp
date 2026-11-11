@@ -308,3 +308,40 @@ describe("url-safety: migration compatibility — browserbase.validatePublicUrl"
     await expect(validatePublicUrl("https://93.184.216.34/")).resolves.toBeUndefined();
   });
 });
+
+// ── SEC-08 (2026-11 audit): IPv6 embeddings + FQDN trailing dot ──────
+describe("isPublicUrlSync — SEC-08 IPv6 embeddings and trailing dots", () => {
+  const blocked = [
+    "http://[::7f00:1]/", // IPv4-compatible 127.0.0.1
+    "http://[::127.0.0.1]/",
+    "http://[::a9fe:a9fe]/", // IPv4-compatible 169.254.169.254
+    "http://[64:ff9b::a9fe:a9fe]/", // NAT64 → metadata
+    "http://[64:ff9b::10.0.0.1]/", // NAT64 → RFC1918
+    "http://[2002:a9fe:a9fe::]/", // 6to4 → metadata
+    "http://[2002:c0a8:0101::1]/", // 6to4 → 192.168.1.1
+    "http://[::ffff:0:7f00:1]/", // SIIT → loopback
+    "http://[0:0:0:0:0:ffff:7f00:1]/", // fully expanded mapped
+    "http://[fd00:ec2::254]/", // AWS IMDS IPv6
+    "http://[ff02::1]/", // multicast
+    "http://localhost./",
+    "http://metadata.google.internal./computeMetadata/v1/",
+  ];
+  for (const url of blocked) {
+    it(`blocks ${url}`, async () => {
+      const { isPublicUrlSync } = await import("./url-safety");
+      expect(isPublicUrlSync(url).ok).toBe(false);
+    });
+  }
+
+  const allowed = [
+    "http://[2606:4700:4700::1111]/",
+    "http://[2002:0808:0808::]/",
+    "https://example.com./",
+  ];
+  for (const url of allowed) {
+    it(`allows ${url}`, async () => {
+      const { isPublicUrlSync } = await import("./url-safety");
+      expect(isPublicUrlSync(url).ok).toBe(true);
+    });
+  }
+});

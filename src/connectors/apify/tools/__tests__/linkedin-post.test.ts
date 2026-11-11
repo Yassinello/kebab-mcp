@@ -3,8 +3,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const fetchMock = vi.fn();
 const runActorMock = vi.fn();
 
-vi.mock("@/core/fetch-utils", () => ({
-  fetchWithTimeout: (...args: unknown[]) => fetchMock(...args),
+// SEC-08: resolution goes through safeFetch (manual redirects, SSRF guard
+// per hop). The mock returns the final response + final URL.
+vi.mock("@/core/safe-fetch", () => ({
+  safeFetch: async (...args: unknown[]) => {
+    const res = (await fetchMock(...args)) as Response & { url: string };
+    return { response: res, finalUrl: res.url, redirects: 0 };
+  },
 }));
 vi.mock("../../lib/client", () => ({
   runActor: (...args: unknown[]) => runActorMock(...args),

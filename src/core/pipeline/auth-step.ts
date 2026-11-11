@@ -23,7 +23,7 @@
 
 import { createHash } from "node:crypto";
 import type { Step, PipelineContext } from "./types";
-import { checkMcpAuth, checkAdminAuth } from "../auth";
+import { checkMcpAuth, checkAdminAuth, safeCompare } from "../auth";
 import { isLoopbackRequest } from "../request-utils";
 import { requestContext } from "../request-context";
 import { getConfig } from "../config-facade";
@@ -87,7 +87,8 @@ export function authStep(kind: AuthKind): Step {
     const cronSecret = getConfig("CRON_SECRET");
 
     if (cronSecret) {
-      if (authHeader !== `Bearer ${cronSecret}`) {
+      // SEC-15: constant-time comparison (was `!==`).
+      if (!authHeader || !safeCompare(authHeader, `Bearer ${cronSecret}`)) {
         return new Response("Unauthorized", { status: 401 });
       }
     } else {

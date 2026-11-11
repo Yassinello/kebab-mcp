@@ -178,22 +178,21 @@ describe("ConnectorsTab — Save feedback (2026-04-29 regression)", () => {
     );
   }
 
-  // Click the *first* Save button — only the expanded card's Save is
-  // interactive in the user's eye. (Both render in the DOM but only one
-  // is visible.)
-  function clickFirstSave() {
-    const buttons = screen.getAllByRole("button", { name: /^Save$/ });
-    fireEvent.click(buttons[0]!);
-  }
-
   // Save button click without typing into any field — the silent-return path.
   it("surfaces 'No changes to save' when Save is clicked with no edits on an already-configured pack", async () => {
-    mockTabFetches({ GOOGLE_CLIENT_ID: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022" });
+    // Google moved to the multi-account selector in v0.19 (no legacy Save
+    // button in KV mode), so exercise the legacy single-token path on an
+    // already-configured Obsidian Vault pack instead.
+    mockTabFetches({ GITHUB_PAT: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022" });
+    const configured = mockConnectors.map((c) =>
+      c.id === "vault" ? { ...c, enabled: true, reason: "" } : c
+    );
 
-    render(<ConnectorsTab connectors={mockConnectors} />);
-    await openCard("Google Workspace");
+    render(<ConnectorsTab connectors={configured} />);
+    await openCard("Obsidian Vault");
 
-    clickFirstSave();
+    const buttons = screen.getAllByRole("button", { name: /^Save$/ });
+    fireEvent.click(buttons[buttons.length - 1]!);
 
     await waitFor(() => {
       expect(screen.getByText(/No changes to save/i)).toBeInTheDocument();

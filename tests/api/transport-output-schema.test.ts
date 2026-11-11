@@ -93,11 +93,13 @@ vi.mock("@/core/tool-toggles", () => ({
 // about scoping, so mock it to "no filter" (full access) — every pack is
 // listed, matching pre-v0.20 behavior.
 vi.mock("@/core/token-scope", () => ({
+  resolveTokenAccess: vi.fn().mockResolvedValue({ kind: "full" }),
+  runWithToolAccess: (_ctx: unknown, fn: () => unknown) => fn(),
+  getToolAccessContext: () => undefined,
   resolveTokenSkillScope: async () => null,
   runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
   getCurrentSkillScope: () => null,
   isSkillVisible: () => true,
-  resolveTokenConnectorScope: vi.fn().mockResolvedValue(null),
   isConnectorAllowed: () => true,
 }));
 

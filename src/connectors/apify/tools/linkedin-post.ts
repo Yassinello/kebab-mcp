@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { runActor } from "../lib/client";
-import { fetchWithTimeout } from "@/core/fetch-utils";
+import { safeFetch } from "@/core/safe-fetch";
 
 export const APIFY_LINKEDIN_POST_ACTOR = "supreme_coder/linkedin-post";
 
@@ -33,8 +33,16 @@ function isShortlink(url: string): boolean {
 export async function resolveLinkedinShortlink(url: string): Promise<string> {
   if (!isShortlink(url)) return url;
   try {
-    const res = await fetchWithTimeout(url, { redirect: "follow" }, RESOLVE_TIMEOUT_MS);
-    if (res.url && !isShortlink(res.url)) return res.url;
+    // SEC-08: hops are re-validated by the SSRF guard (was redirect:"follow").
+    const { response: res, finalUrl } = await safeFetch(
+      url,
+      {},
+      { timeoutMs: RESOLVE_TIMEOUT_MS, maxRedirects: 5 }
+    );
+    if (finalUrl && !isShortlink(finalUrl)) {
+      await res.body?.cancel().catch(() => undefined);
+      return finalUrl;
+    }
     const html = await res.text();
     const match = html.match(/https?:\/\/(?:[a-z]+\.)?linkedin\.com\/[^"'<>\s]+/i);
     if (match) return match[0].replace(/&amp;/g, "&");

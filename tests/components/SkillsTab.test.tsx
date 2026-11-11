@@ -6,6 +6,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { SkillsTab } from "../../app/config/tabs/skills";
 
+// Mock next/navigation — SkillsTab reads useRouter() + useSearchParams()
+// (?edit=<id> deep link) and there is no app router mounted under jsdom.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => "/config",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Mock InfoTooltip to avoid transitive deps
 vi.mock("../../app/config/tabs/settings/info-tooltip", () => ({
   InfoTooltip: () => <span data-testid="info-tooltip">?</span>,

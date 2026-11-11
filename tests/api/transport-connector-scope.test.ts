@@ -88,14 +88,24 @@ vi.mock("@/core/tool-toggles", () => ({
 // scope) then reject it at invocation — proving the defense-in-depth guard
 // fires independently, as it would across separate HTTP requests when the
 // operator tightens the token's scope mid-session.
+const REVOKED = new Set<string>(["__revoked__"]);
 let scopeAtListing: Set<string> | null = new Set(["apify"]);
 let denyAtInvocation: Set<string> = new Set();
 vi.mock("@/core/token-scope", () => ({
+  resolveTokenAccess: vi
+    .fn()
+    .mockImplementation(async () =>
+      scopeAtListing === null
+        ? { kind: "full" }
+        : scopeAtListing === REVOKED
+          ? { kind: "revoked" }
+          : { kind: "scoped", connectors: scopeAtListing }
+    ),
+  runWithToolAccess: (_ctx: unknown, fn: () => unknown) => fn(),
   resolveTokenSkillScope: async () => null,
   runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
   getCurrentSkillScope: () => null,
   isSkillVisible: () => true,
-  resolveTokenConnectorScope: vi.fn().mockImplementation(async () => scopeAtListing),
   isConnectorAllowed: (scope: Set<string> | null, id: string) => {
     if (denyAtInvocation.has(id)) return false;
     return scope === null ? true : scope.has(id);
@@ -176,5 +186,15 @@ describe("transport — per-token connector scope", () => {
     const result = await handlerMap["google_search_files"]?.({});
     expect((result as { isError?: boolean }).isError).toBe(true);
     expect(JSON.stringify(result)).toMatch(/not in this token's connector scope/);
+  });
+
+  it("SEC-06: a revoked/rotated token is refused with 401 before any tool registers", async () => {
+    scopeAtListing = REVOKED;
+    for (const k of Object.keys(registered)) delete registered[k];
+    vi.resetModules();
+    const { GET } = await import("../../app/api/[transport]/route");
+    const res = await GET(new Request("https://kebab.example.com/api/mcp", { method: "GET" }));
+    expect(res.status).toBe(401);
+    expect(Object.keys(registered)).toHaveLength(0);
   });
 });

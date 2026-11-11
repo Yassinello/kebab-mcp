@@ -5,6 +5,7 @@ import {
   rehydrateStep,
   rateLimitStep,
   bodyParseStep,
+  hydrateCredentialsStep,
   type PipelineContext,
 } from "@/core/pipeline";
 import { getConfig, getConfigInt } from "@/core/config-facade";
@@ -41,9 +42,24 @@ function getAllowedWebhooks(): Set<string> {
   );
 }
 
+/**
+ * Resolve the HMAC secret for a webhook. `KEBAB_WEBHOOK_SECRET_<NAME>` is
+ * the canonical name; the legacy `MYMCP_WEBHOOK_SECRET_<NAME>` still works.
+ * Secrets saved from the dashboard live in KV (`cred:*`) and are visible
+ * here because the pipeline runs `hydrateCredentialsStep` (SEC-11).
+ */
+function getWebhookSecret(name: string): string | undefined {
+  const suffix = name.toUpperCase().replace(/-/g, "_");
+  return getConfig(`KEBAB_WEBHOOK_SECRET_${suffix}`) || getConfig(`MYMCP_WEBHOOK_SECRET_${suffix}`);
+}
+
+function allowUnsigned(): boolean {
+  const v = getConfig("KEBAB_WEBHOOK_ALLOW_UNSIGNED");
+  return v === "1" || v === "true";
+}
+
 function verifySignature(body: string, name: string, signature: string): boolean {
-  const envKey = `MYMCP_WEBHOOK_SECRET_${name.toUpperCase().replace(/-/g, "_")}`;
-  const secret = getConfig(envKey);
+  const secret = getWebhookSecret(name);
   if (!secret) return false;
 
   const expected = createHmac("sha256", secret).update(body).digest("hex");
@@ -81,9 +97,22 @@ async function webhookHandler(ctx: PipelineContext): Promise<Response> {
   // rejected. Fall back to `body` only if rawBody is somehow absent.
   const rawBody: string = typeof ctx.rawBody === "string" ? ctx.rawBody : body;
 
-  // Optional HMAC signature verification
-  const secretEnvKey = `MYMCP_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")}`;
-  if (getConfig(secretEnvKey)) {
+  // HMAC signature verification. SEC-11 (2026-11 audit): fail closed — an
+  // allowlisted webhook without a secret used to accept anyone's payload,
+  // which the LLM then reads back through the webhook tools (prompt
+  // injection channel). KEBAB_WEBHOOK_ALLOW_UNSIGNED=1 restores the old
+  // behaviour for operators who accept that risk.
+  if (!getWebhookSecret(normalizedName)) {
+    if (!allowUnsigned()) {
+      return new Response(
+        JSON.stringify({
+          error: "Webhook secret not configured",
+          hint: `Set KEBAB_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")} (or KEBAB_WEBHOOK_ALLOW_UNSIGNED=1 to accept unsigned payloads).`,
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  } else {
     const signature = request.headers.get("x-webhook-signature");
     if (!signature || !verifySignature(rawBody, normalizedName, signature)) {
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
@@ -145,6 +174,8 @@ export const POST = composeRequestPipeline(
     rehydrateStep,
     rateLimitStep({ scope: "webhook", keyFrom: "ip", limit: 30 }),
     bodyParseStep({ maxBytes: MAX_PAYLOAD_BYTES }),
+    // SEC-11: dashboard-saved secrets / KEBAB_WEBHOOKS live in KV.
+    hydrateCredentialsStep,
   ],
   webhookHandler
 );

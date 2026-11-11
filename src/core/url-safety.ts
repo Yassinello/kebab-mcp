@@ -126,49 +126,91 @@ function classifyIPv4(host: string): UrlSafetyCode | null {
  * Does NOT do full IPv6 parsing — relies on prefix heuristics used by
  * the prior remote-fetcher implementation.
  */
+/**
+ * Expand an IPv6 literal (with optional trailing dotted IPv4) into 8
+ * 16-bit groups. Returns null when the string is not a valid IPv6 literal.
+ */
+function expandIPv6(input: string): number[] | null {
+  let host = input.toLowerCase();
+  const zone = host.indexOf("%");
+  if (zone >= 0) host = host.slice(0, zone);
+  // Trailing dotted IPv4 → two hextets.
+  const dotted = host.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted && dotted[1] !== undefined && dotted[2] !== undefined) {
+    const v4 = parseIPv4(dotted[2]);
+    if (!v4) return null;
+    host =
+      dotted[1] + ((v4[0] << 8) | v4[1]).toString(16) + ":" + ((v4[2] << 8) | v4[3]).toString(16);
+  }
+  const halves = host.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string): number[] | null => {
+    if (part === "") return [];
+    const groups = part.split(":");
+    const out: number[] = [];
+    for (const g of groups) {
+      if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+      out.push(parseInt(g, 16));
+    }
+    return out;
+  };
+  const head = parse(halves[0] ?? "");
+  const tail = halves.length === 2 ? parse(halves[1] ?? "") : [];
+  if (!head || !tail) return null;
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 1) return null;
+  return [...head, ...new Array<number>(missing).fill(0), ...tail];
+}
+
+function v4FromGroups(hi: number, lo: number): string {
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
 function classifyIPv6(host: string): UrlSafetyCode | null {
-  const lower = host.toLowerCase();
+  const g = expandIPv6(host);
+  if (!g) return null;
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const firstSixZero = g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0;
 
-  // Normalize extremes
-  if (lower === "::1" || lower === "::") return "loopback";
-
-  // IPv4-mapped ::ffff:a.b.c.d — delegate to IPv4. WHATWG URL parser
-  // normalizes this to the compact hex form `::ffff:WWWW:XXXX` so we
-  // handle both surface forms.
-  const mappedDotted = lower.match(/^::ffff:([0-9.]+)$/);
-  if (mappedDotted && mappedDotted[1]) {
-    return classifyIPv4(mappedDotted[1]);
+  // ::, ::1
+  if (firstSixZero && g6 === 0 && (g7 === 0 || g7 === 1)) return "loopback";
+  // IPv4-mapped ::ffff:a.b.c.d
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) {
+    return classifyIPv4(v4FromGroups(g6, g7));
   }
-  const mappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (mappedHex && mappedHex[1] && mappedHex[2]) {
-    const hi = parseInt(mappedHex[1], 16);
-    const lo = parseInt(mappedHex[2], 16);
-    const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
-    return classifyIPv4(dotted);
+  // SIIT IPv4-translated ::ffff:0:a.b.c.d
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0xffff && g5 === 0) {
+    return classifyIPv4(v4FromGroups(g6, g7));
   }
-
-  // Link-local fe80::/10 (prefix covers fe8..feb nibble-wise)
-  if (
-    lower.startsWith("fe8") ||
-    lower.startsWith("fe9") ||
-    lower.startsWith("fea") ||
-    lower.startsWith("feb")
-  ) {
-    return "link_local";
+  // Deprecated IPv4-compatible ::a.b.c.d (SEC-08, 2026-11 audit)
+  if (firstSixZero) return classifyIPv4(v4FromGroups(g6, g7));
+  // NAT64 well-known prefix 64:ff9b::/96 and local-use 64:ff9b:1::/48
+  if (g0 === 0x64 && g1 === 0xff9b) {
+    return classifyIPv4(v4FromGroups(g6, g7));
   }
-
-  // ULA fc00::/7 (fc.. and fd..)
-  if (lower.startsWith("fc") || lower.startsWith("fd")) {
-    return "private_ip";
+  // 6to4 2002::/16 embeds an IPv4 address in groups 1-2
+  if (g0 === 0x2002) {
+    return classifyIPv4(v4FromGroups(g1, g2));
   }
-
+  // Link-local fe80::/10
+  if ((g0 & 0xffc0) === 0xfe80) return "link_local";
+  // ULA fc00::/7 (AWS IMDS IPv6 fd00:ec2::254 is in here)
+  if ((g0 & 0xfe00) === 0xfc00) return "private_ip";
+  // Multicast ff00::/8 — never a legitimate fetch target
+  if ((g0 & 0xff00) === 0xff00) return "private_ip";
   return null;
 }
 
-/**
- * Apply opts overrides. Given a category classification, decide whether
- * opts permits it through.
- */
 function isAllowed(code: UrlSafetyCode, opts: IsPublicUrlOptions): boolean {
   if (opts.allowLoopback && code === "loopback") return true;
   if (opts.allowCloudMetadata && code === "cloud_metadata") return true;
@@ -200,7 +242,9 @@ export function isPublicUrlSync(url: string, opts: IsPublicUrlOptions = {}): Res
   }
 
   const rawHost = parsed.hostname.toLowerCase();
-  const host = rawHost.replace(/^\[|\]$/g, "");
+  // SEC-08: strip a trailing root dot ("localhost.", "metadata.google.internal.")
+  // so FQDN spellings can't slip past the hostname checks.
+  const host = rawHost.replace(/^\[|\]$/g, "").replace(/\.+$/, "");
 
   // Explicit localhost hostname (not an IP literal)
   if (host === "localhost" || host.endsWith(".localhost")) {
@@ -231,7 +275,8 @@ export function isPublicUrlSync(url: string, opts: IsPublicUrlOptions = {}): Res
       if (isAllowed(ipv6Code, opts)) return { ok: true };
       return err(ipv6Code, messageFor(ipv6Code));
     }
-    // Unrecognized IPv6 literal → treat as public.
+    // Unparseable IPv6-looking host → refuse rather than guess.
+    if (!expandIPv6(host)) return err("invalid_url", "Invalid IPv6 literal");
     return { ok: true };
   }
 
@@ -278,7 +323,10 @@ export async function isPublicUrl(url: string, opts: IsPublicUrlOptions = {}): P
   } catch {
     return err("invalid_url", "Invalid URL format");
   }
-  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const host = parsed.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "");
 
   // If the host is an IP literal, sync already validated it. DNS would be
   // a no-op (Node returns the literal back). Skip.

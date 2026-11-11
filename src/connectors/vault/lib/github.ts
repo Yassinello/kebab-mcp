@@ -97,6 +97,35 @@ export function validateVaultPath(path: string): void {
   }
 }
 
+/**
+ * SEC-14 (2026-11 audit): writes and deletes may not touch repository
+ * plumbing. A prompt-injected `vault_write` to `.github/workflows/x.yml`
+ * would otherwise run arbitrary code in GitHub Actions when the PAT has the
+ * `workflow` scope.
+ */
+export function validateVaultWritePath(path: string): void {
+  validateVaultPath(path);
+  const first = (path.split("/")[0] ?? "").toLowerCase();
+  if (first === ".github" || first.startsWith(".git")) {
+    throw new Error(`Writing under '${first}/' is not allowed (repository configuration)`);
+  }
+}
+
+/**
+ * SEC-14: strip GitHub search qualifiers (`repo:`, `org:`, `user:`, …) from
+ * free-text queries so a query cannot widen the search beyond the vault
+ * repository (GitHub ORs multiple `repo:` qualifiers).
+ */
+export function sanitizeSearchQuery(query: string): string {
+  return query
+    .replace(
+      /(^|\s)-?(repo|org|user|owner|path|in|is|fork|language|extension|filename|size):\S*/gi,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // --- Read ---
 
 export async function vaultRead(path: string): Promise<VaultFile> {
@@ -129,7 +158,7 @@ export async function vaultWrite(
   message?: string,
   knownSha?: string
 ): Promise<{ path: string; sha: string; created: boolean }> {
-  validateVaultPath(path);
+  validateVaultWritePath(path);
   const { pat, repo } = getConfig();
   const url = `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(path)}`;
 
@@ -183,7 +212,7 @@ export async function vaultDelete(
   message?: string,
   knownSha?: string
 ): Promise<{ path: string }> {
-  validateVaultPath(path);
+  validateVaultWritePath(path);
   const { pat, repo } = getConfig();
   const url = `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(path)}`;
 
@@ -296,7 +325,9 @@ async function tryCodeSearch(
 ): Promise<{ results: SearchResult[]; totalCount: number }> {
   const { pat, repo } = getConfig();
 
-  let q = `${query} repo:${repo}`;
+  const cleanQuery = sanitizeSearchQuery(query);
+  if (!cleanQuery) throw new Error("Search query is empty after removing GitHub qualifiers");
+  let q = `${cleanQuery} repo:${repo}`;
   if (folder) q += ` path:${folder}`;
 
   const res = await fetchWithTimeout(

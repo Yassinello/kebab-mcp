@@ -67,6 +67,13 @@ export interface ImportOptions {
    */
   mode?: "merge" | "replace" | undefined;
   /**
+   * SEC-02: allow writing secret-bearing and authorization keys
+   * (`cred:*`, `mymcp:firstrun:*`, `devices:*`, ...). Defaults to false;
+   * those keys are skipped and reported. In "replace" mode they are also
+   * never deleted unless this is set.
+   */
+  includeSecrets?: boolean | undefined;
+  /**
    * Phase 42 / TEN-04: target scope.
    * - "tenant" (default): writes via `getContextKVStore()` — current
    *   tenant only. Requires the backup to be tenant-scoped OR the
@@ -82,6 +89,50 @@ export interface ExportOptions {
   kv?: KVStore;
   /** Phase 42 / TEN-04: scope selector. Defaults to "tenant". */
   scope?: "tenant" | "all";
+  /**
+   * SEC-02 (2026-11 audit): include secret-bearing keys (connector
+   * credentials, first-run bootstrap/signing material, API connection
+   * auth, OAuth access tokens). Defaults to false. Only the operator CLI
+   * (`scripts/backup.ts`, which already holds raw KV credentials) passes
+   * true; the MCP tool surface never does.
+   */
+  includeSecrets?: boolean;
+}
+
+/**
+ * SEC-02: key prefixes that carry secrets. Excluded from exports and
+ * refused on import unless `includeSecrets` is set. Matching is done on
+ * the tenant-relative key (TenantKV strips the `tenant:<id>:` prefix) and
+ * on the raw key for `scope: "all"` exports.
+ */
+export const SECRET_KEY_PREFIXES: readonly string[] = [
+  "cred:",
+  "mymcp:firstrun:",
+  "api:connections",
+  "google:oauth:access-token",
+];
+
+/**
+ * SEC-02: keys that are not secret but control authorization. Exported
+ * (they document the instance) but never written by a non-secret import:
+ * rewriting `devices:<id>` would let an importer drop its own connector
+ * scope.
+ */
+export const AUTHZ_KEY_PREFIXES: readonly string[] = ["devices:"];
+
+function stripTenantPrefix(key: string): string {
+  const m = /^tenant:[^:]+:(.*)$/.exec(key);
+  return m?.[1] ?? key;
+}
+
+export function isSecretKey(key: string): boolean {
+  const k = stripTenantPrefix(key);
+  return SECRET_KEY_PREFIXES.some((p) => k.startsWith(p));
+}
+
+function isAuthzKey(key: string): boolean {
+  const k = stripTenantPrefix(key);
+  return AUTHZ_KEY_PREFIXES.some((p) => k.startsWith(p));
 }
 
 /**
@@ -116,7 +167,8 @@ export async function exportBackup(opts?: ExportOptions): Promise<BackupData> {
     scope = tenantId ? `tenant:${tenantId}` : "default";
   }
 
-  const keys = await kvScanAll(kv, "*");
+  const includeSecrets = opts?.includeSecrets === true;
+  const keys = (await kvScanAll(kv, "*")).filter((k) => includeSecrets || !isSecretKey(k));
   const entries: Record<string, string> = {};
 
   if (typeof kv.mget === "function") {
@@ -178,7 +230,7 @@ export async function exportBackup(opts?: ExportOptions): Promise<BackupData> {
 export async function importBackup(
   data: unknown,
   opts?: ImportOptions & { kv?: KVStore }
-): Promise<{ ok: boolean; message: string; count?: number }> {
+): Promise<{ ok: boolean; message: string; count?: number; skipped?: number }> {
   if (!data || typeof data !== "object") {
     return { ok: false, message: "Invalid backup: expected a JSON object" };
   }
@@ -222,26 +274,38 @@ export async function importBackup(
   const entries = backup.entries as Record<string, unknown>;
   const kv = opts?.kv ?? (scopeMode === "all" ? getKVStore() : getContextKVStore());
   const mode = opts?.mode ?? "merge";
+  const includeSecrets = opts?.includeSecrets === true;
+  const isProtected = (key: string) => !includeSecrets && (isSecretKey(key) || isAuthzKey(key));
   let count = 0;
+  let skipped = 0;
 
-  // In "replace" mode, delete all existing keys not present in the backup
+  // In "replace" mode, delete all existing keys not present in the backup.
+  // SEC-02: protected keys are never deleted by a non-secret import —
+  // a "replace" from a redacted export must not wipe credentials.
   if (mode === "replace") {
     const existingKeys = await kvScanAll(kv, "*");
     const backupKeySet = new Set(Object.keys(entries));
     for (const key of existingKeys) {
-      if (!backupKeySet.has(key)) {
+      if (!backupKeySet.has(key) && !isProtected(key)) {
         await kv.delete(key);
       }
     }
   }
 
   for (const [key, value] of Object.entries(entries)) {
-    if (typeof value === "string") {
-      await kv.set(key, value);
-      count++;
+    if (typeof value !== "string") continue;
+    if (isProtected(key)) {
+      skipped++;
+      continue;
     }
+    await kv.set(key, value);
+    count++;
   }
 
+  if (skipped > 0) {
+    backupLog.warn("import skipped protected keys (secrets / authorization)", { skipped });
+  }
   const modeLabel = mode === "replace" ? "Replaced" : "Imported";
-  return { ok: true, message: `${modeLabel} ${count} entries`, count };
+  const skippedLabel = skipped > 0 ? ` (${skipped} protected keys skipped)` : "";
+  return { ok: true, message: `${modeLabel} ${count} entries${skippedLabel}`, count, skipped };
 }

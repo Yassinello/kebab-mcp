@@ -1,5 +1,5 @@
 import { z } from "zod";
-import yaml from "js-yaml";
+import { loadVaultYaml } from "../lib/yaml-safe";
 import { vaultRead, vaultTree } from "../lib/github";
 
 export const vaultDueSchema = {
@@ -54,7 +54,7 @@ export async function handleVaultDue(params: {
       const yamlBlock = content.slice(4, endIndex);
       let frontmatter: Record<string, unknown>;
       try {
-        const parsed = yaml.load(yamlBlock);
+        const parsed = loadVaultYaml(yamlBlock);
         if (!parsed || typeof parsed !== "object") continue;
         frontmatter = parsed as Record<string, unknown>;
       } catch {

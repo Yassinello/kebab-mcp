@@ -102,35 +102,45 @@ function autoBootstrap(): void {
 
   try {
     // Dynamic require so the SDK modules are only loaded when OTel is configured.
+    // OTel JS v3 (sdk-node 0.300+): sdk-trace-node/sdk-trace-base were folded
+    // into @opentelemetry/sdk-trace, which has no NodeTracerProvider.register()
+    // — we register the context manager + propagator ourselves below.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sdkTraceNode = require("@opentelemetry/sdk-trace-node");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sdkTraceBase = require("@opentelemetry/sdk-trace-base");
+    const sdkTrace = require("@opentelemetry/sdk-trace");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const otlpExporter = require("@opentelemetry/exporter-trace-otlp-http");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const resources = require("@opentelemetry/resources");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const asyncHooks = require("@opentelemetry/context-async-hooks");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const otelCore = require("@opentelemetry/core");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
 
     const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4318/v1/traces";
 
-    // OTel SDK v0.200+: use resourceFromAttributes instead of new Resource
-    const resource = resources.resourceFromAttributes
-      ? resources.resourceFromAttributes({ "service.name": serviceName })
-      : new resources.Resource({ "service.name": serviceName });
+    const resource = resources.resourceFromAttributes({ "service.name": serviceName });
 
     const exporter = new otlpExporter.OTLPTraceExporter({ url: endpoint });
-    const processor = new sdkTraceBase.BatchSpanProcessor(exporter);
+    const processor = new sdkTrace.BatchSpanProcessor(exporter);
 
-    // OTel SDK v0.200+: pass spanProcessors in constructor
-    const provider = new sdkTraceNode.NodeTracerProvider({
+    const provider = new sdkTrace.TracerProvider({
       resource,
       spanProcessors: [processor],
     });
-    provider.register();
 
-    // Also register with the global API so startToolSpan picks up our provider.
+    // Equivalent of the former NodeTracerProvider.register(): async context
+    // propagation within the process + W3C trace-context/baggage propagators.
+    api.context.setGlobalContextManager(new asyncHooks.AsyncLocalStorageContextManager().enable());
+    api.propagation.setGlobalPropagator(
+      new otelCore.CompositePropagator({
+        propagators: [
+          new otelCore.W3CTraceContextPropagator(),
+          new otelCore.W3CBaggagePropagator(),
+        ],
+      })
+    );
     api.trace.setGlobalTracerProvider(provider);
 
     otelBootstrapped = true;
@@ -140,7 +150,7 @@ function autoBootstrap(): void {
     console.warn(
       "[Kebab MCP] OTel bootstrap failed: " +
         toMsg(error) +
-        ". Install @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-http to enable tracing."
+        ". Install @opentelemetry/sdk-node and @opentelemetry/exporter-trace-otlp-http to enable tracing."
     );
   }
 }

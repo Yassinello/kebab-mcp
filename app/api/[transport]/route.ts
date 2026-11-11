@@ -6,9 +6,12 @@ import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
+import { getConfigRevision } from "@/core/config-revision";
 import {
-  resolveTokenConnectorScope,
+  resolveTokenAccess,
   isConnectorAllowed,
+  runWithToolAccess,
+  type TokenAccess,
   resolveTokenSkillScope,
   runWithSkillScope,
 } from "@/core/token-scope";
@@ -63,17 +66,20 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
 // (env.changed, skill/tool CRUD) reset the cache to keep dashboard
 // edits visible on the next request.
 const PRIME_CACHE_TTL_MS = 30_000;
-// Keyed by tenant: refresh() primes tenant-scoped caches, so a prime done
-// for tenant A must never satisfy tenant B's request.
-const primeCache = new Map<string, { at: number; promise: Promise<void> }>();
+// REL-01 / REL-02 (2026-11 audit): one entry per tenant (a prime done for
+// tenant A must never satisfy tenant B), invalidated as soon as the shared
+// config revision moves (a skill / API tool / custom tool was edited on ANY
+// lambda) or env.changed fires locally.
+const primeCache = new Map<string, { at: number; rev: string; promise: Promise<void> }>();
 
 async function primeDynamicCaches(
   packs: { manifest: { refresh?: (() => Promise<void>) | undefined } }[]
 ): Promise<void> {
   const key = getCurrentTenantId() ?? "__root__";
   const now = Date.now();
+  const rev = await getConfigRevision();
   const hit = primeCache.get(key);
-  if (hit && now - hit.at < PRIME_CACHE_TTL_MS) {
+  if (hit && hit.rev === rev && now - hit.at < PRIME_CACHE_TTL_MS) {
     return hit.promise;
   }
   // The per-connector refresh() is wrapped in .catch() so individual failures
@@ -85,7 +91,7 @@ async function primeDynamicCaches(
     packs.map((p) =>
       p.manifest.refresh?.().catch(() => {
         // refresh failure should not block transport startup; the connector
-        // will simply expose whatever the cached sync view sees (possibly []).
+        // will simply expose whatever the cached sync view sees.
       })
     )
   )
@@ -93,7 +99,7 @@ async function primeDynamicCaches(
     .catch(() => {
       primeCache.delete(key);
     });
-  primeCache.set(key, { at: now, promise });
+  primeCache.set(key, { at: now, rev, promise });
   return promise;
 }
 
@@ -124,9 +130,10 @@ export function __resetPrimeCacheForTests(): void {
  * ambient process.env still works (SEC-02 fallback).
  */
 async function buildHandler(
-  callerTokenId?: string | null,
-  tenantId?: string | null,
-  requestId?: string | null
+  callerTokenId: string | null | undefined,
+  tenantId: string | null | undefined,
+  requestId: string | null | undefined,
+  access: TokenAccess
 ) {
   // PERF-01: resolve lazily. buildHandler() is invoked per request by the
   // transport pipeline, so awaiting getEnabledPacksLazy() here is safe — the
@@ -140,7 +147,12 @@ async function buildHandler(
   // (defense-in-depth check inside each tool handler). Core connectors are
   // always in-scope (resolved inside token-scope.ts). See
   // src/core/token-scope.ts + src/core/devices.ts.
-  const connectorScope = await resolveTokenConnectorScope(callerTokenId);
+  const connectorScope =
+    access.kind === "full"
+      ? null
+      : access.kind === "scoped"
+        ? access.connectors
+        : new Set<string>();
 
   // Prime dynamic tool caches (user-defined Skills, Custom API Tools) before
   // we iterate `manifest.tools`. Without this priming step, connectors that
@@ -217,9 +229,9 @@ async function buildHandler(
               // timers), and it is idempotent — runWithCredentials
               // merges creds, and the outer tenantId is preserved.
               void tenantId; // silence unused (kept for signature compatibility)
-              // Kept explicit so a connector author reading this file sees
-              // the intended behavior.
-              return tool.handler(params);
+              // SEC-05: expose the caller's connector scope to code that
+              // invokes other tools on its behalf (Custom Tools runner).
+              return runWithToolAccess({ connectorScope }, () => tool.handler(params));
             },
             callerTokenId,
             pack.manifest.id,
@@ -338,12 +350,23 @@ async function buildHandler(
  * credential-store.ts SEC-02 for the resolution order.
  */
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
+  // SEC-04 / SEC-06: resolve the caller token's access once per request.
+  // A rotated/revoked token is refused outright — on Vercel it can still
+  // be present in the env until the next deploy.
+  const access = await resolveTokenAccess(ctx.tokenId);
+  if (access.kind === "revoked") {
+    const res = new Response("Unauthorized: this token has been revoked or rotated", {
+      status: 401,
+    });
+    res.headers.set("x-request-id", ctx.requestId);
+    return res;
+  }
   // Skills v2 §6: resolve the token's skill tag scope once, and keep it
   // ambient for the whole request (tools getter, tool handlers, prompts,
   // resources and the instructions block all read it).
   const skillScope = await resolveTokenSkillScope(ctx.tokenId);
   return runWithSkillScope(skillScope, async () => {
-    const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId);
+    const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
     const response = await mcpHandler(ctx.request);
     response.headers.set("x-request-id", ctx.requestId);
     return response;

@@ -85,9 +85,10 @@ export function DevicesTab({
   const [busy, setBusy] = useState<string | null>(null);
   const [scopeEditId, setScopeEditId] = useState<string | null>(null);
 
-  // Connectors the operator can pick from (core connectors are always in
-  // scope, so they never appear in the picker).
-  const pickable = connectors.filter((c) => !c.core);
+  // Connectors the operator can pick from. Scope-exempt core connectors
+  // (skills) are always in scope, so they never appear in the picker.
+  // SEC-03: `admin` is core but must be granted explicitly to a scoped token.
+  const pickable = connectors.filter((c) => !c.core || c.id === "admin");
 
   const resolvedBaseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -197,7 +198,7 @@ export function DevicesTab({
       r.connectors === null
         ? "All connectors"
         : r.connectors.length === 0
-          ? "None (core only)"
+          ? "None (skills only)"
           : `${r.connectors.length} connector${r.connectors.length === 1 ? "" : "s"}`;
     const tags = r.skillTags;
     if (!tags) return conn;

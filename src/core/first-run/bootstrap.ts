@@ -97,6 +97,8 @@ async function deleteBootstrapFromKv(): Promise<void> {
   try {
     const kv = getKVStore();
     await kv.delete(KV_BOOTSTRAP_KEY);
+    // SEC-07: a reset must also release the persisted first-run claim.
+    await kv.delete(KV_CLAIM_KEY);
   } catch (err) {
     console.info(`[Kebab MCP first-run] KV delete skipped: ${toMsg(err)}`);
   }
@@ -172,6 +174,21 @@ export async function getOrCreateClaim(request: Request): Promise<ClaimResult> {
     return { claimId: existingId, isNewClaim: false, isClaimer: true };
   }
 
+  // SEC-07 (2026-11 audit): "first writer wins" is arbitrated in KV, not
+  // only in this lambda's memory — otherwise two lambdas could each mint a
+  // claim for two different visitors.
+  const persisted = await readPersistedClaimId();
+  if (persisted.kind === "error") {
+    throw new Error("claim store unreadable — refusing to mint a claim");
+  }
+  if (persisted.kind === "present") {
+    if (existingId && existingId === persisted.claimId) {
+      claims.set(existingId, { createdAt: Date.now() });
+      return { claimId: existingId, isNewClaim: false, isClaimer: true };
+    }
+    return { claimId: persisted.claimId, isNewClaim: false, isClaimer: false };
+  }
+
   // If another claim is already active and unexpired, refuse to mint another.
   if (claims.size > 0) {
     const otherId = claims.keys().next().value as string;
@@ -179,6 +196,20 @@ export async function getOrCreateClaim(request: Request): Promise<ClaimResult> {
   }
 
   const claimId = randomBytes(32).toString("hex");
+  if (isExternalKvAvailable()) {
+    const kv = getKVStore();
+    if (typeof kv.setIfNotExists === "function") {
+      const res = await kv.setIfNotExists(KV_CLAIM_KEY, claimId, {
+        ttlSeconds: Math.floor(CLAIM_TTL_MS / 1000),
+      });
+      if (!res.ok) {
+        // Lost the race to a visitor on another lambda.
+        return { claimId: res.existing, isNewClaim: false, isClaimer: false };
+      }
+    } else {
+      await kv.set(KV_CLAIM_KEY, claimId);
+    }
+  }
   claims.set(claimId, { createdAt: Date.now() });
   console.info(`[Kebab MCP first-run] new claim minted (id=${claimId.slice(0, 8)}…)`);
   return {
@@ -189,28 +220,63 @@ export async function getOrCreateClaim(request: Request): Promise<ClaimResult> {
   };
 }
 
+/** SEC-07: KV record of the single active first-run claim (TTL = claim TTL). */
+const KV_CLAIM_KEY = "mymcp:firstrun:claim";
+
+type PersistedClaim = { kind: "absent" } | { kind: "present"; claimId: string } | { kind: "error" };
+
+async function readPersistedClaimId(): Promise<PersistedClaim> {
+  if (!isExternalKvAvailable()) return { kind: "absent" };
+  try {
+    const raw = await getKVStore().get(KV_CLAIM_KEY);
+    return raw ? { kind: "present", claimId: raw } : { kind: "absent" };
+  } catch (err) {
+    console.error(`[Kebab MCP first-run] claim store read failed: ${toMsg(err)}`);
+    return { kind: "error" };
+  }
+}
+
 /**
- * True if the request carries a valid first-run claim cookie.
+ * True if the request carries a valid first-run claim cookie AND that
+ * claim is still entitled to act as the operator.
  *
- * As of v0.10 (SEC-04) the cookie is HMAC-signed with a random 32-byte
- * secret persisted in KV at `mymcp:firstrun:signing-secret`. A valid
- * signature is proof the bearer received the cookie from
- * `/api/welcome/claim` on this deployment. The in-memory `claims` Map and
- * `activeBootstrap` are hot-path hints — on serverless platforms without
- * Upstash, cold lambdas have neither, and the original "must match
- * in-memory state" check would reject every cross-lambda welcome call
- * with 403. "First writer wins" is still enforced at cookie issuance
- * time by `getOrCreateClaim`.
+ * The cookie is HMAC-signed (domain-separated; issue time covered by the
+ * signature and checked server-side — see claim.ts). SEC-07 (2026-11
+ * audit) tightened what a valid cookie is worth:
+ *  - while the instance is UNINITIALIZED, the cookie's claimId must match
+ *    the claim persisted in KV (when external KV exists) — only the first
+ *    visitor is the claimer, across lambdas;
+ *  - once the instance is INITIALIZED, only the claim that minted the
+ *    bootstrap token keeps working (the last welcome steps, e.g. starter
+ *    skills), and only within the cookie TTL. Deployments configured
+ *    purely through MCP_AUTH_TOKEN (no bootstrap record) have no claimer.
  *
- * Rotation: `MYMCP_RECOVERY_RESET=1` now rotates the signing secret via
- * `rotateSigningSecret()` (called from `rehydrateBootstrapFromTmp`), so
- * any pre-reset cookies no longer verify. This closes SEC-05.
- *
- * Async as of v0.10 because the signing secret is KV-backed.
+ * Rotation: `MYMCP_RECOVERY_RESET=1` rotates the signing secret via
+ * `rotateSigningSecret()`, so any pre-reset cookies no longer verify.
  */
 export async function isClaimer(request: Request): Promise<boolean> {
   pruneExpired();
-  return (await readClaimCookie(request)) !== null;
+  const claimId = await readClaimCookie(request);
+  if (claimId === null) return false;
+
+  if (!isFirstRunMode()) {
+    // Only the claim that minted the bootstrap token keeps working. On
+    // filesystem deploys welcome/init also writes MCP_AUTH_TOKEN to the
+    // env, so "token present" alone must not lock the legitimate claimer
+    // out of the last welcome steps. Deployments configured purely through
+    // MCP_AUTH_TOKEN have no bootstrap record → no claimer.
+    const bootstrapClaimId =
+      activeBootstrap?.claimId ?? (await loadBootstrapFromKv())?.claimId ?? null;
+    return bootstrapClaimId !== null && bootstrapClaimId === claimId;
+  }
+
+  if (claims.has(claimId) || activeBootstrap?.claimId === claimId) return true;
+  const persisted = await readPersistedClaimId();
+  if (persisted.kind === "error") return false;
+  if (persisted.kind === "present") return persisted.claimId === claimId;
+  // No external KV (local dev / single process): the signed cookie is the
+  // only evidence available.
+  return !isExternalKvAvailable();
 }
 
 /**
@@ -539,4 +605,5 @@ export const __internals = {
   BOOTSTRAP_TTL_MS,
   BOOTSTRAP_PATH,
   encodeCookie,
+  claims,
 };

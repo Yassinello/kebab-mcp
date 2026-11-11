@@ -301,7 +301,13 @@ export async function proxy(request: NextRequest) {
   // layout and passed to <Script nonce=…>).
   const nonce = generateNonce();
   const csp = buildCsp(nonce);
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  // SEC-12: only reflect a client-supplied request id when it is a short,
+  // log-safe token; anything else is replaced.
+  const incomingRequestId = request.headers.get("x-request-id");
+  const requestId =
+    incomingRequestId && /^[A-Za-z0-9._:-]{1,128}$/.test(incomingRequestId)
+      ? incomingRequestId
+      : crypto.randomUUID();
 
   // Build a request-headers delta so the app can read `x-nonce` and `x-request-id`.
   const requestHeaders = new Headers(request.headers);
@@ -367,6 +373,35 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/config/") ||
     pathname === "/setup"; // legacy: still gate it in case someone hits it before redirect
 
+  // SEC-12 (2026-11 audit): mirror the Node-side SEC-A-03 guard
+  // (src/core/auth.ts checkAdminAuth). In production, a platform-set
+  // MCP_AUTH_TOKEN is NOT an admin credential unless the operator opts in
+  // with KEBAB_ADMIN_TOKEN_FALLBACK=1 — otherwise any device/agent token
+  // could open the dashboard (server-rendered logs, config). The KV-only
+  // bootstrap token (zero-config installs) remains a valid admin fallback.
+  const fallbackOptIn =
+    process.env.KEBAB_ADMIN_TOKEN_FALLBACK === "1" ||
+    process.env.KEBAB_ADMIN_TOKEN_FALLBACK === "true";
+  const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+  if (
+    adminGated &&
+    isProd &&
+    !process.env.ADMIN_AUTH_TOKEN?.trim() &&
+    process.env.MCP_AUTH_TOKEN?.trim() &&
+    !fallbackOptIn
+  ) {
+    return finalize(
+      new NextResponse(
+        JSON.stringify({
+          error:
+            "Admin auth misconfigured: ADMIN_AUTH_TOKEN is required when MCP_AUTH_TOKEN is set " +
+            "(or set KEBAB_ADMIN_TOKEN_FALLBACK=1 to allow shared-token fallback).",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      )
+    );
+  }
+
   if (adminGated && !adminToken) {
     // Misconfiguration: admin surface exists but no token set.
     // Never fall through to serving the page unauthenticated.
@@ -415,8 +450,10 @@ export async function proxy(request: NextRequest) {
     // clicked "Open dashboard". Browser follows the redirect with the
     // freshly-set cookie, second hit passes the auth check without the
     // query param.
+    // SEC-12: multi-token lists — compare against each listed token and
+    // store only the token that matched (never the whole list).
     const queryToken = request.nextUrl.searchParams.get("token")?.trim();
-    if (queryToken && safeEqual(queryToken, adminToken)) {
+    if (queryToken && safeEqualAny(queryToken, parseTokensEdge(adminToken))) {
       const cleanUrl = new URL(request.url);
       cleanUrl.searchParams.delete("token");
       const res = finalize(NextResponse.redirect(cleanUrl));
@@ -443,8 +480,8 @@ export async function proxy(request: NextRequest) {
         path: "/",
         maxAge: 60 * 60 * 24 * cookieDays,
       };
-      res.cookies.set("kebab_admin_token", adminToken, cookieOpts);
-      res.cookies.set("mymcp_admin_token", adminToken, cookieOpts);
+      res.cookies.set("kebab_admin_token", queryToken, cookieOpts);
+      res.cookies.set("mymcp_admin_token", queryToken, cookieOpts);
       return res;
     }
   }

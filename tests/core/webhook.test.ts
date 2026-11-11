@@ -150,6 +150,7 @@ describe("webhook API route", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (origWebhooks === undefined) delete process.env.MYMCP_WEBHOOKS;
     else process.env.MYMCP_WEBHOOKS = origWebhooks;
     delete process.env.MYMCP_WEBHOOK_SECRET_STRIPE;
@@ -171,8 +172,22 @@ describe("webhook API route", () => {
     expect(res.status).toBe(404);
   });
 
-  it("stores payload for allowed webhook", async () => {
+  it("SEC-11: refuses an allowlisted webhook that has no secret (fail closed)", async () => {
     process.env.MYMCP_WEBHOOKS = "stripe,github";
+    const { POST } = await importRoute();
+    const req = new Request("http://localhost/api/webhook/stripe", {
+      method: "POST",
+      body: JSON.stringify({ event: "x" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req, { params: Promise.resolve({ name: "stripe" }) });
+    expect(res.status).toBe(401);
+    expect(mockKV["webhook:last:stripe"]).toBeUndefined();
+  });
+
+  it("stores payload for allowed webhook (unsigned opt-in)", async () => {
+    process.env.MYMCP_WEBHOOKS = "stripe,github";
+    vi.stubEnv("KEBAB_WEBHOOK_ALLOW_UNSIGNED", "1");
     const { POST } = await importRoute();
     const payload = JSON.stringify({ event: "payment.completed" });
     const req = new Request("http://localhost/api/webhook/stripe", {
@@ -297,5 +312,15 @@ describe("webhook API route", () => {
     });
     const res = await POST(req, { params: Promise.resolve({ name: "stripe" }) });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("webhook route — SEC-11 contract", () => {
+  it("hydrates KV credentials so dashboard-saved secrets are honoured", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("app/api/webhook/[name]/route.ts", "utf-8");
+    expect(src).toMatch(/hydrateCredentialsStep/);
+    expect(src).toMatch(/KEBAB_WEBHOOK_SECRET_/);
+    expect(src).toMatch(/KEBAB_WEBHOOK_ALLOW_UNSIGNED/);
   });
 });

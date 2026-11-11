@@ -17,6 +17,8 @@
  * `runWithCredentials(creds, ...)` at the request entry instead.
  */
 
+import { bumpConfigRevision } from "./config-revision";
+import { runAfterResponse } from "./after-response";
 import { kvScanAll } from "./kv-store";
 import { getContextKVStore, getCurrentTenantId } from "./request-context";
 import { hasUpstashCreds } from "./upstash-env";
@@ -128,6 +130,8 @@ export async function saveCredentialsToKV(vars: Record<string, string>): Promise
     }
   }
   await Promise.all(writes);
+  // REL-02: tell every other lambda to re-hydrate.
+  await bumpConfigRevision();
 }
 
 // ── Hydration ──────────────────────────────────────────────────────
@@ -211,6 +215,7 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
 export function resetHydrationFlag(): void {
   hydrationPromises.clear();
   hydratedSnapshots.clear();
+  hydratedRevisions.clear();
 }
 
 /**
@@ -221,6 +226,28 @@ export function resetHydrationFlag(): void {
  */
 export function resetCredentialHydration(): void {
   hydrationPromises.delete(tenantSnapshotKey());
+  // REL-02: credentials changed (save / delete / account edit) — make the
+  // other warm lambdas drop their snapshot on their next request. Scheduled
+  // with after() so the KV write survives the response.
+  runAfterResponse(() => bumpConfigRevision(), "Config revision bump");
+}
+
+// REL-02: last config revision each tenant's snapshot was built from.
+const hydratedRevisions = new Map<string, string>();
+
+/**
+ * Drop the current tenant's hydrated snapshot when the shared config
+ * revision moved since it was built — including credentials that were
+ * DELETED elsewhere (the snapshot used to only ever grow). A fresh object
+ * replaces the old one so in-flight requests keep their consistent view.
+ */
+export function invalidateCredentialsIfRevisionChanged(rev: string): void {
+  const key = tenantSnapshotKey();
+  const prev = hydratedRevisions.get(key);
+  hydratedRevisions.set(key, rev);
+  if (prev === undefined || prev === rev) return;
+  hydrationPromises.delete(key);
+  hydratedSnapshots.set(key, {});
 }
 
 /**

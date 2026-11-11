@@ -7,6 +7,8 @@
  */
 
 const TENANT_HEADER = "x-mymcp-tenant";
+/** Q-03 (2026-11 audit): brand-consistent alias, preferred when both are sent. */
+const KEBAB_TENANT_HEADER = "x-kebab-tenant";
 
 /** Allowed tenant ID pattern: 1-64 alphanumeric + hyphens. */
 const TENANT_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -17,7 +19,7 @@ const TENANT_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * Throws if the header is present but invalid.
  */
 export function getTenantId(request: Request): string | null {
-  const raw = request.headers.get(TENANT_HEADER);
+  const raw = request.headers.get(KEBAB_TENANT_HEADER) ?? request.headers.get(TENANT_HEADER);
   if (raw === null || raw === "") return null;
   const id = raw.trim().toLowerCase();
   if (!TENANT_ID_RE.test(id)) {

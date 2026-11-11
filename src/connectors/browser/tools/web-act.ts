@@ -2,6 +2,7 @@ import {
   createBrowserSession,
   validatePublicUrl,
   validateContextName,
+  assertInteractiveContextAllowed,
   sanitizeError,
 } from "../lib/browserbase";
 import { clampNavTimeout } from "../lib/page-helpers";
@@ -16,6 +17,7 @@ type WebActParams = {
 export async function handleWebAct(params: WebActParams) {
   await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
+  assertInteractiveContextAllowed(contextName);
   const stagehand = await createBrowserSession(contextName);
 
   try {

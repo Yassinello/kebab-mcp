@@ -1,58 +1,55 @@
 version: 2
 updates:
-  # CI-04 (v0.11 Phase 43): security updates get their own ecosystem block
-  # with a generous open-PR cap so an urgent CVE fix is never blocked
-  # behind queued minor bumps. Daily interval + `applies-to:
-  # security-updates` on the groups config routes every security advisory
-  # Dependabot raises into this block, not the slower version-updates
-  # block below.
+  # CI-04 (2026-11 audit): a single npm entry for "/". Dependabot rejects two
+  # entries with the same ecosystem + directory, so the former
+  # security/version split is expressed with groups instead:
+  #   - security updates are grouped separately (`applies-to:
+  #     security-updates`) and are not subject to the weekly schedule — an
+  #     urgent CVE fix is never blocked behind queued minor bumps;
+  #   - version updates are grouped into prod / dev minor+patch PRs. Majors
+  #     stay as individual PRs so each breaking change is reviewed on its own.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
     open-pull-requests-limit: 10
     labels:
       - dependencies
-      - security
     groups:
       security-updates:
         applies-to: security-updates
         patterns:
           - "*"
+      prod-minor-patch:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      dev-minor-patch:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
 
-  # Normal version bumps — weekly cadence, capped at 5 open PRs so the
-  # queue doesn't fill with minor churn. Grouped by dep-family so a
-  # single typescript release doesn't eat the cap with three sibling
-  # @types/* bumps on the same day.
-  - package-ecosystem: npm
+  # Keeps the digest-pinned base image in the Dockerfile current.
+  - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
     labels:
       - dependencies
-    groups:
-      typescript:
-        patterns:
-          - "@types/*"
-          - "typescript"
-          - "typescript-eslint"
-          - "@typescript-eslint/*"
-      testing:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-          - "@testing-library/*"
-          - "@playwright/test"
-      nextjs-core:
-        patterns:
-          - "next"
-          - "@next/*"
-          - "react"
-          - "react-dom"
 
-  # github-actions — monthly, unchanged from pre-CI-04 cadence.
+  # Keeps the SHA-pinned actions in .github/workflows current (Dependabot
+  # updates both the SHA and the `# vX.Y.Z` comment).
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    labels:
+      - dependencies
+    groups:
+      github-actions:
+        patterns:
+          - "*"

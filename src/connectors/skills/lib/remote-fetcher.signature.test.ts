@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { fetchRemote } from "./remote-fetcher";
 
+// Hermetic: fetchRemote's SSRF guard (isPublicUrl with resolveDns) does a
+// real DNS lookup of example.com, which fails offline / in sandboxes and
+// surfaces as "Blocked or unreachable URL". Resolve to a fixed public IP.
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async () => [{ address: "93.184.215.14", family: 4 }]);
+  return { lookup, default: { lookup } };
+});
+
 const SECRET = "test-hmac-secret-32-bytes-aaaaaaaa"; // >= 32 chars (MIN_HMAC_SECRET_LEN)
 const PAYLOAD = "# Skill\nHello world";
 const URL = "https://example.com/skill.md";

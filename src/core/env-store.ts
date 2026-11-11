@@ -66,6 +66,13 @@ export function parseEnvFile(content: string): {
 }
 
 export function serializeEnv(existingLines: string[], updates: Record<string, string>): string {
+  // SEC-15 (2026-11 audit): a value containing a newline would inject extra
+  // KEY=value lines into the .env file, bypassing key-name validation.
+  for (const [k, v] of Object.entries(updates)) {
+    if (/[\r\n\0]/.test(v ?? "")) {
+      throw new Error(`Invalid value for ${k}: control characters are not allowed`);
+    }
+  }
   const pending = new Set(Object.keys(updates));
   const out: string[] = [];
 

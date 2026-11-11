@@ -108,12 +108,14 @@ export class TwentyAdapterSkeleton implements CrmAdapter {
       queued_at: new Date().toISOString(),
     };
     const kv = getContextKVStore();
-    // NO TTL: outbox rows are durable until phase 70's retry cron processes
-    // them. Once status reaches 'sent' or 'dead', a phase 71 cleanup may
-    // apply a TTL — but that is out of scope here.
-    await kv.set(`unipile:outbox:${auditId}`, JSON.stringify(row));
+    // REL-10 (2026-11 audit): no consumer drains this outbox yet (the CRM
+    // adapter is a skeleton), so rows used to accumulate forever. Keep them
+    // 30 days — ample for a future retry worker — then let KV expire them.
+    await kv.set(`unipile:outbox:${auditId}`, JSON.stringify(row), OUTBOX_TTL_SECONDS);
   }
 }
+
+const OUTBOX_TTL_SECONDS = 30 * 24 * 3600;
 
 /**
  * Singleton instance used by tool handlers in Plan 06. Default consumer

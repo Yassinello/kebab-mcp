@@ -1,4 +1,5 @@
 import { promises as fs, readFileSync, existsSync } from "fs";
+import { bumpConfigRevision } from "@/core/config-revision";
 import path from "path";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -201,6 +202,8 @@ async function writeRaw(skills: Skill[]): Promise<void> {
   // newly-created/edited skills on the next tools iteration in this
   // lambda — without waiting for the next `primeSkillsCache()` roundtrip.
   _skillsCache.set(cacheKey(), skills);
+  // REL-02: other lambdas re-prime.
+  await bumpConfigRevision();
 }
 
 // ── Write mutex ─────────────────────────────────────────────────────────
@@ -256,7 +259,9 @@ function cacheKey(): string {
 export async function primeSkillsCache(): Promise<void> {
   try {
     _skillsCache.set(cacheKey(), await readRaw());
-  } catch {
+  } catch (err) {
+    // Q-01: keep the last good snapshot on transient failures.
+    console.error(`[Kebab MCP] skills cache refresh failed: ${toMsg(err)}`);
     if (!_skillsCache.has(cacheKey())) _skillsCache.set(cacheKey(), []);
   }
 }

@@ -46,9 +46,17 @@ export function useClaimStatus(initialClaim: ClaimStatus = "loading"): UseClaimS
 
     (async () => {
       try {
+        // SEC-07: forward the optional deploy-time setup token
+        // (`/welcome?setup=…`) so instances that set KEBAB_SETUP_TOKEN can
+        // be claimed.
+        const setup =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("setup")
+            : null;
         const res = await fetch("/api/welcome/claim", {
           method: "POST",
           signal: controller.signal,
+          headers: setup ? { "x-kebab-setup-token": setup } : {},
         });
         if (cancelled) return;
         const data = (await res.json()) as { status?: ClaimStatus; error?: string };

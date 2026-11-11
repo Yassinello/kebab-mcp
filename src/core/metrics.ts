@@ -19,6 +19,7 @@
  *   - app/api/admin/metrics/errors/route.ts   → aggregateErrorsByConnectorHour
  */
 
+import { getConfig } from "./config-facade";
 import { getRecentLogs, type ToolLog } from "./logging";
 import { getLogStore } from "./log-store";
 
@@ -190,7 +191,15 @@ export async function getMetricsSource(
   // Generous ceiling — route-level limits are enforced at the route
   // layer; here we want the full 24h window available for aggregation.
   const bufferLogs = getRecentLogs(2000, bufferOpts);
-  if (bufferLogs.length > 0) {
+  // REL-06 (2026-11 audit): on serverless each lambda has its own ring
+  // buffer, so "buffer if non-empty" showed one random instance's slice.
+  // When durable logs are enabled, they are the source of truth for the
+  // un-scoped (root / all) views; tenant-scoped views keep the buffer since
+  // durable entries are not tenant-partitioned.
+  const preferDurable =
+    getConfig("KEBAB_DURABLE_LOGS") === "true" &&
+    ("scope" in bufferOpts || bufferOpts.tenantId === null);
+  if (bufferLogs.length > 0 && !preferDurable) {
     return { logs: bufferLogs, source: "buffer" };
   }
 
@@ -206,6 +215,7 @@ export async function getMetricsSource(
       logs.push(meta);
     }
     if (logs.length > 0) return { logs, source: "durable" };
+    if (bufferLogs.length > 0) return { logs: bufferLogs, source: "buffer" };
   } catch {
     // Durable store unavailable — return the empty buffer result.
     // silent-swallow-ok: metrics must not surface durable-store

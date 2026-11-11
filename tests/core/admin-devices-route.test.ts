@@ -251,7 +251,8 @@ describe("/api/admin/devices — DELETE revoke", () => {
     const body = await res.json();
     expect(body.revoked).toBe(true);
 
-    expect(kvStore.has(`devices:${tid}`)).toBe(false);
+    // SEC-06: revocation tombstone instead of deletion
+    expect(JSON.parse(kvStore.get(`devices:${tid}`)!).revokedAt).toBeTruthy();
     expect(envVars.MCP_AUTH_TOKEN).toBe(TOKEN_B);
   });
 

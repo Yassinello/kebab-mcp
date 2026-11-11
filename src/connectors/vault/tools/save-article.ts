@@ -13,6 +13,25 @@ export const saveArticleSchema = {
   folder: z.string().optional().describe('Target folder in vault (default: "Veille/")'),
 };
 
+const MEDIUM_HOSTS = [
+  "medium.com",
+  "towardsdatascience.com",
+  "betterprogramming.pub",
+  "levelup.gitconnected.com",
+];
+
+export function isMediumHost(url: string): boolean {
+  let host: string;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    host = u.hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return MEDIUM_HOSTS.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
 export async function handleSaveArticle(params: {
   url: string;
   title?: string | undefined;
@@ -21,11 +40,9 @@ export async function handleSaveArticle(params: {
 }) {
   // Fetch article content via Jina Reader with timeout and size limit
   // Auto-detect Medium URLs and inject session cookie
-  const isMedium =
-    params.url.includes("medium.com") ||
-    params.url.includes("towardsdatascience.com") ||
-    params.url.includes("betterprogramming.pub") ||
-    params.url.includes("levelup.gitconnected.com");
+  // SEC-10 (2026-11 audit): match on the parsed hostname. A substring test
+  // sent MEDIUM_SID to Jina for URLs like https://evil.example/medium.com.
+  const isMedium = isMediumHost(params.url);
 
   const jinaUrl = `https://r.jina.ai/${params.url}`;
   const controller = new AbortController();

@@ -127,6 +127,48 @@ describe("listDevices", () => {
   });
 });
 
+describe("setDeviceLabel — SEC-03b exploit regression", () => {
+  it("renaming a scoped token keeps its connector scope", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "agent", createdAt: "2026-01-01", connectors: ["apify"] })
+    );
+    await setDeviceLabel("abcd1234", "renamed");
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed.label).toBe("renamed");
+    expect(parsed.connectors).toEqual(["apify"]);
+    expect(await getDeviceConnectors("abcd1234")).toEqual(["apify"]);
+  });
+
+  it("renaming keeps a revocation tombstone", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "old", createdAt: "2026-01-01", revokedAt: "2026-11-01" })
+    );
+    await setDeviceLabel("abcd1234", "renamed");
+    expect(JSON.parse(store.get("devices:abcd1234")!).revokedAt).toBe("2026-11-01");
+  });
+
+  it("refuses to rewrite a corrupt entry (would silently grant full access)", async () => {
+    store.set("devices:abcd1234", "{ not json");
+    await expect(setDeviceLabel("abcd1234", "x")).rejects.toThrow(/corrupt/i);
+  });
+});
+
+describe("rotateDeviceToken — SEC-06", () => {
+  it("carries the scope to the new token and tombstones the old one", async () => {
+    envVars.MCP_AUTH_TOKEN = `${TOKEN_A}`;
+    const tidA = tokenId(TOKEN_A);
+    store.set(
+      `devices:${tidA}`,
+      JSON.stringify({ label: "Agent", createdAt: "2026-01-01", connectors: ["apify"] })
+    );
+    const { newTokenId } = await rotateDeviceToken(tidA);
+    expect(JSON.parse(store.get(`devices:${newTokenId}`)!).connectors).toEqual(["apify"]);
+    expect(await getDeviceConnectors(tidA)).toEqual([]);
+  });
+});
+
 describe("setDeviceLabel", () => {
   it("rejects empty / newline / >40-char labels", async () => {
     await expect(setDeviceLabel("abcd1234", "")).rejects.toThrow(/label/i);
@@ -155,7 +197,7 @@ describe("setDeviceLabel", () => {
 });
 
 describe("deleteDevice", () => {
-  it("deletes KV entry + clears rate-limit buckets", async () => {
+  it("tombstones the KV entry (SEC-06) + clears rate-limit buckets", async () => {
     const tid = tokenId(TOKEN_A);
     const hash = idHash16(TOKEN_A);
     store.set(`devices:${tid}`, JSON.stringify({ label: "L", createdAt: "x" }));
@@ -168,7 +210,12 @@ describe("deleteDevice", () => {
     const result = await deleteDevice(tid, TOKEN_A);
     expect(result.kvDeleted).toBe(true);
     expect(result.rateLimitBucketsDeleted).toBe(3);
-    expect(store.has(`devices:${tid}`)).toBe(false);
+    // SEC-06: the entry is replaced by a revocation tombstone, not deleted —
+    // a deleted entry would mean "no scope" = full access while the token
+    // still sits in a not-yet-redeployed env.
+    const tomb = JSON.parse(store.get(`devices:${tid}`)!);
+    expect(typeof tomb.revokedAt).toBe("string");
+    expect(tomb.label).toBe("L");
     expect(store.has(`ratelimit:mcp:${hash}:100`)).toBe(false);
     expect(store.has(`ratelimit:mcp:${hash}:101`)).toBe(false);
     expect(store.has(`ratelimit:admin:${hash}:100`)).toBe(false);
@@ -197,8 +244,8 @@ describe("rotateDeviceToken", () => {
     expect(parts).toContain(TOKEN_B);
     expect(parts).not.toContain(TOKEN_A);
 
-    // Old KV entry gone, new one carries preserved label
-    expect(store.has(`devices:${tidA}`)).toBe(false);
+    // SEC-06: old entry becomes a revocation tombstone; new one carries the label
+    expect(JSON.parse(store.get(`devices:${tidA}`)!).revokedAt).toBeTruthy();
     const newRaw = store.get(`devices:${newTokenId}`);
     expect(newRaw).toBeTruthy();
     const parsed = JSON.parse(newRaw!);
@@ -267,9 +314,14 @@ describe("getDeviceConnectors", () => {
     expect(await getDeviceConnectors("abcd1234")).toEqual([]);
   });
 
-  it("fails open (null) on a corrupt entry", async () => {
+  it("fails CLOSED ([]) on a corrupt entry (SEC-04)", async () => {
     store.set("devices:abcd1234", "{ not json");
-    expect(await getDeviceConnectors("abcd1234")).toBeNull();
+    expect(await getDeviceConnectors("abcd1234")).toEqual([]);
+  });
+
+  it("returns [] for a revoked token", async () => {
+    store.set("devices:abcd1234", JSON.stringify({ label: "x", createdAt: "x", revokedAt: "now" }));
+    expect(await getDeviceConnectors("abcd1234")).toEqual([]);
   });
 });
 

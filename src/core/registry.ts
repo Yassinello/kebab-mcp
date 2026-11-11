@@ -2,7 +2,6 @@ import type { ConnectorManifest, ConnectorState, ToolDefinition } from "./types"
 import { getEnabledPacksOverride } from "./config";
 import { on } from "./events";
 import { hydrateCredentialsFromKV, getHydratedCredentialSnapshot } from "./credential-store";
-import { getConfig } from "./config-facade";
 // Credential guides for the disabled-stub path. These are plain markdown
 // strings (no tool handlers / SDK pulled in), so importing them statically
 // here costs nothing and lets the stub manifest carry the guide before any
@@ -243,7 +242,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Admin",
     description: "Framework-level admin tools (health check, tool toggle, etc.)",
     requiredEnvVars: [],
-    toolCount: 5,
+    toolCount: 3,
     core: true,
     loader: () => import("@/connectors/admin/manifest").then((m) => m.adminConnector),
   },

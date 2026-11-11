@@ -107,6 +107,9 @@ const ALLOWLIST: readonly string[] = [
   // and FIRST_RUN_COOKIE_NAME that are cross-version contract literals.
   "src/core/first-run/claim.ts",
   "src/core/first-run/bootstrap.ts",
+  // SEC-02 (2026-11 audit): backup redaction must match the legacy
+  // `mymcp:firstrun:*` KV key prefix (signing secret, bootstrap token).
+  "src/core/backup.ts",
   "src/core/first-run/obs.ts",
   // Skills export format: claude-skills JSON carries `source: "mymcp"`
   // as an external identifier; rename would break Claude Desktop's

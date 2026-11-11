@@ -13,6 +13,7 @@ import {
   rehydrateBootstrapAsync,
   getBootstrapAuthToken,
   __resetFirstRunForTests,
+  __resetFirstRunForTestsAsync,
   __internals,
 } from "./first-run";
 import * as kvStore from "./kv-store";
@@ -25,9 +26,11 @@ function makeRequest(cookie?: string): Request {
   return new Request("http://localhost/api/welcome/claim", { headers });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   delete process.env.MCP_AUTH_TOKEN;
-  __resetFirstRunForTests();
+  // Awaited: the persisted first-run claim (SEC-07) lives in KV and must be
+  // gone before the next test mints one.
+  await __resetFirstRunForTestsAsync();
 });
 
 afterEach(() => {
@@ -242,13 +245,15 @@ describe("KV cross-instance bootstrap persistence", () => {
     // asserts THAT invariant.
     const c = await getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
     bootstrapToken(c.claimId);
+    // SEC-07: the claim itself is persisted (stub has no SETNX → plain set).
+    const bootstrapWrites = () =>
+      stubKv.set.mock.calls.filter((call) => call[0] === "mymcp:firstrun:bootstrap");
     // bootstrapToken itself no longer schedules a KV write; flush is the
     // authoritative path.
-    expect(stubKv.set).toHaveBeenCalledTimes(0);
+    expect(bootstrapWrites()).toHaveLength(0);
     await flushBootstrapToKv();
-    expect(stubKv.set).toHaveBeenCalledTimes(1);
-    expect(stubKv.set.mock.calls[0]?.[0]).toBe("mymcp:firstrun:bootstrap");
-    const stored = JSON.parse(stubKv.set.mock.calls[0]?.[1] as string);
+    expect(bootstrapWrites()).toHaveLength(1);
+    const stored = JSON.parse(bootstrapWrites()[0]?.[1] as string);
     expect(stored.claimId).toBe(c.claimId);
     expect(stored.token).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -326,5 +331,58 @@ describe("KV cross-instance bootstrap persistence", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(stubKv.delete).toHaveBeenCalledWith("mymcp:firstrun:bootstrap");
+  });
+});
+
+// ── SEC-07 (2026-11 audit) ───────────────────────────────────────────
+describe("SEC-07 — claim hardening", () => {
+  function withCookie(cookieValue: string): Request {
+    return makeRequest(`mymcp_firstrun_claim=${encodeURIComponent(cookieValue)}`);
+  }
+
+  it("rejects a correctly signed but expired claim cookie (server-side expiry)", async () => {
+    const c = await getOrCreateClaim(makeRequest());
+    const { encodeCookie } = __internals as unknown as {
+      encodeCookie: (id: string, issuedAt?: number) => Promise<string>;
+    };
+    const stale = await encodeCookie(c.claimId, Date.now() - 31 * 60 * 1000);
+    expect(await isClaimer(withCookie(stale))).toBe(false);
+  });
+
+  it("rejects legacy two-part cookies (claimId.sig)", async () => {
+    const c = await getOrCreateClaim(makeRequest());
+    const [id, , sig] = (c.cookieToSet ?? "").split(".");
+    expect(await isClaimer(withCookie(`${id}.${sig}`))).toBe(false);
+  });
+
+  it("EXPLOIT: a second visitor on a cold lambda cannot mint a parallel claim", async () => {
+    const first = await getOrCreateClaim(makeRequest());
+    expect(first.isClaimer).toBe(true);
+    // Simulate another lambda: wipe ONLY in-memory state; the KV claim stays.
+    __internals.claims.clear();
+    const second = await getOrCreateClaim(makeRequest());
+    expect(second.isClaimer).toBe(false);
+    expect(second.isNewClaim).toBe(false);
+    // …while the legitimate claimer is still recognised on that lambda.
+    const again = await getOrCreateClaim(withCookie(first.cookieToSet ?? ""));
+    expect(again.isClaimer).toBe(true);
+  });
+
+  it("EXPLOIT: on an env-configured instance (no bootstrap), a claim cookie grants nothing", async () => {
+    const c = await getOrCreateClaim(makeRequest());
+    process.env.MCP_AUTH_TOKEN = "x".repeat(32);
+    expect(await isClaimer(withCookie(c.cookieToSet ?? ""))).toBe(false);
+  });
+
+  it("after bootstrap init, only the claim that minted the token is still a claimer", async () => {
+    const c = await getOrCreateClaim(makeRequest());
+    bootstrapToken(c.claimId);
+    expect(isFirstRunMode()).toBe(false);
+    expect(await isClaimer(withCookie(c.cookieToSet ?? ""))).toBe(true);
+    const { encodeCookie } = __internals as unknown as {
+      encodeCookie: (id: string) => Promise<string>;
+    };
+    const other = await encodeCookie("e".repeat(64));
+    expect(await isClaimer(withCookie(other))).toBe(false);
   });
 });

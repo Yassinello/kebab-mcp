@@ -20,13 +20,16 @@
     "url": "https://github.com/Yassinello/kebab-mcp"
   },
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "predev": "node scripts/check-updates.js",
     "dev": "next dev",
     "build": "next build",
     "analyze": "ANALYZE=true next build",
     "start": "next start",
-    "lint": "eslint src/ app/ scripts/ tests/",
+    "lint": "eslint src/ app/ scripts/ tests/ --max-warnings 0",
     "lint:fix": "eslint src/ app/ scripts/ tests/ --fix",
     "lint:unused": "knip --config config/knip.ts",
     "typecheck": "tsc --noEmit --skipLibCheck",
@@ -61,9 +64,13 @@
     "@composio/core": "^0.13.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mozilla/readability": "^0.6.0",
-    "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
-    "@opentelemetry/sdk-node": "^0.215.0",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/context-async-hooks": "^3.1.1",
+    "@opentelemetry/core": "^3.1.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.1",
+    "@opentelemetry/resources": "^3.1.1",
+    "@opentelemetry/sdk-node": "^0.301.1",
+    "@opentelemetry/sdk-trace": "^3.1.1",
     "@tailwindcss/postcss": "^4.3.2",
     "arctic": "^3.7.0",
     "fflate": "^0.8.3",
@@ -72,7 +79,7 @@
     "mcp-handler": "^1.1.0",
     "next": "^16.2.4",
     "react": "^19.2.6",
-    "react-dom": "^19.2.5",
+    "react-dom": "^19.2.6",
     "recharts": "^2.15.4",
     "tailwindcss": "^4.2.4",
     "turndown": "^7.2.4",
@@ -105,11 +112,6 @@
     "typescript-eslint": "^8.59.1",
     "vitest": "^4.1.5"
   },
-  "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "16.2.4",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.2.2",
-    "lightningcss-linux-x64-gnu": "1.32.0"
-  },
   "lint-staged": {
     "*.{ts,tsx}": [
       "prettier --write",
@@ -125,6 +127,8 @@
     "vite": "^8.1.5",
     "@hono/node-server": "^2.0.11",
     "sharp": "^0.35.3",
-    "@opentelemetry/propagator-jaeger": "^2.10.0"
+    "jsdom": {
+      "undici": "^7.30.2"
+    }
   }
 }

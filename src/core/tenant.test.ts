@@ -56,3 +56,15 @@ describe("withTenantPrefix", () => {
     expect(withTenantPrefix("", "acme")).toBe("tenant:acme:");
   });
 });
+
+describe("getTenantId — Q-03 x-kebab-tenant alias", () => {
+  it("accepts x-kebab-tenant and prefers it over the legacy header", async () => {
+    const { getTenantId } = await import("./tenant");
+    const both = new Request("http://x/", {
+      headers: { "x-kebab-tenant": "acme", "x-mymcp-tenant": "legacy" },
+    });
+    expect(getTenantId(both)).toBe("acme");
+    const legacy = new Request("http://x/", { headers: { "x-mymcp-tenant": "legacy" } });
+    expect(getTenantId(legacy)).toBe("legacy");
+  });
+});

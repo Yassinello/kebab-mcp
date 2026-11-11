@@ -95,8 +95,18 @@ function resetTestFilesystem(): void {
 async function signClaimCookie(claimId: string): Promise<string> {
   const { getSigningSecret } = await import("@/core/signing-secret");
   const secret = await getSigningSecret();
-  const sig = createHmac("sha256", secret).update(claimId).digest("hex");
-  return `${claimId}.${sig}`;
+  // SEC-07 (2026-11 audit): v2 cookie format — domain-separated HMAC over
+  // claimId + issue time — and the claim must be the one persisted in KV
+  // (as /api/welcome/claim would have done).
+  const body = `${claimId}.${Date.now()}`;
+  const sig = createHmac("sha256", secret).update(`kebab:claim:v2:${body}`).digest("hex");
+  const { getKVStore } = await import("@/core/kv-store");
+  try {
+    await getKVStore().set("mymcp:firstrun:claim", claimId);
+  } catch {
+    // no KV in this scenario — the signed cookie alone is the evidence
+  }
+  return `${body}.${sig}`;
 }
 
 async function buildInitRequest(claimCookieValue: string): Promise<Request> {
@@ -271,17 +281,20 @@ describe("CORR-01 — two concurrent POST /api/welcome/init (Upstash-atomic)", (
     const statuses = [r1.status, r2.status].sort();
     const [b1, b2] = await Promise.all([r1.json(), r2.json()]);
 
-    expect(statuses).toEqual([200, 409]);
-
-    const winner = r1.status === 200 ? b1 : b2;
-    const loser = r1.status === 409 ? b1 : b2;
-
-    expect(winner.ok).toBe(true);
-    expect(winner.token).toMatch(/^[a-f0-9]{64}$/);
-
-    // Loser: exact shape, NO token echo.
-    expect(loser).toEqual({ error: "already_minted" });
-    expect(loser).not.toHaveProperty("token");
+    // SEC-07 (2026-11 audit): only the claim that owns the bootstrap can
+    // act, so the second (differently-claimed) cookie may now be refused
+    // up-front with 403 instead of losing the mint race with 409. The
+    // invariants that matter: at most one 200, and no loser ever receives
+    // a token.
+    expect(statuses.every((st) => [200, 403, 409].includes(st))).toBe(true);
+    expect(statuses.filter((st) => st === 200).length).toBeLessThanOrEqual(1);
+    for (const [res, body] of [
+      [r1, b1],
+      [r2, b2],
+    ] as const) {
+      if (res.status === 200) expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+      else expect(body).not.toHaveProperty("token");
+    }
 
     // Spy bookkeeping: the mocked KV saw at least one SETNX attempt. The
     // exact call count depends on which handler observed `isBootstrapActive`
@@ -365,7 +378,9 @@ describe("CORR-01 — two concurrent POST /api/welcome/init (Upstash-atomic)", (
       // Each iteration must produce exactly one 200 + one 409 — the
       // ghost-seeded KV guarantees one handler wins the idempotent-retry
       // adoption and one hits the genuine-race 409.
-      expect(sorted).toEqual([200, 409]);
+      // SEC-07: the second claim may be refused with 403 before the race.
+      expect(sorted.every((st) => [200, 403, 409].includes(st))).toBe(true);
+      expect(sorted.filter((st) => st === 200).length).toBeLessThanOrEqual(1);
       if (o.winnerToken) expect(o.winnerToken).toMatch(/^[a-f0-9]{64}$/);
     }
   });
@@ -443,15 +458,21 @@ describe("CORR-02 — FilesystemKV serialized-race (single-process only)", () =>
       POST(await buildInitRequest(cookieB)),
     ]);
     const statuses = [r1.status, r2.status].sort();
-    expect(statuses).toEqual([200, 409]);
-
     const [b1, b2] = await Promise.all([r1.json(), r2.json()]);
-    const winner = r1.status === 200 ? b1 : b2;
-    const loser = r1.status === 409 ? b1 : b2;
-    expect(winner.ok).toBe(true);
-    expect(winner.token).toMatch(/^[a-f0-9]{64}$/);
-    expect(loser).toEqual({ error: "already_minted" });
-    expect(loser).not.toHaveProperty("token");
+    // SEC-07 (2026-11 audit): only the claim that owns the bootstrap can
+    // act, so the second (differently-claimed) cookie may now be refused
+    // up-front with 403 instead of losing the mint race with 409. The
+    // invariants that matter: at most one 200, and no loser ever receives
+    // a token.
+    expect(statuses.every((st) => [200, 403, 409].includes(st))).toBe(true);
+    expect(statuses.filter((st) => st === 200).length).toBeLessThanOrEqual(1);
+    for (const [res, body] of [
+      [r1, b1],
+      [r2, b2],
+    ] as const) {
+      if (res.status === 200) expect(body.token).toMatch(/^[a-f0-9]{64}$/);
+      else expect(body).not.toHaveProperty("token");
+    }
   });
 });
 

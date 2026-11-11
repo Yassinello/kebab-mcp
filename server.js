@@ -7,14 +7,14 @@
  * process manager to SIGKILL on timeout. That drops in-flight requests.
  *
  * This wrapper is COPY'd into /app/server.js in the Dockerfile runner
- * stage AFTER the standalone extract, overwriting .next/standalone/server.js
- * at the container level. It require()s the standalone entry so Next's
+ * stage AFTER the standalone extract (whose own server.js is renamed to
+ * next-standalone-server.js first). It require()s the standalone entry so Next's
  * http.createServer runs in this same process, then installs SIGTERM +
  * SIGINT handlers that grant a drain window before exit.
  *
  * Config (JC-2):
  *   - Default drain: 5000 ms.
- *   - Override: MYMCP_SHUTDOWN_TIMEOUT_MS=<ms> (minimum 1000).
+ *   - Override: KEBAB_SHUTDOWN_TIMEOUT_MS=<ms> (legacy MYMCP_SHUTDOWN_TIMEOUT_MS still read; minimum 1000).
  *   - Ignored on Vercel (lambdas are SIGKILL'd by the runtime).
  *
  * Behavior:
@@ -29,12 +29,28 @@
 
 const TIMEOUT_MS = Math.max(
   1000,
-  parseInt(process.env.MYMCP_SHUTDOWN_TIMEOUT_MS ?? "5000", 10) || 5000
+  parseInt(process.env.KEBAB_SHUTDOWN_TIMEOUT_MS ?? process.env.MYMCP_SHUTDOWN_TIMEOUT_MS ?? "5000", 10) || 5000
 );
 
 // Delegate to Next standalone server. require() runs it in this process,
 // so our SIGTERM handler shares the event loop with the HTTP server.
-require("./.next/standalone/server.js");
+//
+// Two layouts:
+//   - repo root after `next build`: ./.next/standalone/server.js
+//   - Docker runner stage: the standalone tree is extracted INTO /app, and
+//     its server.js is renamed to next-standalone-server.js so this wrapper
+//     can take the server.js name (the standalone entry must stay next to
+//     its .next/ and node_modules/ — it chdir()s to its own __dirname).
+const path = require("node:path");
+const fs = require("node:fs");
+const candidates = ["./.next/standalone/server.js", "./next-standalone-server.js"];
+const entry = candidates.find((c) => fs.existsSync(path.join(__dirname, c)));
+if (!entry) {
+  // eslint-disable-next-line no-console
+  console.error(`[server] Next standalone entry not found (tried ${candidates.join(", ")}).`);
+  process.exit(1);
+}
+require(entry);
 
 let shuttingDown = false;
 
