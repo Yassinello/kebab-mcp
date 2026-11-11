@@ -26,12 +26,20 @@ const RETRYABLE = new Set([429, 502, 503, 504]);
 const DEFAULT_MAX = 3;
 const BASE_MS = 200;
 
+/**
+ * Statuses safe to retry for a NON-idempotent write (a message send): only 429,
+ * where the request was rejected before processing. A 502/503/504 may arrive
+ * after the provider already delivered the message — retrying would double-send.
+ */
+export const WRITE_RETRYABLE: ReadonlySet<number> = new Set([429]);
+
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  opts: { max?: number; baseMs?: number } = {}
+  opts: { max?: number; baseMs?: number; statuses?: ReadonlySet<number> } = {}
 ): Promise<T> {
   const max = opts.max ?? DEFAULT_MAX;
   const baseMs = opts.baseMs ?? BASE_MS;
+  const retryable = opts.statuses ?? RETRYABLE;
   let attempt = 0;
   while (true) {
     try {
@@ -41,7 +49,7 @@ export async function withRetry<T>(
       if (
         attempt >= max ||
         !(err instanceof UnsuccessfulRequestError) ||
-        !RETRYABLE.has((err.body as { status?: number } | null)?.status ?? 0)
+        !retryable.has((err.body as { status?: number } | null)?.status ?? 0)
       ) {
         throw err;
       }

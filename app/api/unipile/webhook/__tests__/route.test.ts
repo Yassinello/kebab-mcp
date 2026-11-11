@@ -68,6 +68,9 @@ vi.mock("@/core/kv-store", () => ({
 vi.mock("@/connectors/unipile/webhook/dispatcher", () => ({
   dispatchEventAsync: hoist.dispatchEventAsyncMock,
   getIdempotencyKey: hoist.getIdempotencyKeyMock,
+  isIgnoredEvent: (p: Record<string, unknown>) =>
+    p.event === "message_received" &&
+    (p.is_sender === true || String(p.account_type ?? "").toUpperCase() === "WHATSAPP"),
 }));
 
 // Side-effect import target — handlers/index.ts is `export {};` placeholder.

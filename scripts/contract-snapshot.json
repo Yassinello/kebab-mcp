@@ -564,6 +564,40 @@
     "destructive": true
   },
   {
+    "name": "linkedin_cancel_invitation",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "confirm",
+      "invitation_id"
+    ],
+    "destructive": true
+  },
+  {
+    "name": "linkedin_comment_post",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "confirm",
+      "post",
+      "text"
+    ],
+    "destructive": true
+  },
+  {
+    "name": "linkedin_create_post",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "confirm",
+      "text"
+    ],
+    "destructive": true
+  },
+  {
     "name": "linkedin_engage",
     "pack": "unipile",
     "schemaKeys": [
@@ -589,11 +623,31 @@
     "destructive": false
   },
   {
+    "name": "linkedin_get_profile",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "identifier"
+    ],
+    "destructive": false
+  },
+  {
     "name": "linkedin_get_relationship_status",
     "pack": "unipile",
     "schemaKeys": [
       "account_id",
       "profile_url"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "linkedin_list_connections",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "limit",
+      "query",
+      "scan_limit"
     ],
     "destructive": false
   },
@@ -619,6 +673,28 @@
     "destructive": false
   },
   {
+    "name": "linkedin_list_posts",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "identifier",
+      "limit"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "linkedin_react_post",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "confirm",
+      "post",
+      "reaction"
+    ],
+    "destructive": true
+  },
+  {
     "name": "linkedin_read_messages",
     "pack": "unipile",
     "schemaKeys": [
@@ -626,6 +702,43 @@
       "chat_id",
       "limit",
       "profile_url"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "linkedin_reply",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "attachments",
+      "chat_id",
+      "confirm",
+      "text"
+    ],
+    "destructive": true
+  },
+  {
+    "name": "linkedin_search",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "category",
+      "keywords",
+      "limit",
+      "url"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "linkedin_search_messages",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "chat_id",
+      "limit",
+      "query",
+      "since_days"
     ],
     "destructive": false
   },
@@ -1063,6 +1176,18 @@
     "destructive": false
   },
   {
+    "name": "whatsapp_find_chat",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "include_contacts",
+      "limit",
+      "query",
+      "scan_limit"
+    ],
+    "destructive": false
+  },
+  {
     "name": "whatsapp_list_inbox",
     "pack": "unipile",
     "schemaKeys": [
@@ -1082,5 +1207,31 @@
       "limit"
     ],
     "destructive": false
+  },
+  {
+    "name": "whatsapp_search_messages",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "chat_id",
+      "limit",
+      "query",
+      "since_days"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "whatsapp_send_message",
+    "pack": "unipile",
+    "schemaKeys": [
+      "account_id",
+      "actor_user_id",
+      "attachments",
+      "chat_id",
+      "confirm",
+      "phone",
+      "text"
+    ],
+    "destructive": true
   }
 ]

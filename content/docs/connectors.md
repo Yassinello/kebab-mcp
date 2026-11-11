@@ -81,9 +81,9 @@ The Apify connector ships native wrappers for 6 LinkedIn actors (profile, compan
 
 Required: `UNIPILE_DSN` (e.g. `api41.unipile.com:17153`) and `UNIPILE_TOKEN`.
 
-Sign up at [unipile.com](https://www.unipile.com), grab DSN + API token from **Settings → API**, then connect a LinkedIn account (Sales Navigator-tier recommended for higher daily quotas) and/or a WhatsApp account via **Accounts → Add account**.
+Sign up at [unipile.com](https://www.unipile.com), grab DSN + API token from **Settings → API**, then connect a LinkedIn account (Sales Navigator-tier recommended for higher daily quotas) and/or a WhatsApp account (scan the QR code from WhatsApp → Linked devices) via **Accounts → Add account**.
 
-Provides 10 tools — 6 LinkedIn write/read, 2 LinkedIn inbox readers, 2 WhatsApp inbox readers:
+Provides 23 tools — LinkedIn prospection, messaging, networking and content, plus personal WhatsApp:
 
 - `linkedin_send_connection` — send a connection request and verify it actually went through (3-poll verify-after-write at 2s/5s/10s). Returns `verified: true|false` — never silent ambiguity. Same `(profile_url, note)` combination is deduped for 90 days; change the note to retry. Per-account daily/weekly caps enforced (25/day, 100/week by default).
 - `linkedin_get_relationship_status` — read the network distance (1/2/3/null) of a profile relative to your connected account.
@@ -95,8 +95,20 @@ Provides 10 tools — 6 LinkedIn write/read, 2 LinkedIn inbox readers, 2 WhatsAp
 - `linkedin_read_messages` — read one LinkedIn conversation by `chat_id` or `profile_url`. Returns inbound + outbound messages, sorted oldest-first.
 - `whatsapp_list_inbox` — list WhatsApp conversations (read-only). Filter by `unread_only` and `since_days`. Returns chat_id, name, `conversation_type` (single/group/channel), and unread state.
 - `whatsapp_read_messages` — read one WhatsApp conversation by `chat_id`. Returns inbound + outbound messages, sorted oldest-first.
+- `whatsapp_find_chat` — find a WhatsApp group or 1:1 chat (and contacts) by name fragment or phone number to get its `chat_id`.
+- `whatsapp_search_messages` / `linkedin_search_messages` — keyword search over recent messages (one chat or the whole inbox, last 30 days by default).
+- `whatsapp_send_message` — send to a chat (person or group) or to a phone number. Preview first; sends only with `confirm: true`.
+- `linkedin_reply` — reply in any existing LinkedIn conversation by `chat_id`. Preview first; `confirm: true` to send.
+- `linkedin_get_profile` — person or company profile from a URL.
+- `linkedin_list_connections` — your 1st-degree connections, optionally filtered by name/headline words.
+- `linkedin_search` — search people / companies by keywords or replay a LinkedIn / Sales Navigator search URL.
+- `linkedin_list_posts` — recent posts of a person or company.
+- `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post` — engage and publish (preview first; `confirm: true` to act).
+- `linkedin_cancel_invitation` — withdraw a stale pending invitation.
 
-All four inbox tools are strictly read-only — no audit log, no rate-limit, no message sending.
+Every spec-v2 outgoing action (marked "preview first") returns exactly what it would do and acts only on `confirm: true`; daily caps, a 10-minute duplicate guard, and the kill switches `KEBAB_UNIPILE_WRITES_DISABLED` / `KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED` / `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` apply.
+
+All read tools are strictly read-only — no audit log, no rate-limit, no message sending.
 
 ## Browser automation
 

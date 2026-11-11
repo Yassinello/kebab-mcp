@@ -26,8 +26,30 @@
 
 import { getConfig } from "@/core/config-facade";
 
+function isTruthy(v: string | undefined): boolean {
+  return v === "true" || v === "1";
+}
+
+/**
+ * Spec v2 (ADR 0002) — global switch covering BOTH channels. Checked by
+ * `isWritesDisabled()` and `isWhatsappWritesDisabled()`.
+ */
+function isAllWritesDisabled(): boolean {
+  return isTruthy(getConfig("KEBAB_UNIPILE_WRITES_DISABLED"));
+}
+
+/** LinkedIn writes disabled (channel switch, legacy alias, or global switch). */
 export function isWritesDisabled(): boolean {
   const v =
     getConfig("KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED") ?? getConfig("LINKEDIN_TOOLS_DISABLED");
-  return v === "true" || v === "1";
+  return isTruthy(v) || isAllWritesDisabled();
+}
+
+/** WhatsApp writes disabled (channel switch or global switch). */
+export function isWhatsappWritesDisabled(): boolean {
+  return isTruthy(getConfig("KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED")) || isAllWritesDisabled();
+}
+
+export function isChannelWritesDisabled(channel: "LINKEDIN" | "WHATSAPP"): boolean {
+  return channel === "WHATSAPP" ? isWhatsappWritesDisabled() : isWritesDisabled();
 }

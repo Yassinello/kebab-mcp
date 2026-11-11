@@ -189,15 +189,20 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     id: "unipile",
     label: "Unipile (LinkedIn + WhatsApp)",
     description:
-      "Send LinkedIn connection requests, read relationship status, and read LinkedIn + WhatsApp inboxes via Unipile's managed-browser API.",
+      "LinkedIn networking & prospection (invites, DMs, InMail, replies, profiles, search, posts) and personal WhatsApp (find chats, read, search, send to people or groups) via Unipile. Every outgoing action previews first and needs confirm:true.",
     requiredEnvVars: ["UNIPILE_DSN", "UNIPILE_TOKEN"],
     // Phase 69 (UNI-07..10): 6 write/read tools — send_connection,
     // get_relationship_status, send_message, send_inmail, engage, list_pending.
     // + 2 LinkedIn inbox readers (list_inbox, read_messages)
     // + 2 WhatsApp inbox readers (whatsapp_list_inbox, whatsapp_read_messages)
-    // = 10 total. registry-metadata-consistency contract test asserts
+    // + 13 spec-v2 tools (ADR 0002): whatsapp_find_chat, whatsapp_search_messages,
+    //   whatsapp_send_message, linkedin_search_messages, linkedin_reply,
+    //   linkedin_get_profile, linkedin_list_connections, linkedin_search,
+    //   linkedin_list_posts, linkedin_react_post, linkedin_comment_post,
+    //   linkedin_create_post, linkedin_cancel_invitation
+    // = 23 total. registry-metadata-consistency contract test asserts
     // toolCount === manifest.tools.length.
-    toolCount: 10,
+    toolCount: 23,
     loader: () => import("@/connectors/unipile/manifest").then((m) => m.unipileConnector),
   },
   {

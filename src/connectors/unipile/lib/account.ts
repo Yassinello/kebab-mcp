@@ -51,16 +51,10 @@
  */
 
 import { getConfig } from "@/core/config-facade";
-import { getUnipileClient } from "./client";
-import { withRetry } from "./retry";
+import { getMessagingProvider } from "../provider";
 
 interface ResolveArgs {
   account_id?: string;
-}
-
-interface UnipileAccountItem {
-  id: string;
-  type: string;
 }
 
 /**
@@ -102,9 +96,10 @@ async function resolveForType<E extends string>(
   // Step 1 (LOCKED D-20): explicit account_id wins, no getAll round-trip.
   if (args.account_id) return { accountId: args.account_id };
 
-  const resp = await withRetry(() => getUnipileClient().account.getAll());
-  const items = (resp as { items?: UnipileAccountItem[] }).items ?? [];
-  const matching = items.filter((i) => i.type === type).map((i) => i.id);
+  // ADR 0002: account enumeration goes through the provider (which applies
+  // withRetry on transient 429/5xx — D-16 unchanged).
+  const accounts = await getMessagingProvider().listAccounts();
+  const matching = accounts.filter((a) => a.type === type).map((a) => a.id);
 
   if (matching.length === 0) return { error: errorNoAccount };
 

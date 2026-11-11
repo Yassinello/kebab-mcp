@@ -36,6 +36,37 @@ import {
   whatsappReadMessagesSchema,
   handleWhatsappReadMessages,
 } from "./tools/whatsapp-read-messages";
+import { whatsappFindChatSchema, handleWhatsappFindChat } from "./tools/whatsapp-find-chat";
+import {
+  whatsappSearchMessagesSchema,
+  linkedinSearchMessagesSchema,
+  handleWhatsappSearchMessages,
+  handleLinkedinSearchMessages,
+} from "./tools/search-messages";
+import {
+  whatsappSendMessageSchema,
+  linkedinReplySchema,
+  handleWhatsappSendMessage,
+  handleLinkedinReply,
+} from "./tools/messaging-send";
+import {
+  linkedinGetProfileSchema,
+  linkedinListConnectionsSchema,
+  linkedinSearchSchema,
+  linkedinListPostsSchema,
+  linkedinReactPostSchema,
+  linkedinCommentPostSchema,
+  linkedinCreatePostSchema,
+  linkedinCancelInvitationSchema,
+  handleLinkedinGetProfile,
+  handleLinkedinListConnections,
+  handleLinkedinSearch,
+  handleLinkedinListPosts,
+  handleLinkedinReactPost,
+  handleLinkedinCommentPost,
+  handleLinkedinCreatePost,
+  handleLinkedinCancelInvitation,
+} from "./tools/linkedin-network";
 
 const log = getLogger("CONNECTOR:unipile");
 
@@ -87,9 +118,9 @@ interface UnipileAccountListResponse {
   items?: UnipileAccountItem[];
 }
 
-function countLinkedinAccounts(resp: UnipileAccountListResponse): number {
+function countAccounts(resp: UnipileAccountListResponse, type: string): number {
   const items = resp.items ?? [];
-  return items.filter((it) => it?.type === "LINKEDIN").length;
+  return items.filter((it) => it?.type === type).length;
 }
 
 /**
@@ -131,23 +162,27 @@ async function probe(
   try {
     const client = new UnipileClient(normalizeDsnForProbe(dsn), token);
     const resp = (await client.account.getAll()) as UnipileAccountListResponse;
-    const linkedinCount = countLinkedinAccounts(resp);
+    const linkedinCount = countAccounts(resp, "LINKEDIN");
+    const whatsappCount = countAccounts(resp, "WHATSAPP");
     const total = resp.items?.length ?? 0;
-    if (linkedinCount >= 1) {
-      log.info(`Unipile probe ok: ${linkedinCount} LinkedIn account(s) of ${total} total`);
+    // Spec v2: a token with only WhatsApp (or only LinkedIn) is healthy — each
+    // channel's tools resolve their own account and fail loud if absent.
+    if (linkedinCount + whatsappCount >= 1) {
+      log.info(
+        `Unipile probe ok: ${linkedinCount} LinkedIn + ${whatsappCount} WhatsApp account(s) of ${total} total`
+      );
+      const summary = `Connected — ${linkedinCount} LinkedIn, ${whatsappCount} WhatsApp account(s)`;
       return {
         ok: true,
-        message: writes_disabled
-          ? `Connected — ${linkedinCount} LinkedIn account(s) — ⚠ writes disabled`
-          : `Connected — ${linkedinCount} LinkedIn account(s)`,
+        message: writes_disabled ? `${summary} — ⚠ writes disabled` : summary,
         writes_disabled,
         accounts: pickerAccounts(resp),
       };
     }
-    log.info(`Unipile probe: no LinkedIn account connected (${total} total accounts)`);
+    log.info(`Unipile probe: no LinkedIn or WhatsApp account connected (${total} total accounts)`);
     return {
       ok: false,
-      message: "No LinkedIn account connected to Unipile token",
+      message: "No LinkedIn or WhatsApp account connected to Unipile token",
       detail: `Total accounts on token: ${total}`,
       writes_disabled,
     };
@@ -166,23 +201,30 @@ export const unipileConnector: ConnectorManifest = {
   id: "unipile",
   label: "Unipile (LinkedIn + WhatsApp)",
   description:
-    "Send LinkedIn connection requests, read relationship status, and read LinkedIn + WhatsApp inboxes via Unipile's managed-browser API.",
-  guide: `Use Unipile's managed-browser API to send LinkedIn connection requests and read relationship signals from the server side — no DOM automation, no Browserbase session juggling.
+    "LinkedIn networking & prospection (invites, DMs, InMail, replies, profiles, search, posts) and personal WhatsApp (find chats, read, search, send to people or groups) via Unipile. Every outgoing action previews first and needs confirm:true.",
+  guide: `Drive your LinkedIn and your personal WhatsApp from any AI client through [Unipile](https://www.unipile.com) — a hosted API that holds the LinkedIn / WhatsApp sessions (no browser automation on Kebab's side).
 
 ### Prerequisites
-A [Unipile](https://www.unipile.com) account with at least one LinkedIn account connected through the Unipile dashboard. The connected LinkedIn account is what actually fires the connection request — Unipile is the API layer in front of it.
+A Unipile account (from 49 €/month for up to 10 connected accounts, all channels) with at least one **LinkedIn** or **WhatsApp** account connected.
 
 ### How to get credentials
 1. Sign in to the [Unipile dashboard](https://dashboard.unipile.com).
-2. Open **Settings → API** and copy your **DSN** (e.g. \`api41.unipile.com:17153\`) — set it as \`UNIPILE_DSN\`.
-3. From the same screen, copy your **API Token** and set it as \`UNIPILE_TOKEN\`.
-4. In **Accounts → Add account**, connect a LinkedIn account (Sales Navigator-tier recommended for higher daily quotas).
-5. Paste both env vars in the /config Credentials tab and click Test. The probe calls Unipile and verifies that at least one LinkedIn account is wired — without that you get connected-but-useless ambiguity.
+2. **Settings → API**: copy the **DSN** (e.g. \`api41.unipile.com:17153\`) → \`UNIPILE_DSN\`, and the **API token** → \`UNIPILE_TOKEN\`.
+3. **Accounts → Add account**: connect LinkedIn (credentials or cookie) and/or WhatsApp (scan the QR code from your phone: WhatsApp → Linked devices).
+4. Paste both values in /config → Connectors → Unipile and click **Test**. If the token has several accounts of one type, pick yours in the **Default account** dropdown.
 
-### Notes
-- Phase 69 complete: 6 tools available (2 from phase 68 + 4 from phase 69) — \`linkedin_send_connection\`, \`linkedin_get_relationship_status\`, \`linkedin_send_message\`, \`linkedin_send_inmail\`, \`linkedin_engage\`, \`linkedin_list_pending\`.
-- Audit log entries live 90 days in Upstash KV and store only a SHA-256 of \`{tool, profile_url, note}\` — never the note text itself.
-- Per-account daily/weekly caps enforced by the kebab-side rate-limiter (defaults: 25/day, 100/week for connects; 50/day for DMs; 15/day for InMail). Override via \`KEBAB_UNIPILE_LINKEDIN_*_CAP\` env vars.`,
+### What you can do
+- **WhatsApp**: \`whatsapp_find_chat\` (group/contact by name or phone) → \`whatsapp_read_messages\` / \`whatsapp_search_messages\` → \`whatsapp_send_message\` (to a chat or a phone number).
+- **LinkedIn messaging**: \`linkedin_list_inbox\`, \`linkedin_read_messages\`, \`linkedin_search_messages\`, \`linkedin_reply\`, \`linkedin_send_message\`, \`linkedin_send_inmail\`.
+- **LinkedIn networking**: \`linkedin_search\`, \`linkedin_get_profile\`, \`linkedin_get_relationship_status\`, \`linkedin_send_connection\`, \`linkedin_engage\`, \`linkedin_list_connections\`, \`linkedin_list_pending\`, \`linkedin_cancel_invitation\`.
+- **LinkedIn content**: \`linkedin_list_posts\`, \`linkedin_react_post\`, \`linkedin_comment_post\`, \`linkedin_create_post\`.
+
+### Safety
+- New send/post tools return a **preview** unless called with \`confirm: true\` — let the AI show you the exact text and recipient first.
+- Per-account daily caps (LinkedIn: 25 invites, 50 DMs, 15 InMail, 40 reactions/comments, 3 posts; WhatsApp: 100 messages), overridable via \`KEBAB_UNIPILE_*_CAP\`. Identical sends within 10 minutes are blocked.
+- Emergency brakes: \`KEBAB_UNIPILE_WRITES_DISABLED=true\` (everything), or per channel \`KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED\` / \`KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED\`.
+- Audit log (90 days, Upstash KV) stores hashes only — never message text.
+- Unofficial automation can get accounts restricted by LinkedIn or WhatsApp. Keep volumes human.`,
   requiredEnvVars: ["UNIPILE_DSN", "UNIPILE_TOKEN"],
   testConnection: async (credentials) => {
     const dsn = credentials.UNIPILE_DSN;
@@ -322,6 +364,140 @@ function buildTools(): ToolDefinition[] {
       handler: async (args) =>
         handleWhatsappReadMessages(args as Parameters<typeof handleWhatsappReadMessages>[0]),
       destructive: false,
+    }),
+    // ── Spec v2 (ADR 0002) — WhatsApp ──
+    defineTool({
+      name: "whatsapp_find_chat",
+      description:
+        "Find a WhatsApp group or 1:1 conversation (and contacts) by name fragment or phone number, to get its chat_id. " +
+        "Accent/case-insensitive. Returns {chats: [{chat_id, name, conversation_type, phone, last_message_at, unread_count}], contacts: [{contact_id, name, phone}]}. Read-only.",
+      schema: whatsappFindChatSchema,
+      handler: async (args) =>
+        handleWhatsappFindChat(args as Parameters<typeof handleWhatsappFindChat>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "whatsapp_search_messages",
+      description:
+        "Search WhatsApp messages by keywords (all words must appear, accents ignored), in one chat (chat_id) or across the account, over the last since_days (default 30). " +
+        "Scans up to 1000 recent messages. Returns {matches: [{chat_id, chat_name, message_id, direction, sender_id, text, sent_at}], scanned, truncated}. Read-only.",
+      schema: whatsappSearchMessagesSchema,
+      handler: async (args) =>
+        handleWhatsappSearchMessages(args as Parameters<typeof handleWhatsappSearchMessages>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "whatsapp_send_message",
+      description:
+        "Send a WhatsApp message to an existing chat (chat_id — person or group) OR to a phone number (international format). " +
+        "SAFETY: without confirm:true it only returns a preview (recipient name + exact text) and sends nothing — show it to the user and resend with confirm:true only after explicit approval. " +
+        "Daily cap 100, identical sends within 10 min blocked, verified-after-send. Returns {executed, provider_ok, verified, chat_id, message_id, audit_id, preview?, error?}.",
+      schema: whatsappSendMessageSchema,
+      handler: async (args) =>
+        handleWhatsappSendMessage(args as Parameters<typeof handleWhatsappSendMessage>[0]),
+      destructive: true,
+    }),
+    // ── Spec v2 (ADR 0002) — LinkedIn ──
+    defineTool({
+      name: "linkedin_search_messages",
+      description:
+        "Search LinkedIn messages by keywords (all words must appear, accents ignored), in one conversation (chat_id) or across the inbox, over the last since_days (default 30). " +
+        "Returns {matches: [{chat_id, chat_name, message_id, direction, sender_id, text, sent_at}], scanned, truncated}. Read-only.",
+      schema: linkedinSearchMessagesSchema,
+      handler: async (args) =>
+        handleLinkedinSearchMessages(args as Parameters<typeof handleLinkedinSearchMessages>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "linkedin_reply",
+      description:
+        "Reply in an existing LinkedIn conversation by chat_id (from linkedin_list_inbox) — works for any thread (DM, InMail reply, group). " +
+        "SAFETY: preview only unless confirm:true. Shares the 50/day LinkedIn DM cap. Returns {executed, verified, chat_id, message_id, audit_id, preview?, error?}.",
+      schema: linkedinReplySchema,
+      handler: async (args) =>
+        handleLinkedinReply(args as Parameters<typeof handleLinkedinReply>[0]),
+      destructive: true,
+    }),
+    defineTool({
+      name: "linkedin_get_profile",
+      description:
+        "Get a LinkedIn person profile (name, headline, location, degree, connections, summary, current positions, provider_id) " +
+        "or company page (name, tagline, industry, size, website, followers) from a URL or public id. Read-only.",
+      schema: linkedinGetProfileSchema,
+      handler: async (args) =>
+        handleLinkedinGetProfile(args as Parameters<typeof handleLinkedinGetProfile>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "linkedin_list_connections",
+      description:
+        "List your 1st-degree LinkedIn connections (most recent first), optionally filtered by words in name/headline (e.g. 'founder fintech'). " +
+        "Returns {count, scanned, items: [{first_name, last_name, headline, profile_url, provider_id, connected_at}]}. Read-only.",
+      schema: linkedinListConnectionsSchema,
+      handler: async (args) =>
+        handleLinkedinListConnections(args as Parameters<typeof handleLinkedinListConnections>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "linkedin_search",
+      description:
+        "Search LinkedIn people or companies by keywords, or replay a LinkedIn / Sales Navigator search URL. " +
+        "Returns {count, items: [{type, name, headline, location, degree, profile_url, provider_id}]}. Read-only. Use results with linkedin_engage / linkedin_send_connection.",
+      schema: linkedinSearchSchema,
+      handler: async (args) =>
+        handleLinkedinSearch(args as Parameters<typeof handleLinkedinSearch>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "linkedin_list_posts",
+      description:
+        "List recent posts of a LinkedIn person or company (text, date, reactions, comments, url, post_id). " +
+        "Use before commenting/reacting for warm outreach. Read-only.",
+      schema: linkedinListPostsSchema,
+      handler: async (args) =>
+        handleLinkedinListPosts(args as Parameters<typeof handleLinkedinListPosts>[0]),
+      destructive: false,
+    }),
+    defineTool({
+      name: "linkedin_react_post",
+      description:
+        "React to a LinkedIn post (like, celebrate, support, love, insightful, funny). Post = URL, urn or post_id. " +
+        "SAFETY: preview only unless confirm:true. Shares a 40/day engagement cap with comments.",
+      schema: linkedinReactPostSchema,
+      handler: async (args) =>
+        handleLinkedinReactPost(args as Parameters<typeof handleLinkedinReactPost>[0]),
+      destructive: true,
+    }),
+    defineTool({
+      name: "linkedin_comment_post",
+      description:
+        "Comment on a LinkedIn post (≤1250 chars). Post = URL, urn or post_id. " +
+        "SAFETY: preview only unless confirm:true. Shares a 40/day engagement cap with reactions.",
+      schema: linkedinCommentPostSchema,
+      handler: async (args) =>
+        handleLinkedinCommentPost(args as Parameters<typeof handleLinkedinCommentPost>[0]),
+      destructive: true,
+    }),
+    defineTool({
+      name: "linkedin_create_post",
+      description:
+        "Publish a public text post (≤3000 chars) from the LinkedIn account. SAFETY: preview only unless confirm:true. Cap 3 posts/day.",
+      schema: linkedinCreatePostSchema,
+      handler: async (args) =>
+        handleLinkedinCreatePost(args as Parameters<typeof handleLinkedinCreatePost>[0]),
+      destructive: true,
+    }),
+    defineTool({
+      name: "linkedin_cancel_invitation",
+      description:
+        "Withdraw a pending LinkedIn invitation (invitation_id from linkedin_list_pending) — cleans up stale invites to protect your acceptance rate. " +
+        "SAFETY: preview only unless confirm:true. LinkedIn blocks re-inviting the same person for ~3 weeks.",
+      schema: linkedinCancelInvitationSchema,
+      handler: async (args) =>
+        handleLinkedinCancelInvitation(
+          args as Parameters<typeof handleLinkedinCancelInvitation>[0]
+        ),
+      destructive: true,
     }),
   ];
 }

@@ -15,8 +15,7 @@
 
 import { z } from "zod";
 import type { ToolResult } from "@/core/types";
-import { getUnipileClient } from "../lib/client";
-import { withRetry } from "../lib/retry";
+import { getMessagingProvider, type ProviderMessage } from "../provider";
 import { resolveAccountIdForType } from "../lib/account";
 import { classifyUnipileError } from "../lib/errors";
 import { runRead } from "../lib/read-helpers";
@@ -52,15 +51,6 @@ type ReadMessagesArgs = {
   account_id?: string;
   limit?: number;
 };
-
-interface MessageItem {
-  id?: string;
-  text?: string | null;
-  is_sender?: 0 | 1;
-  sender_id?: string;
-  timestamp?: string;
-  attachments?: unknown[];
-}
 
 interface ThreadMessage {
   message_id: string;
@@ -114,15 +104,9 @@ async function readMessagesBody(args: ReadMessagesArgs): Promise<ToolResult> {
     });
   }
 
-  let rawItems: MessageItem[];
+  let rawItems: ProviderMessage[];
   try {
-    const resp: unknown = await withRetry(() =>
-      getUnipileClient().messaging.getAllMessagesFromChat({
-        chat_id: args.chat_id,
-        limit,
-      })
-    );
-    rawItems = (resp as { items?: MessageItem[] }).items ?? [];
+    rawItems = await getMessagingProvider().listChatMessages({ chatId: args.chat_id, limit });
   } catch (err) {
     log.warn("whatsapp_read_messages getAllMessagesFromChat failed", {
       chat_id: args.chat_id,
@@ -137,14 +121,13 @@ async function readMessagesBody(args: ReadMessagesArgs): Promise<ToolResult> {
   }
 
   const shaped: ThreadMessage[] = rawItems
-    .filter((m): m is MessageItem & { id: string } => typeof m.id === "string" && m.id.length > 0)
     .map((m) => ({
       message_id: m.id,
-      direction: m.is_sender === 1 ? ("out" as const) : ("in" as const),
-      sender_id: m.sender_id ?? null,
-      text: m.text ?? null,
-      sent_at: m.timestamp ?? null,
-      has_attachments: Array.isArray(m.attachments) && m.attachments.length > 0,
+      direction: m.direction,
+      sender_id: m.senderId,
+      text: m.text,
+      sent_at: m.sentAt,
+      has_attachments: m.hasAttachments,
     }))
     .sort((a, b) => {
       const ta = a.sent_at ? new Date(a.sent_at).getTime() : 0;

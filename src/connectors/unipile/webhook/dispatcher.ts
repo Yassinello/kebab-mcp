@@ -70,6 +70,21 @@ export const _handlers: {
 };
 
 /**
+ * Spec v2 R8 — events dropped before ANY KV work (idempotency write included):
+ *  - outbound echoes (`is_sender: true`, D-63);
+ *  - `message_received` from WhatsApp accounts: a personal WhatsApp (busy
+ *    groups) would otherwise cost one idempotency key + one 90-day audit row
+ *    per inbound message — Upstash quota burn with no business value (the
+ *    D-63 reply correlation is a LinkedIn prospection feature).
+ */
+export function isIgnoredEvent(p: Record<string, unknown>): boolean {
+  if (p.event !== "message_received") return false;
+  if (p.is_sender === true) return true;
+  const type = typeof p.account_type === "string" ? p.account_type.toUpperCase() : "";
+  return type === "WHATSAPP";
+}
+
+/**
  * Derive the idempotency key for a webhook payload. Returns null on
  * malformed payloads (caller skips dedup write + still dispatches; the
  * handlers' own defensive checks drop bad shapes).
@@ -115,9 +130,11 @@ export async function dispatchEventAsync(payload: Record<string, unknown>): Prom
 
   // D-63: skip outbound echoes. Unipile sends `message_received` for BOTH
   // inbound AND outbound; `is_sender: true` marks our own outbound.
-  if (event === "message_received" && payload.is_sender === true) {
-    log.debug("[CONNECTOR:unipile-webhook] skip outbound echo", {
+  if (isIgnoredEvent(payload)) {
+    log.debug("[CONNECTOR:unipile-webhook] skip ignored message event", {
       message_id: payload.message_id,
+      account_type: payload.account_type,
+      is_sender: payload.is_sender,
     });
     return;
   }
