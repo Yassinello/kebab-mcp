@@ -412,20 +412,19 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
           error={error}
           saving={saving}
           isNew={isNew}
+          filesSlot={
+            !isNew && skill ? (
+              <SkillFilesEditor skillId={skill.id} agentName={skill.id.replace(/_/g, "-")} />
+            ) : (
+              <p className="text-xs text-text-muted px-1">
+                Bundled files (references, templates, scripts) can be added once the skill is
+                created.
+              </p>
+            )
+          }
           onSave={save}
           onCancel={goBack}
         />
-      )}
-
-      {tab === "editor" && !isNew && skill && (
-        <div className="mt-5">
-          <SkillFilesEditor skillId={skill.id} agentName={skill.id.replace(/_/g, "-")} />
-        </div>
-      )}
-      {tab === "editor" && isNew && (
-        <p className="mt-3 text-xs text-text-muted">
-          Save the skill first to add bundled files (references, templates, scripts).
-        </p>
       )}
 
       {tab === "settings" && !isNew && skill && (
@@ -480,6 +479,7 @@ function EditorTab({
   error,
   saving,
   isNew,
+  filesSlot,
   onSave,
   onCancel,
 }: {
@@ -493,6 +493,8 @@ function EditorTab({
   error: string | null;
   saving: boolean;
   isNew: boolean;
+  /** Bundled files editor (has its own save — files are stored separately). */
+  filesSlot?: React.ReactNode;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -623,6 +625,8 @@ function EditorTab({
           </div>
         )}
       </section>
+
+      {filesSlot}
 
       <section className="border border-border rounded-lg bg-bg p-5 space-y-4">
         <div className="flex items-center justify-between">
