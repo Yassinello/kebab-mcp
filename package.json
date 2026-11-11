@@ -107,11 +107,6 @@
     "typescript-eslint": "^8.59.1",
     "vitest": "^4.1.5"
   },
-  "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "16.2.4",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.2.2",
-    "lightningcss-linux-x64-gnu": "1.32.0"
-  },
   "lint-staged": {
     "*.{ts,tsx}": [
       "prettier --write",

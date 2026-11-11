@@ -36,10 +36,11 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      # --include=optional is needed because the package-lock was generated on
-      # Windows; lightningcss / @next/swc native binaries for linux-x64 are
-      # optional deps that npm skips otherwise. Without this flag, the next
-      # `npm run build` step fails with "Cannot find module ../lightningcss.linux-x64-gnu.node".
+      # --include=optional: the native binaries (lightningcss, @next/swc,
+      # tailwind oxide) are platform optionalDependencies of their parents.
+      # The stale top-level linux-x64 pins were removed in 2026-11 after the
+      # lockfile was regenerated on Linux; the flag is kept as a guard in
+      # case an npm config (e.g. omit=optional) would otherwise skip them.
       - run: npm ci --include=optional
       # SCM-03 (v0.11 Phase 44): audit gate policy. FAIL on direct-dep
       # moderate+ (unless allowlisted in scripts/audit-gate.mjs with
