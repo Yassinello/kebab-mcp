@@ -347,9 +347,9 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold text-text">Skills</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 [&>button]:whitespace-nowrap">
           {flash && (
             <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
               {flash}
@@ -538,15 +538,6 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
             await reload();
           }}
         />
-      )}
-
-      {syncTargets.length === 0 && skills.length > 0 && (
-        <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
-          <strong>Tip:</strong> Configure sync targets by setting{" "}
-          <code>KEBAB_SKILLS_SYNC_TARGETS</code> to a JSON array. Example:{" "}
-          <code>{`[{"name":"claude-code","path":"/Users/you/.claude/skills"}]`}</code>. Skills will
-          then be syncable to Claude Code&apos;s local skills directory with one click.
-        </div>
       )}
 
       {syncTargets.length > 0 && (

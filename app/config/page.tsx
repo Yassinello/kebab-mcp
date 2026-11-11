@@ -18,7 +18,10 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   overview: { title: "Overview", subtitle: "Live status of your MCP server." },
   connectors: { title: "Connectors", subtitle: "Enable, configure, and test your connectors." },
   tools: { title: "Tools", subtitle: "Browse and run any registered tool." },
-  skills: { title: "Skills", subtitle: "Create and manage user-defined skills." },
+  skills: {
+    title: "Skills",
+    subtitle: "Your personal skills library — one place, every AI client.",
+  },
   "custom-tools": {
     title: "Custom Tools",
     subtitle: "Compose existing tools into new MCP tools — declarative JSON, no code.",

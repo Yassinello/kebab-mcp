@@ -107,6 +107,7 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
   const s = server as {
     server?: {
       setRequestHandler: (schema: unknown, cb: (req: unknown) => Promise<unknown>) => void;
+      registerCapabilities?: (caps: Record<string, unknown>) => void;
     };
   };
   const rpc = s.server;
@@ -132,6 +133,15 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
         "[resources] SDK version missing ListResourcesRequestSchema / ReadResourceRequestSchema — skipping registration"
       );
       return;
+    }
+
+    // The SDK refuses resources/* handlers unless the server advertises the
+    // `resources` capability ("Server does not support resources"). McpServer
+    // only declares it when resources go through its own registerResource()
+    // API, so declare it here (allowed before the transport connects). Before
+    // this, resources/list answered "Method not found" for every connector.
+    if (typeof rpc.registerCapabilities === "function") {
+      rpc.registerCapabilities({ resources: {} });
     }
 
     rpc.setRequestHandler(ListResourcesRequestSchema, async () => {
