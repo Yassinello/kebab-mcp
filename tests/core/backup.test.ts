@@ -133,11 +133,66 @@ describe("backup export/import — v2 baseline", () => {
     expect(exported.entries[deviceKey]).toBeTruthy();
 
     for (const key of Object.keys(mockKV)) delete mockKV[key];
-    await importBackup(exported);
+    // SEC-02: authorization keys are only restored by the operator path.
+    await importBackup(exported, { includeSecrets: true });
 
     const restored = JSON.parse(mockKV[deviceKey]!);
     expect(restored.connectors).toEqual(["apify", "unipile"]);
     expect(restored.label).toBe("Team token");
+  });
+
+  it("SEC-02: default export excludes secret-bearing keys; includeSecrets keeps them", async () => {
+    mockKV["cred:SLACK_BOT_TOKEN"] = "xoxb-secret";
+    mockKV["cred:acct:google:work"] = "refresh";
+    mockKV["mymcp:firstrun:signing-secret"] = "s3cr3t";
+    mockKV["mymcp:firstrun:bootstrap"] = "{}";
+    mockKV["api:connections"] = "[]";
+    mockKV["skills:all"] = "[]";
+
+    const redacted = await exportBackup();
+    expect(Object.keys(redacted.entries)).toEqual(["skills:all"]);
+
+    const full = await exportBackup({ includeSecrets: true });
+    expect(full.entries["cred:SLACK_BOT_TOKEN"]).toBe("xoxb-secret");
+    expect(full.entries["mymcp:firstrun:signing-secret"]).toBe("s3cr3t");
+  });
+
+  it("SEC-02 EXPLOIT: a non-secret import cannot rewrite devices:* or plant a signing secret", async () => {
+    mockKV["devices:abcd1234"] = JSON.stringify({
+      label: "a",
+      createdAt: "x",
+      connectors: ["apify"],
+    });
+    const result = await importBackup({
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      scope: "default",
+      entries: {
+        "devices:abcd1234": JSON.stringify({ label: "a", createdAt: "x" }),
+        "mymcp:firstrun:signing-secret": "attacker",
+        "cred:GITHUB_PAT": "attacker",
+        "skills:all": "[]",
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.count).toBe(1);
+    expect(result.skipped).toBe(3);
+    expect(JSON.parse(mockKV["devices:abcd1234"]!).connectors).toEqual(["apify"]);
+    expect(mockKV["mymcp:firstrun:signing-secret"]).toBeUndefined();
+    expect(mockKV["cred:GITHUB_PAT"]).toBeUndefined();
+  });
+
+  it("SEC-02: replace mode never deletes protected keys on a non-secret import", async () => {
+    mockKV["cred:SLACK_BOT_TOKEN"] = "keep-me";
+    mockKV["devices:abcd1234"] = "{}";
+    mockKV["old:key"] = "drop-me";
+    await importBackup(
+      { version: 2, exportedAt: "x", scope: "default", entries: {} },
+      { mode: "replace" }
+    );
+    expect(mockKV["cred:SLACK_BOT_TOKEN"]).toBe("keep-me");
+    expect(mockKV["devices:abcd1234"]).toBe("{}");
+    expect(mockKV["old:key"]).toBeUndefined();
   });
 
   it("rejects wrong version", async () => {

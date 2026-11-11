@@ -5,7 +5,12 @@ import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
-import { resolveTokenConnectorScope, isConnectorAllowed } from "@/core/token-scope";
+import {
+  resolveTokenAccess,
+  isConnectorAllowed,
+  runWithToolAccess,
+  type TokenAccess,
+} from "@/core/token-scope";
 import {
   composeRequestPipeline,
   rehydrateStep,
@@ -117,9 +122,10 @@ export function __resetPrimeCacheForTests(): void {
  * ambient process.env still works (SEC-02 fallback).
  */
 async function buildHandler(
-  callerTokenId?: string | null,
-  tenantId?: string | null,
-  requestId?: string | null
+  callerTokenId: string | null | undefined,
+  tenantId: string | null | undefined,
+  requestId: string | null | undefined,
+  access: TokenAccess
 ) {
   // PERF-01: resolve lazily. buildHandler() is invoked per request by the
   // transport pipeline, so awaiting getEnabledPacksLazy() here is safe — the
@@ -133,7 +139,12 @@ async function buildHandler(
   // (defense-in-depth check inside each tool handler). Core connectors are
   // always in-scope (resolved inside token-scope.ts). See
   // src/core/token-scope.ts + src/core/devices.ts.
-  const connectorScope = await resolveTokenConnectorScope(callerTokenId);
+  const connectorScope =
+    access.kind === "full"
+      ? null
+      : access.kind === "scoped"
+        ? access.connectors
+        : new Set<string>();
 
   // Prime dynamic tool caches (user-defined Skills, Custom API Tools) before
   // we iterate `manifest.tools`. Without this priming step, connectors that
@@ -210,9 +221,9 @@ async function buildHandler(
               // timers), and it is idempotent — runWithCredentials
               // merges creds, and the outer tenantId is preserved.
               void tenantId; // silence unused (kept for signature compatibility)
-              // Kept explicit so a connector author reading this file sees
-              // the intended behavior.
-              return tool.handler(params);
+              // SEC-05: expose the caller's connector scope to code that
+              // invokes other tools on its behalf (Custom Tools runner).
+              return runWithToolAccess({ connectorScope }, () => tool.handler(params));
             },
             callerTokenId,
             pack.manifest.id,
@@ -313,7 +324,18 @@ async function buildHandler(
  * credential-store.ts SEC-02 for the resolution order.
  */
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
-  const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId);
+  // SEC-04 / SEC-06: resolve the caller token's access once per request.
+  // A rotated/revoked token is refused outright — on Vercel it can still
+  // be present in the env until the next deploy.
+  const access = await resolveTokenAccess(ctx.tokenId);
+  if (access.kind === "revoked") {
+    const res = new Response("Unauthorized: this token has been revoked or rotated", {
+      status: 401,
+    });
+    res.headers.set("x-request-id", ctx.requestId);
+    return res;
+  }
+  const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
   const response = await mcpHandler(ctx.request);
   response.headers.set("x-request-id", ctx.requestId);
   return response;

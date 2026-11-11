@@ -56,10 +56,90 @@ interface DeviceKVEntry {
   createdAt: string;
   /** Optional per-token connector allowlist. Absent = full access. */
   connectors?: string[];
+  /**
+   * SEC-06 (2026-11 audit): set when the token was rotated or revoked.
+   * On Vercel the `MCP_AUTH_TOKEN` env edit only lands on the next
+   * deploy, so the old token keeps authenticating until then — this
+   * tombstone makes the transport refuse it immediately instead of
+   * falling back to full access.
+   */
+  revokedAt?: string;
+}
+
+/**
+ * Parsed device entry.
+ * - `absent`: no KV entry → no scope (full access; the documented
+ *   default, and the case of the KV-only bootstrap token).
+ * - `corrupt`: unparseable JSON, or a `connectors` field that is present
+ *   but not an array of strings → fail CLOSED (SEC-04).
+ */
+export type DeviceEntryState =
+  | { kind: "absent" }
+  | { kind: "corrupt" }
+  | { kind: "ok"; entry: Partial<DeviceKVEntry> & { connectors?: string[] } };
+
+export function parseDeviceEntry(raw: string | null): DeviceEntryState {
+  if (!raw) return { kind: "absent" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { kind: "corrupt" };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { kind: "corrupt" };
+  const entry = parsed as Partial<DeviceKVEntry> & { connectors?: unknown };
+  if (entry.connectors !== undefined) {
+    if (
+      !Array.isArray(entry.connectors) ||
+      !entry.connectors.every((c): c is string => typeof c === "string")
+    ) {
+      return { kind: "corrupt" };
+    }
+  }
+  return { kind: "ok", entry: entry as Partial<DeviceKVEntry> & { connectors?: string[] } };
+}
+
+/**
+ * Access level carried by one device entry, as seen from one KV namespace.
+ * `null` = no restriction; an array = allowlist; "revoked" = refuse.
+ */
+export type DeviceAccess = "revoked" | string[] | null;
+
+export function deviceAccessFromState(state: DeviceEntryState): DeviceAccess {
+  if (state.kind === "absent") return null;
+  if (state.kind === "corrupt") return [];
+  if (typeof state.entry.revokedAt === "string" && state.entry.revokedAt.length > 0) {
+    return "revoked";
+  }
+  return state.entry.connectors ?? null;
 }
 
 const DEVICE_KEY_PREFIX = "devices:";
 const LABEL_MAX_LEN = 40;
+
+/**
+ * Overwrite a device entry with a revocation tombstone (keeps the label
+ * for audit). Tombstones are tiny and keyed by an 8-hex tokenId; they are
+ * kept indefinitely so a token that lingers in a stale env snapshot can
+ * never regain access.
+ */
+async function writeRevocationTombstone(
+  kv: { get(key: string): Promise<string | null>; set(key: string, value: string): Promise<void> },
+  key: string
+): Promise<void> {
+  const state = parseDeviceEntry(await kv.get(key));
+  const label =
+    state.kind === "ok" && typeof state.entry.label === "string" ? state.entry.label : "unnamed";
+  const tombstone: DeviceKVEntry = {
+    label,
+    createdAt:
+      state.kind === "ok" && typeof state.entry.createdAt === "string"
+        ? state.entry.createdAt
+        : new Date().toISOString(),
+    revokedAt: new Date().toISOString(),
+  };
+  await kv.set(key, JSON.stringify(tombstone));
+}
 
 /** 16-hex SHA-256 prefix — matches rate-limit.ts hashToken(). */
 function idHash16(token: string): string {
@@ -118,25 +198,32 @@ export async function listDevices(): Promise<DeviceRow[]> {
 }
 
 /**
- * Read a token's connector allowlist. Returns the stored array, or `null`
- * when the token has no scope (missing entry, absent `connectors` field, or
- * a corrupt entry) — i.e. fail-open to full access. Never throws.
+ * Read a token's connector allowlist in the current (tenant) namespace.
+ * Returns the stored array, or `null` when the token has no scope (missing
+ * entry or absent `connectors` field — full access). SEC-04: a corrupt
+ * entry or a revoked token yields `[]` (fail closed). Never throws on
+ * parse errors.
  *
  * `id` is the 8-hex `tokenId` (see auth.ts). Reads through
  * `getContextKVStore()` so tenant isolation is automatic.
  */
 export async function getDeviceConnectors(id: string): Promise<string[] | null> {
-  const kv = getContextKVStore();
+  const access = await getDeviceAccess(id, getContextKVStore());
+  if (access === "revoked") return [];
+  return access;
+}
+
+/**
+ * Read one token's access level from a specific KV namespace. Used by
+ * token-scope.ts, which consults both the root and the tenant namespace
+ * (SEC-04) and keeps the most restrictive answer.
+ */
+export async function getDeviceAccess(
+  id: string,
+  kv: { get(key: string): Promise<string | null> }
+): Promise<DeviceAccess> {
   const raw = await kv.get(`${DEVICE_KEY_PREFIX}${id}`);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
-    if (!Array.isArray(parsed.connectors)) return null;
-    return parsed.connectors.filter((c): c is string => typeof c === "string");
-  } catch {
-    // Corrupt entry — fail open (full access), never wedge the token.
-    return null;
-  }
+  return deviceAccessFromState(parseDeviceEntry(raw));
 }
 
 /**
@@ -190,6 +277,10 @@ export async function setDeviceConnectors(id: string, connectors: string[] | nul
   }
   const entry: DeviceKVEntry = { label, createdAt };
   if (validated !== null) entry.connectors = validated;
+  const prevState = parseDeviceEntry(existingRaw);
+  if (prevState.kind === "ok" && typeof prevState.entry.revokedAt === "string") {
+    entry.revokedAt = prevState.entry.revokedAt;
+  }
   await kv.set(key, JSON.stringify(entry));
 }
 
@@ -209,19 +300,26 @@ export async function setDeviceLabel(id: string, label: string): Promise<void> {
 
   const kv = getContextKVStore();
   const key = `${DEVICE_KEY_PREFIX}${id}`;
-  const existingRaw = await kv.get(key);
-  let createdAt = new Date().toISOString();
-  if (existingRaw) {
-    try {
-      const parsed = JSON.parse(existingRaw) as Partial<DeviceKVEntry>;
-      if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
-        createdAt = parsed.createdAt;
-      }
-    } catch {
-      // fall through to fresh createdAt
-    }
+  const state = parseDeviceEntry(await kv.get(key));
+  if (state.kind === "corrupt") {
+    // SEC-04: never "repair" a corrupt entry by rewriting it without a
+    // scope — that would silently grant full access.
+    throw new Error("Device entry is corrupt; re-set its connector scope before renaming");
   }
+  let createdAt = new Date().toISOString();
   const entry: DeviceKVEntry = { label: trimmed, createdAt };
+  if (state.kind === "ok") {
+    const prev = state.entry;
+    if (typeof prev.createdAt === "string" && prev.createdAt.length > 0) {
+      createdAt = prev.createdAt;
+      entry.createdAt = createdAt;
+    }
+    // SEC-03b (2026-11 audit): preserve the connector scope and any
+    // revocation tombstone. Previously the rewrite dropped `connectors`,
+    // so renaming a scoped token silently restored full access.
+    if (prev.connectors !== undefined) entry.connectors = prev.connectors;
+    if (typeof prev.revokedAt === "string") entry.revokedAt = prev.revokedAt;
+  }
   await kv.set(key, JSON.stringify(entry));
 }
 
@@ -260,13 +358,14 @@ export async function deleteDevice(
     await getEnvStore().write({ MCP_AUTH_TOKEN: filtered.join(",") });
   }
 
-  // 2) Delete KV label entry.
+  // 2) Replace the KV entry with a revocation tombstone (SEC-06). The env
+  // edit above only takes effect on the next deploy on Vercel; until then
+  // the token still authenticates, and a *deleted* entry would mean "no
+  // scope" = full access. The tombstone makes the transport refuse it now.
   const kv = getContextKVStore();
   const labelKey = `${DEVICE_KEY_PREFIX}${id}`;
   const labelExisted = (await kv.get(labelKey)) !== null;
-  if (labelExisted) {
-    await kv.delete(labelKey);
-  }
+  await writeRevocationTombstone(kv, labelKey);
 
   // 3) Clear rate-limit buckets.
   const rateLimitBucketsDeleted = await clearDeviceRateLimit(rawToken);
@@ -295,36 +394,38 @@ export async function rotateDeviceToken(
   const newToken = randomBytes(32).toString("hex");
   const newTokenId = tokenId(newToken);
 
+  // SEC-06: carry the old entry's label + scope over to the NEW tokenId
+  // BEFORE touching the env or the old entry, so a crash mid-rotation can
+  // never leave a token without its scope.
+  const kv = getContextKVStore();
+  const oldKey = `${DEVICE_KEY_PREFIX}${id}`;
+  const newKey = `${DEVICE_KEY_PREFIX}${newTokenId}`;
+  const oldState = parseDeviceEntry(await kv.get(oldKey));
+  let label = "unnamed";
+  let connectors: string[] | undefined;
+  if (oldState.kind === "ok") {
+    if (typeof oldState.entry.label === "string" && oldState.entry.label.length > 0) {
+      label = oldState.entry.label;
+    }
+    // Preserve the connector scope across rotation — a rotated team token
+    // must keep its allowlist, else rotation would silently re-grant full
+    // access (privilege escalation).
+    connectors = oldState.entry.connectors;
+  } else if (oldState.kind === "corrupt") {
+    connectors = []; // fail closed, mirrors token-scope resolution
+  }
+  const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
+  if (connectors !== undefined) newEntry.connectors = connectors;
+  await kv.set(newKey, JSON.stringify(newEntry));
+
   // Splice env list.
   const updated = [...tokens];
   updated[matchIdx] = newToken;
   await getEnvStore().write({ MCP_AUTH_TOKEN: updated.join(",") });
 
-  // Move KV entry: preserve label, update createdAt to now (mint timestamp).
-  const kv = getContextKVStore();
-  const oldKey = `${DEVICE_KEY_PREFIX}${id}`;
-  const newKey = `${DEVICE_KEY_PREFIX}${newTokenId}`;
-  const oldRaw = await kv.get(oldKey);
-  let label = "unnamed";
-  let connectors: string[] | undefined;
-  if (oldRaw) {
-    try {
-      const parsed = JSON.parse(oldRaw) as Partial<DeviceKVEntry>;
-      if (typeof parsed.label === "string" && parsed.label.length > 0) label = parsed.label;
-      // Preserve the connector scope across rotation — a rotated team token
-      // must keep its allowlist, else rotation would silently re-grant full
-      // access (privilege escalation).
-      if (Array.isArray(parsed.connectors)) {
-        connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
-      }
-    } catch {
-      // fall through
-    }
-    await kv.delete(oldKey);
-  }
-  const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
-  if (connectors !== undefined) newEntry.connectors = connectors;
-  await kv.set(newKey, JSON.stringify(newEntry));
+  // Tombstone the old tokenId: on Vercel the env edit only applies after a
+  // redeploy, and until then the old token still authenticates.
+  await writeRevocationTombstone(kv, oldKey);
 
   // Clear old rate-limit buckets — the NEW token has a different idHash,
   // so its fresh buckets will accumulate independently.

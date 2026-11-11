@@ -46,6 +46,14 @@ function prefixed(tenantId: string | null) {
   };
 }
 
+// token-scope.ts reads the ROOT namespace too (SEC-04), via getKVStore /
+// getTenantKVStore — back them with the same shared map.
+vi.mock("@/core/kv-store", () => ({
+  getKVStore: () => baseStore(),
+  getTenantKVStore: (t: string | null) => prefixed(t),
+  kvScanAll: async () => [],
+}));
+
 let mockTenantId: string | null = null;
 vi.mock("@/core/request-context", () => ({
   getCurrentTenantId: () => mockTenantId,

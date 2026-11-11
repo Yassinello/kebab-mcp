@@ -1,4 +1,7 @@
+import { z } from "zod";
 import { getEnabledPacksLazy } from "@/core/registry";
+import { getToolAccessContext, isConnectorAllowed } from "@/core/token-scope";
+import { getDisabledTools } from "@/core/tool-toggles";
 import { runWithCredentials } from "@/core/request-context";
 import { getHydratedCredentialSnapshot } from "@/core/credential-store";
 import { getConfigInt } from "@/core/config-facade";
@@ -576,6 +579,21 @@ async function runStep(
     );
   }
 
+  // SEC-05 (2026-11 audit): a composed tool must not reach further than the
+  // caller could directly. Enforce the caller token's connector scope
+  // (ambient, set by the MCP transport) and the per-tool disable toggles
+  // on EVERY step — previously only the custom tool itself was checked,
+  // so a token scoped to `custom-tools` could drive Gmail/Slack/Vault.
+  const access = getToolAccessContext();
+  if (access && !isConnectorAllowed(access.connectorScope, lookup.packId)) {
+    throw new Error(
+      `tool "${step.toolName}" is outside this token's connector scope (connector "${lookup.packId}")`
+    );
+  }
+  if ((await getDisabledTools()).has(step.toolName)) {
+    throw new Error(`tool "${step.toolName}" is currently disabled`);
+  }
+
   // Phase 5 — Dry-run short-circuit. Resolve allowlist + recursion checks
   // first (so the operator still gets a "blocked pack" or "recursion"
   // error in dry-run, which is the *point* of dry-run for diagnostics),
@@ -597,7 +615,13 @@ async function runStep(
   }
 
   const expanded = expandArgs(step.args, context);
-  const argsObj = (expanded ?? {}) as Record<string, unknown>;
+  // SEC-05: validate step args against the target tool's schema, exactly
+  // like the MCP transport does for direct calls.
+  const argsObj = validateStepArgs(
+    step.toolName,
+    lookup.tool.schema,
+    (expanded ?? {}) as Record<string, unknown>
+  );
   // NB: we intentionally do NOT pass the signal to `handler(argsObj)`.
   // The current `ToolDefinition.handler` signature is single-argument
   // (`Record<string, unknown>`); widening it would touch 80+ tools.
@@ -615,6 +639,61 @@ async function runStep(
   // the runner can stamp `committedSteps`. Transforms are never
   // destructive; tool steps inherit the flag from their ToolDefinition.
   return { saved: finalText, finalText, destructive: !!lookup.tool.destructive };
+}
+
+/**
+ * Validate expanded step arguments against the target tool's Zod raw
+ * shape. Mustache rendering always yields strings, so when the strict
+ * parse fails we retry once with string values JSON-decoded where that
+ * decoding succeeds ("5" → 5, "true" → true, "[...]" → array) — this keeps
+ * existing custom tools that pass templated numbers/booleans working.
+ * Returns the parsed data (defaults applied), or throws a readable error.
+ */
+function validateStepArgs(
+  toolName: string,
+  schema: ToolDefinition["schema"],
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  // `.loose()` validates declared fields without stripping extra keys, so
+  // existing custom tools that pass additional args keep working.
+  const objectSchema = z.object(schema as z.ZodRawShape).loose();
+  const first = objectSchema.safeParse(args);
+  if (first.success) return first.data as Record<string, unknown>;
+  const coerced: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (typeof v === "string") {
+      try {
+        coerced[k] = JSON.parse(v);
+        continue;
+      } catch {
+        // not JSON — keep the string
+      }
+    }
+    coerced[k] = v;
+  }
+  // Only keep a coerced value when the field's schema accepts it; strings
+  // that the schema wants as strings stay strings.
+  const shape = schema as z.ZodRawShape;
+  const merged: Record<string, unknown> = { ...args };
+  for (const [k, v] of Object.entries(coerced)) {
+    const raw = shape[k];
+    if (!raw) continue;
+    const field = z.object({ v: raw as z.ZodType });
+    if (
+      v !== args[k] &&
+      !field.safeParse({ v: args[k] }).success &&
+      field.safeParse({ v }).success
+    ) {
+      merged[k] = v;
+    }
+  }
+  const second = objectSchema.safeParse(merged);
+  if (second.success) return second.data as Record<string, unknown>;
+  const issues = second.error.issues
+    .slice(0, 5)
+    .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+    .join("; ");
+  throw new Error(`invalid arguments for tool "${toolName}": ${issues}`);
 }
 
 function toolResultToText(result: ToolResult): string {

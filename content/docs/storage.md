@@ -18,7 +18,7 @@ Knowing which mode you're in matters because each one has a different durability
 
 **When picked**: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set and the ping check succeeds.
 
-**What works**: every save is instant and survives cold starts, redeploys, and multi-instance scaling. Migration from file mode is one click in the dashboard. Backups via `mcp_backup_export`. Free Upstash tier is plenty for a personal instance.
+**What works**: every save is instant and survives cold starts, redeploys, and multi-instance scaling. Migration from file mode is one click in the dashboard. Backups via `npm run backup:export` (operator CLI). Free Upstash tier is plenty for a personal instance.
 
 **What breaks**: nothing inherent. If Upstash is misconfigured (wrong token, deleted database, network blocked), Kebab MCP flips to a `kv-degraded` state instead of silently writing to the wrong place — you'll see `KV unreachable ✗` and the dashboard refuses to save.
 
@@ -90,11 +90,16 @@ The dashboard tells you which mode you're in and links to the right upgrade path
 There's no UI for this — it's the wrong direction for a personal Vercel instance. If you genuinely need to back up KV to disk (e.g. moving from Vercel to self-hosted Docker), use:
 
 ```bash
-# From the dashboard: /config → Settings → Backup → Export JSON
-# Or via MCP tool: mcp_backup_export
+# Operator CLI — run with the instance's KV credentials in the environment.
+# Includes secrets (connector credentials, bootstrap token): treat the file as a credential.
+npm run backup:export > backup.json
+# Redacted, shareable variant:
+npx tsx scripts/backup.ts export --no-secrets > backup-redacted.json
 ```
 
-Then start the new instance with file storage and `mcp_backup_import` the JSON.
+Then start the new instance with file storage and run `npm run backup:import backup.json`.
+
+> The `mcp_backup_export` / `mcp_backup_import` MCP tools are disabled by default since the 2026-11 security audit (any MCP token could otherwise dump every stored secret). Set `KEBAB_MCP_BACKUP_TOOLS=1` to re-enable them; even then they never export or import credentials, first-run material or device scopes.
 
 ### KV-degraded recovery
 

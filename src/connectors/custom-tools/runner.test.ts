@@ -61,6 +61,11 @@ vi.mock("@/core/credential-store", () => ({
 // runner tests don't accidentally write to data/kv.json. The runs-store
 // is exercised directly in runs-store.test.ts; here we only care about
 // `committedSteps` being populated on the in-memory RunResult.
+const { disabledTools } = vi.hoisted(() => ({ disabledTools: new Set<string>() }));
+vi.mock("@/core/tool-toggles", () => ({
+  getDisabledTools: async () => new Set(disabledTools),
+}));
+
 vi.mock("./runs-store", () => ({
   recordRun: vi.fn(async () => undefined),
   listRuns: vi.fn(async () => []),
@@ -733,5 +738,80 @@ describe("runner — dry-run (Phase 5)", () => {
     const result = await runCustomTool(tool, {}, { dryRun: true });
     expect(result.ok).toBe(true);
     expect(result.result).toBe("after: [dry-run mock]");
+  });
+});
+
+// ── SEC-05 (2026-11 audit) ───────────────────────────────────────────
+describe("runner — SEC-05 caller scope, toggles and arg validation", () => {
+  beforeEach(() => {
+    mockTools.length = 0;
+    mockAdminTools.length = 0;
+    disabledTools.clear();
+  });
+
+  function oneStep(toolName: string, args: Record<string, unknown> = {}): CustomTool {
+    return {
+      id: "composed",
+      description: "x",
+      destructive: false,
+      inputs: [{ name: "n", type: "string", required: false, description: "" }],
+      steps: [{ kind: "tool", toolName, args }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  it("EXPLOIT: a step whose connector is outside the caller token's scope is refused", async () => {
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "sent" }] }));
+    registerTool("vault_delete", handler, true);
+    const { runWithToolAccess } = await import("@/core/token-scope");
+    const result = await runWithToolAccess({ connectorScope: new Set(["custom-tools"]) }, () =>
+      runCustomTool(oneStep("vault_delete"), {})
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/outside this token's connector scope/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("allows the step when the connector is in scope", async () => {
+    registerTool("vault_read", async () => ({ content: [{ type: "text", text: "ok" }] }));
+    const { runWithToolAccess } = await import("@/core/token-scope");
+    const result = await runWithToolAccess(
+      { connectorScope: new Set(["custom-tools", "vault"]) },
+      () => runCustomTool(oneStep("vault_read"), {})
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses a step that targets a disabled tool", async () => {
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "x" }] }));
+    registerTool("vault_write", handler, true);
+    disabledTools.add("vault_write");
+    const result = await runCustomTool(oneStep("vault_write"), {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/disabled/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("validates step args against the target schema and coerces templated numbers", async () => {
+    const { z } = await import("zod");
+    let received: unknown;
+    mockTools.push({
+      name: "vault_list",
+      description: "list",
+      destructive: false,
+      schema: { limit: z.number().int().max(50) },
+      handler: async (args) => {
+        received = args;
+        return { content: [{ type: "text", text: "ok" }] };
+      },
+    });
+    const ok = await runCustomTool(oneStep("vault_list", { limit: "{{n}}" }), { n: "5" });
+    expect(ok.ok).toBe(true);
+    expect(received).toEqual({ limit: 5 });
+
+    const bad = await runCustomTool(oneStep("vault_list", { limit: "{{n}}" }), { n: "500" });
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toMatch(/invalid arguments for tool "vault_list"/);
   });
 });

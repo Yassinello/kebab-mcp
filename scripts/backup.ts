@@ -3,8 +3,13 @@
  * Kebab MCP Backup CLI — export / import KV store data.
  *
  * Usage:
- *   npx tsx scripts/backup.ts export [--scope=all]
+ *   npx tsx scripts/backup.ts export [--scope=all] [--no-secrets]
  *   npx tsx scripts/backup.ts import backup.json [--mode=merge|replace] [--scope=all]
+ *
+ * SEC-02 (2026-11): the CLI is the operator path (it already holds the raw
+ * KV credentials), so exports include secret-bearing keys by default —
+ * pass --no-secrets for a shareable redacted export. The MCP tools never
+ * include secrets. Treat full exports as credentials.
  *
  * Phase 42 (TEN-04) — default scope is the current tenant. The CLI
  * runs outside any HTTP request context, so there is no tenant
@@ -26,7 +31,10 @@ async function main() {
       if (arg === "--scope=all") scope = "all";
       else if (arg === "--scope=tenant") scope = "tenant";
     }
-    const data = await exportBackup({ scope });
+    const data = await exportBackup({
+      scope,
+      includeSecrets: !process.argv.includes("--no-secrets"),
+    });
     process.stdout.write(JSON.stringify(data, null, 2) + "\n");
     process.exit(0);
   }
@@ -66,7 +74,7 @@ async function main() {
       console.error("Error: invalid JSON in", filePath);
       process.exit(1);
     }
-    const result = await importBackup(data, { mode, scope });
+    const result = await importBackup(data, { mode, scope, includeSecrets: true });
     console.log(result.message);
     process.exit(result.ok ? 0 : 1);
   }

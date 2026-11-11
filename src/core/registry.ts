@@ -243,7 +243,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Admin",
     description: "Framework-level admin tools (health check, tool toggle, etc.)",
     requiredEnvVars: [],
-    toolCount: 5,
+    toolCount: 3,
     core: true,
     loader: () => import("@/connectors/admin/manifest").then((m) => m.adminConnector),
   },

@@ -783,21 +783,6 @@
     "destructive": true
   },
   {
-    "name": "mcp_backup_export",
-    "pack": "admin",
-    "schemaKeys": [],
-    "destructive": false
-  },
-  {
-    "name": "mcp_backup_import",
-    "pack": "admin",
-    "schemaKeys": [
-      "data",
-      "mode"
-    ],
-    "destructive": true
-  },
-  {
     "name": "mcp_cache_evict",
     "pack": "admin",
     "schemaKeys": [

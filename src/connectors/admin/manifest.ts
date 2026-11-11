@@ -27,23 +27,34 @@ const baseTools = [
     handler: async (args) => handleCacheEvict(args),
     destructive: true,
   }),
-  defineTool({
-    name: "mcp_backup_export",
-    description:
-      "Export all KV store data as a JSON backup. Returns version, timestamp, and all key-value entries. Does not include env vars or secrets.",
-    schema: backupExportSchema,
-    handler: async () => handleBackupExport(),
-    destructive: false,
-  }),
-  defineTool({
-    name: "mcp_backup_import",
-    description:
-      "Import a JSON backup into the KV store. Accepts the same format produced by mcp_backup_export. Validates version before writing.",
-    schema: backupImportSchema,
-    handler: async (args) => handleBackupImport(args),
-    destructive: true,
-  }),
 ];
+
+// SEC-01 (2026-11 audit): backup export/import are NOT exposed over MCP by
+// default. Any MCP token (and any prompt-injected LLM holding one) could
+// otherwise dump or rewrite the whole KV namespace. Operators who want them
+// opt in with KEBAB_MCP_BACKUP_TOOLS=1; even then secrets are redacted
+// (see SEC-02 in src/core/backup.ts). The operator CLI (scripts/backup.ts)
+// remains the supported full-backup path.
+if (getConfig("KEBAB_MCP_BACKUP_TOOLS") === "1") {
+  baseTools.push(
+    defineTool({
+      name: "mcp_backup_export",
+      description:
+        "Export all KV store data as a JSON backup. Returns version, timestamp, and all key-value entries. Secret-bearing keys (connector credentials, bootstrap/signing material, API connection auth) are always excluded.",
+      schema: backupExportSchema,
+      handler: async () => handleBackupExport(),
+      destructive: false,
+    }),
+    defineTool({
+      name: "mcp_backup_import",
+      description:
+        "Import a JSON backup into the KV store. Accepts the same format produced by mcp_backup_export. Validates version before writing. Credential and authorization keys (cred:*, devices:*, first-run material) are never written.",
+      schema: backupImportSchema,
+      handler: async (args) => handleBackupImport(args),
+      destructive: true,
+    })
+  );
+}
 
 // MEDIUM-5: Only include the stream-test diagnostic tool outside production.
 if (getConfig("NODE_ENV") !== "production") {
