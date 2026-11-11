@@ -3,7 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { kvScanAll } from "@/core/kv-store";
-import { getContextKVStore } from "@/core/request-context";
+import { getContextKVStore, getCurrentTenantId } from "@/core/request-context";
 import { hasUpstashCreds } from "@/core/upstash-env";
 import { getLogger } from "@/core/logging";
 import { getConfig } from "@/core/config-facade";
@@ -200,7 +200,7 @@ async function writeRaw(skills: Skill[]): Promise<void> {
   // Keep the sync cache in lock-step so the MCP transport picks up
   // newly-created/edited skills on the next tools iteration in this
   // lambda — without waiting for the next `primeSkillsCache()` roundtrip.
-  _skillsCache = skills;
+  _skillsCache.set(cacheKey(), skills);
 }
 
 // ── Write mutex ─────────────────────────────────────────────────────────
@@ -235,7 +235,18 @@ export async function listSkills(): Promise<Skill[]> {
 // clients on cold lambdas until /api/admin/status (which calls `diagnose()`)
 // happened to fire first. The ConnectorManifest.refresh hook in the
 // transport primes this cache before iterating `tools`.
-let _skillsCache: Skill[] | null = null;
+// Keyed by tenant: a process-wide single value let one tenant's skills be
+// served to another tenant's MCP request within the prime window.
+const ROOT_TENANT = "__root__";
+const _skillsCache = new Map<string, Skill[]>();
+
+function cacheKey(): string {
+  try {
+    return getCurrentTenantId() ?? ROOT_TENANT;
+  } catch {
+    return ROOT_TENANT;
+  }
+}
 
 /**
  * Populate the sync cache from the authoritative async store. Called by
@@ -244,15 +255,15 @@ let _skillsCache: Skill[] | null = null;
  */
 export async function primeSkillsCache(): Promise<void> {
   try {
-    _skillsCache = await readRaw();
+    _skillsCache.set(cacheKey(), await readRaw());
   } catch {
-    _skillsCache = _skillsCache ?? [];
+    if (!_skillsCache.has(cacheKey())) _skillsCache.set(cacheKey(), []);
   }
 }
 
 /** Reset the sync cache. Exposed for tests — prevents cross-test bleed. */
 export function _resetSkillsCacheForTests(): void {
-  _skillsCache = null;
+  _skillsCache.clear();
 }
 
 /** Synchronous snapshot — used by the pack manifest at registry scan time.
@@ -264,7 +275,12 @@ export function _resetSkillsCacheForTests(): void {
  *   3. Else (Upstash without a warm cache), return [] — callers that need
  *      a guaranteed fresh read must use the async `listSkills()` API. */
 export function listSkillsSync(): Skill[] {
-  if (_skillsCache !== null) return _skillsCache;
+  const key = cacheKey();
+  const cached = _skillsCache.get(key);
+  if (cached) return cached;
+  // The on-disk fallback below reads the ROOT tenant's record only; never
+  // serve it to another tenant.
+  if (key !== ROOT_TENANT) return [];
   const legacy = getLegacySkillsPath();
   const filePath =
     legacy ?? (hasUpstashCreds() ? null : path.resolve(process.cwd(), "data", "kv.json"));
@@ -303,7 +319,9 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
   return enqueueWrite(async () => {
     const parsed = skillCreateInputSchema.parse(input);
     const all = await readRaw();
-    const existingIds = new Set(all.map((s) => s.id));
+    // `load` / `read_file` are reserved: their legacy tool names would
+    // collide with the library tools skill_load / skill_read_file.
+    const existingIds = new Set([...all.map((s) => s.id), "load", "read_file"]);
     const id = await uniqueId(parsed.id ?? slugify(parsed.name), existingIds);
     const now = new Date().toISOString();
     const skill: Skill = {

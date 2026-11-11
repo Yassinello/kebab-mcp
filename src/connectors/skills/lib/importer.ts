@@ -35,6 +35,8 @@ export interface ImportPlanItem {
   arguments: { name: string; description: string; required: boolean }[];
   files: Record<string, string>;
   action: "create" | "update";
+  /** On update: keep the existing bundled files (none supplied / invalid). */
+  keepFiles: boolean;
   warnings: string[];
 }
 
@@ -68,25 +70,45 @@ function planOne(src: ImportedSkill, existing: Skill[]): ImportPlanItem {
   }
   if (!parsed.description) warnings.push("no description — the skill will be hard to trigger");
 
-  let files = src.files;
-  const v = validateFiles(files);
-  if (!v.ok) {
-    warnings.push(`bundled files dropped: ${v.error}`);
-    files = {};
-  }
-
   const id = toKebabId(name).replace(/[^a-z0-9_]/g, "_");
   const match = existing.find((s) => s.id === id);
+
+  let files = src.files;
+  let filesValid = true;
+  const v = validateFiles(files);
+  if (!v.ok) {
+    warnings.push(`bundled files not imported: ${v.error}`);
+    files = {};
+    filesValid = false;
+  }
+  const supplied = Object.keys(files).length > 0;
+  // An update never silently wipes what the import does not carry: a pasted
+  // SKILL.md (or a Claude/ChatGPT export without files / tags) keeps the
+  // skill's existing bundled files and profile tags.
+  const keepFiles = !!match && (!supplied || !filesValid);
+  const existingFiles = match?.files?.length ?? 0;
+  if (keepFiles && existingFiles > 0) {
+    warnings.push(`keeps its ${existingFiles} existing bundled file(s)`);
+  } else if (match && supplied && existingFiles > 0) {
+    warnings.push(`replaces its ${existingFiles} existing bundled file(s)`);
+  }
+  let tags = parsed.tags;
+  if (match && tags.length === 0 && (match.tags?.length ?? 0) > 0) {
+    tags = match.tags;
+    warnings.push(`keeps its tags (${tags.map((t) => `#${t}`).join(" ")})`);
+  }
+
   return {
     name: toAgentName(id),
     id,
     title: parsed.title ?? match?.name ?? name,
     description: parsed.description,
     body: parsed.body,
-    tags: parsed.tags,
+    tags,
     arguments: parsed.arguments,
     files,
     action: match ? "update" : "create",
+    keepFiles,
     warnings,
   };
 }
@@ -106,15 +128,18 @@ export async function planImport(input: {
     return { ok: false, error: "Provide a SKILL.md text or a .zip file." };
   }
   const existing = await listSkills();
-  const items = sources.filter((s) => s.skillMd.trim()).map((s) => planOne(s, existing));
-  if (items.length === 0) return { ok: false, error: "No usable SKILL.md found." };
-  const seen = new Set<string>();
-  for (const it of items) {
-    if (seen.has(it.id))
-      it.warnings.push(`duplicate name "${it.name}" in this import — last one wins`);
-    seen.add(it.id);
+  const planned = sources.filter((s) => s.skillMd.trim()).map((s) => planOne(s, existing));
+  if (planned.length === 0) return { ok: false, error: "No usable SKILL.md found." };
+  // Same name twice in one import: keep the LAST occurrence only (otherwise
+  // the second create would land as a duplicate `<id>_2`).
+  const byId = new Map<string, ImportPlanItem>();
+  for (const it of planned) {
+    if (byId.has(it.id)) {
+      it.warnings.push(`"${it.name}" appears more than once in this import — the last one is used`);
+    }
+    byId.set(it.id, it);
   }
-  return { ok: true, items };
+  return { ok: true, items: [...byId.values()] };
 }
 
 export interface ImportResultItem {
@@ -154,8 +179,10 @@ export async function applyImport(items: ImportPlanItem[]): Promise<ImportResult
         });
         skillId = created.id;
       }
-      const filesRes = await setSkillFiles(skillId, it.files);
-      if ("error" in filesRes) throw new Error(filesRes.error);
+      if (!it.keepFiles) {
+        const filesRes = await setSkillFiles(skillId, it.files);
+        if ("error" in filesRes) throw new Error(filesRes.error);
+      }
       out.push({
         name: toAgentName(skillId),
         id: skillId,

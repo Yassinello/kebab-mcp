@@ -32,7 +32,7 @@ One library, stored in Kebab, in the open **Agent Skills** format (`SKILL.md` + 
 
 | Field | Type | Default for existing skills | Default for new skills | Notes |
 |---|---|---|---|---|
-| `files` | `{path, size}[]` (index only) | `[]` | `[]` | Bundled UTF-8 text files, relative POSIX paths (`scripts/run.py`, `references/api.md`). **Bodies live in a separate KV key** `skills:files:<id>` so the hot `skills:all` record (read on every MCP request) stays small. Limits: ≤ 30 files, ≤ 100 KB per file, ≤ 512 KB per skill. No `..`, no absolute paths, no backslashes, no `SKILL.md` (that is `content`). |
+| `files` | `{path, size}[]` (index only) | `[]` | `[]` | Bundled UTF-8 text files, relative POSIX paths (`scripts/run.py`, `references/api.md`). **Bodies live in a separate KV key** `skill:<id>:files` (same prefix as version keys, so deleting a skill removes them) so the hot `skills:all` record (read on every MCP request) stays small. Limits: ≤ 30 files, ≤ 100 KB per file, ≤ 512 KB per skill. No `..`, no absolute paths, no backslashes, no `SKILL.md` (that is `content`). |
 | `tags` | `string[]` | `[]` | `[]` | lower-case slugs, ≤ 10. Drive per-token visibility (§6) and `skills_list` filtering. |
 | `exposeAsTool` | `boolean` | **`true`** (keeps today's `skill_<id>` tool) | **`false`** | Per-skill legacy tool. New skills are reached via `skill_load`, which keeps tool lists short. |
 
@@ -108,6 +108,8 @@ If the Kebab connector is unavailable, say so and stop.
 - Relay skills fire only if the Kebab connector is enabled in that client.
 
 ## 11. Review log
+
+Independent code review (pre-merge) found and fixed: process-wide skills/prime caches leaking one tenant's skills to another (now tenant-keyed, stale-object fallback removed); legacy `skill_load`/`skill_read_file` name collision able to break every MCP request (ids reserved, legacy tools filtered); import updates wiping existing files/tags (now kept, with preview warnings); zip64 entry-count DoS (filter throws); bundle endpoint accepting `?token=` (header only); tag scope failing open on KV errors (now closed); scope re-checked on fresh content in legacy tools/prompts; duplicate names in one import; `skills_list` tag normalization.
 
 Spec self-review before implementation changed: file bodies moved out of `skills:all` (KV value size + per-request latency); bundle auth restricted to the Authorization header; `.kebab-skills.json` manifest added so native sync can prune removed skills; versioning limit made explicit.
 

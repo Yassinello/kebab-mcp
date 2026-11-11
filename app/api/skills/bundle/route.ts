@@ -23,6 +23,15 @@ import {
  * leak into access logs). Rate-limited like the MCP endpoint.
  */
 async function handler(ctx: PipelineContext): Promise<Response> {
+  // authStep also accepts ?token= and the admin cookie; this endpoint is for
+  // scripts and must not encourage tokens in URLs (access logs) — header only.
+  const authz = ctx.request.headers.get("authorization") ?? "";
+  if (!/^Bearer\s+\S+/i.test(authz)) {
+    return new Response("Use the Authorization: Bearer <MCP token> header.", {
+      status: 401,
+      headers: { "WWW-Authenticate": "Bearer" },
+    });
+  }
   const connectorScope = await resolveTokenConnectorScope(ctx.tokenId);
   if (!isConnectorAllowed(connectorScope, "skills")) {
     return new Response("Forbidden", { status: 403 });

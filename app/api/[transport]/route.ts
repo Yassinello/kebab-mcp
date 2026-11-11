@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import { getCurrentTenantId } from "@/core/request-context";
 import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
@@ -49,7 +50,7 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
       );
       // PERF-A-03: env edit may have changed the connector list and any
       // tool-store contents; force the next transport request to re-prime.
-      lastPrimeAt = 0;
+      primeCache.clear();
     });
   }
 }
@@ -62,23 +63,25 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
 // (env.changed, skill/tool CRUD) reset the cache to keep dashboard
 // edits visible on the next request.
 const PRIME_CACHE_TTL_MS = 30_000;
-let lastPrimeAt = 0;
-let lastPrimePromise: Promise<void> | null = null;
+// Keyed by tenant: refresh() primes tenant-scoped caches, so a prime done
+// for tenant A must never satisfy tenant B's request.
+const primeCache = new Map<string, { at: number; promise: Promise<void> }>();
 
 async function primeDynamicCaches(
   packs: { manifest: { refresh?: (() => Promise<void>) | undefined } }[]
 ): Promise<void> {
+  const key = getCurrentTenantId() ?? "__root__";
   const now = Date.now();
-  if (lastPrimePromise && now - lastPrimeAt < PRIME_CACHE_TTL_MS) {
-    return lastPrimePromise;
+  const hit = primeCache.get(key);
+  if (hit && now - hit.at < PRIME_CACHE_TTL_MS) {
+    return hit.promise;
   }
-  lastPrimeAt = now;
   // The per-connector refresh() is wrapped in .catch() so individual failures
   // never reject the Promise.all. Outer .catch() is defense-in-depth: if
   // the whole pipeline somehow throws (e.g. a connector with a bad manifest
   // shape), invalidate the cache so the next request retries instead of
   // forever holding a rejected promise.
-  lastPrimePromise = Promise.all(
+  const promise = Promise.all(
     packs.map((p) =>
       p.manifest.refresh?.().catch(() => {
         // refresh failure should not block transport startup; the connector
@@ -88,16 +91,15 @@ async function primeDynamicCaches(
   )
     .then(() => undefined)
     .catch(() => {
-      lastPrimeAt = 0;
-      lastPrimePromise = null;
+      primeCache.delete(key);
     });
-  return lastPrimePromise;
+  primeCache.set(key, { at: now, promise });
+  return promise;
 }
 
 /** Test-only: reset the prime cache. */
 export function __resetPrimeCacheForTests(): void {
-  lastPrimeAt = 0;
-  lastPrimePromise = null;
+  primeCache.clear();
 }
 
 /**

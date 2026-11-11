@@ -315,12 +315,20 @@ export function parseSkillsZip(data: Uint8Array): ZipParseResult {
         inflated += f.originalSize;
         if (entries > MAX_ZIP_ENTRIES || inflated > MAX_ZIP_INFLATED_BYTES) {
           tooBig = true;
-          return false;
+          // Throwing (not returning false) aborts fflate's central-directory
+          // loop: a tiny zip64 can declare billions of entries.
+          throw new Error("zip limits exceeded");
         }
         return !f.name.endsWith("/");
       },
     });
   } catch (err) {
+    if (tooBig) {
+      return {
+        ok: false,
+        error: `Zip exceeds limits (${MAX_ZIP_ENTRIES} entries / ${MAX_ZIP_INFLATED_BYTES} bytes inflated).`,
+      };
+    }
     return { ok: false, error: `Not a valid zip: ${toMsg(err)}` };
   }
   if (tooBig) {

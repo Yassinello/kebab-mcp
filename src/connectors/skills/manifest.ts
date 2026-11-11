@@ -13,6 +13,9 @@ import {
   skillResourceProvider,
 } from "./lib/library";
 
+/** Ids whose legacy tool name would collide with a library tool. */
+export const RESERVED_SKILL_IDS = new Set(["load", "read_file"]);
+
 function json(payload: unknown): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
 }
@@ -111,8 +114,14 @@ export function buildSkillTool(skill: Skill): ToolDefinition {
     destructive: false,
     schema: buildSchema(skill),
     handler: async (params): Promise<ToolResult> => {
-      // Always re-read the latest skill from disk to pick up edits.
-      const latest = (await getSkill(skill.id)) ?? skill;
+      // Always re-read the latest skill (tenant-scoped store) and re-check the
+      // caller's tag scope on the fresh copy: the listing came from a cache
+      // that may be up to 30 s old. Never fall back to the cached object —
+      // that could hand out content the store no longer grants.
+      const latest = await getSkill(skill.id);
+      if (!latest || !isSkillVisible(latest.tags ?? [], getCurrentSkillScope())) {
+        return json({ error: "skill_not_found", name: skill.id });
+      }
 
       // For remote skills, lazy-refresh if TTL expired (fire-and-forget).
       // Returns the (possibly stale) current state immediately.
@@ -146,6 +155,9 @@ export const skillsConnector: ConnectorManifest = {
       const scope = getCurrentSkillScope();
       legacy = listSkillsSync()
         .filter((s) => s.exposeAsTool !== false && isSkillVisible(s.tags ?? [], scope))
+        // A legacy `skill_<id>` named like a library tool (ids `load`,
+        // `read_file`) would make server.tool() throw for every request.
+        .filter((s) => !RESERVED_SKILL_IDS.has(s.id))
         .map((s) => buildSkillTool(s));
     } catch {
       legacy = [];
@@ -221,7 +233,20 @@ export const skillsConnector: ConnectorManifest = {
 
         try {
           server.prompt(skill.id, skill.description || skill.name, argsSchema, async (args) => {
-            const latest = (await getSkill(skill.id)) ?? skill;
+            const latest = await getSkill(skill.id);
+            if (!latest || !isSkillVisible(latest.tags ?? [], getCurrentSkillScope())) {
+              return {
+                messages: [
+                  {
+                    role: "user" as const,
+                    content: {
+                      type: "text" as const,
+                      text: `Skill "${skill.id}" is not available.`,
+                    },
+                  },
+                ],
+              };
+            }
             const ready = await maybeRefreshRemote(latest);
             const text = renderSkill(ready, args as Record<string, unknown>);
             return {

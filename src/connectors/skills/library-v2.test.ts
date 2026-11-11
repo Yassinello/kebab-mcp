@@ -432,3 +432,105 @@ describe("MCP surface", () => {
     expect(JSON.parse(ko.content[0]!.text)).toMatchObject({ error: "skill_not_found" });
   });
 });
+
+describe("review fixes (pre-merge)", () => {
+  it("HIGH: the skills cache is per tenant — tenant B never sees tenant A's skills", async () => {
+    const { runWithTenant } = await import("@/core/request-context");
+    await runWithTenant("tenant_a", async () => {
+      await seed("Secret plan A");
+      await primeSkillsCache();
+    });
+    await runWithTenant("tenant_b", async () => {
+      await primeSkillsCache();
+      expect(skillsConnector.tools.map((t) => t.name)).toEqual([
+        "skills_list",
+        "skill_load",
+        "skill_read_file",
+      ]);
+      expect(buildSkillsInstructions(null)).toBe("");
+      expect((await skillsListPayload({})).count).toBe(0);
+    });
+    await runWithTenant("tenant_a", async () => {
+      expect((await skillsListPayload({})).count).toBe(1);
+    });
+  });
+
+  it("MEDIUM: ids `load` / `read_file` are reserved and never shadow library tools", async () => {
+    const s = await createSkill({
+      name: "Load",
+      content: "x",
+      source: { type: "inline" },
+      exposeAsTool: true,
+    });
+    expect(s.id).toBe("load_2");
+    const legacy = [
+      {
+        id: "read_file",
+        name: "Read file",
+        description: "",
+        content: "c",
+        arguments: [],
+        toolsAllowed: [],
+        source: { type: "inline" },
+        syncState: {},
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    await fs.writeFile(
+      path.join(tmpDir, "kv.json"),
+      JSON.stringify({ "skills:all": JSON.stringify(legacy) })
+    );
+    resetKVStoreCache();
+    await primeSkillsCache();
+    const names = skillsConnector.tools.map((t) => t.name);
+    expect(names.filter((n) => n === "skill_read_file")).toHaveLength(1);
+  });
+
+  it("MEDIUM: updating via a pasted SKILL.md keeps existing files and tags", async () => {
+    const s = await seed("Meeting prep", { tags: ["work"] });
+    await setSkillFiles(s.id, { "references/a.md": "A" });
+    const plan = await planImport({
+      skillMd: "---\nname: meeting-prep\ndescription: New desc\n---\nNew body",
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.items[0]).toMatchObject({ action: "update", keepFiles: true, tags: ["work"] });
+    expect(plan.items[0]!.warnings.join(" ")).toMatch(/keeps its 1 existing bundled file/);
+    await applyImport(plan.items);
+    expect(await getSkillFiles(s.id)).toEqual({ "references/a.md": "A" });
+    expect((await getSkill(s.id))!).toMatchObject({ description: "New desc", tags: ["work"] });
+  });
+
+  it("MEDIUM: zip entry-count limit aborts early", () => {
+    const tree: Record<string, Uint8Array> = {
+      "s/SKILL.md": strToU8("---\nname: s\ndescription: d\n---\nx"),
+    };
+    for (let i = 0; i < 250; i++) tree[`s/references/f${i}.md`] = strToU8("x");
+    const r = parseSkillsZip(zipSync(tree));
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("exceeds limits") });
+  });
+
+  it("LOW: duplicate names in one import produce a single item", async () => {
+    const zip = zipSync({
+      "a/SKILL.md": strToU8("---\nname: dup\ndescription: first\n---\nA"),
+      "b/SKILL.md": strToU8("---\nname: dup\ndescription: second\n---\nB"),
+    });
+    const plan = await planImport({ zip });
+    expect(plan.ok && plan.items).toHaveLength(1);
+  });
+
+  it("LOW: skills_list tag filter normalizes like stored tags", async () => {
+    await seed("Tagged", { tags: ["Perso Pro"] });
+    expect((await skillsListPayload({ tag: "Perso Pro" })).count).toBe(1);
+  });
+
+  it("LOW: legacy tool re-checks scope on the fresh skill", async () => {
+    const s = await seed("Legacy", { exposeAsTool: true, tags: ["work"] });
+    await primeSkillsCache();
+    const tool = skillsConnector.tools.find((t) => t.name === `skill_${s.id}`)!;
+    await updateSkill(s.id, { tags: ["perso"] });
+    const out = await runWithSkillScope(["work"], () => tool.handler({}));
+    expect(JSON.parse(out.content[0]!.text)).toMatchObject({ error: "skill_not_found" });
+  });
+});

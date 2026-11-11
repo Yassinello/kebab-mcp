@@ -15,7 +15,7 @@ import { getCurrentSkillScope, isSkillVisible } from "@/core/token-scope";
 import { getSkillFiles, listSkills, listSkillsSync, type Skill } from "../store";
 import { maybeRefreshRemote } from "./remote-fetcher";
 import { renderSkill } from "./render";
-import { serializeSkillMd, toAgentName, toKebabId } from "./bundle";
+import { normalizeTag, serializeSkillMd, toAgentName, toKebabId } from "./bundle";
 
 export const MAX_INSTRUCTION_SKILLS = 60;
 const MAX_INSTRUCTIONS_CHARS = 8000;
@@ -72,7 +72,7 @@ export interface SkillsListArgs {
 export async function skillsListPayload(args: SkillsListArgs): Promise<Record<string, unknown>> {
   const all = visibleSkills(await listSkills());
   const q = args.query ? normalize(args.query) : null;
-  const tag = args.tag ? normalize(args.tag) : null;
+  const tag = args.tag ? normalizeTag(args.tag) : null;
   const items = all
     .filter((s) => !tag || (s.tags ?? []).includes(tag))
     .filter((s) => !q || normalize(`${s.id} ${s.name} ${s.description}`).includes(q))

@@ -60,7 +60,9 @@ export async function resolveTokenSkillScope(
   try {
     return await getDeviceSkillTags(callerTokenId);
   } catch {
-    return null;
+    // Fail CLOSED: a KV error must not turn a tag-limited token into a
+    // full-library token. An empty scope shows no skill for this request.
+    return [];
   }
 }
 
