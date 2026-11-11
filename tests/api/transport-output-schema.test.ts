@@ -96,6 +96,10 @@ vi.mock("@/core/token-scope", () => ({
   resolveTokenAccess: vi.fn().mockResolvedValue({ kind: "full" }),
   runWithToolAccess: (_ctx: unknown, fn: () => unknown) => fn(),
   getToolAccessContext: () => undefined,
+  resolveTokenSkillScope: async () => null,
+  runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
+  getCurrentSkillScope: () => null,
+  isSkillVisible: () => true,
   isConnectorAllowed: () => true,
 }));
 

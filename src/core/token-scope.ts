@@ -21,7 +21,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { getDeviceAccess } from "./devices";
+import { getDeviceAccess, getDeviceSkillTagsFrom } from "./devices";
 import { getKVStore, getTenantKVStore } from "./kv-store";
 import { getCurrentTenantId } from "./request-context";
 import { CORE_CONNECTOR_IDS } from "./registry";
@@ -131,4 +131,55 @@ export function getToolAccessContext(): ToolAccessContext | undefined {
 export function isConnectorAllowed(scope: Set<string> | null, connectorId: string): boolean {
   if (scope === null) return true;
   return scope.has(connectorId);
+}
+
+// ── Skills v2: per-token skill tag scope ───────────────────────────────
+
+/**
+ * Resolve the caller token's skill tag scope. `null` = every skill (no
+ * token id, no device entry, or no `skillTags` on it). Never throws.
+ */
+export async function resolveTokenSkillScope(
+  callerTokenId: string | null | undefined
+): Promise<string[] | null> {
+  if (!callerTokenId) return null;
+  try {
+    // SEC-04 (2026-11 audit): like the connector scope, read the root AND
+    // the tenant namespace and keep the most restrictive answer, so an
+    // arbitrary tenant header cannot shed a tag scope either.
+    const tenantId = getCurrentTenantId();
+    const namespaces = [getKVStore()];
+    if (tenantId) namespaces.push(getTenantKVStore(tenantId));
+    const results = await Promise.all(
+      namespaces.map((kv) => getDeviceSkillTagsFrom(callerTokenId, kv))
+    );
+    let tags: string[] | null = null;
+    for (const r of results) {
+      if (r === null) continue;
+      tags = tags === null ? r : intersect(tags, r);
+    }
+    return tags;
+  } catch {
+    // Fail CLOSED: a KV error must not turn a tag-limited token into a
+    // full-library token. An empty scope shows no skill for this request.
+    return [];
+  }
+}
+
+const skillScopeStore = new AsyncLocalStorage<{ tags: string[] | null }>();
+
+/** Run `fn` with a skill tag scope ambient for the whole MCP request. */
+export function runWithSkillScope<T>(tags: string[] | null, fn: () => T): T {
+  return skillScopeStore.run({ tags }, fn);
+}
+
+/** Current request's skill tag scope (`null` = all skills / no request scope). */
+export function getCurrentSkillScope(): string[] | null {
+  return skillScopeStore.getStore()?.tags ?? null;
+}
+
+/** A skill is visible when no scope applies, or it shares at least one tag with it. */
+export function isSkillVisible(skillTags: readonly string[], scope: string[] | null): boolean {
+  if (scope === null) return true;
+  return skillTags.some((t) => scope.includes(t));
 }

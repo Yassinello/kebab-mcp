@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ImportSkillModal } from "./skills-import-modal";
 import { SkillComposer } from "./skill-composer";
 import { SkillEditPage } from "./skill-edit-page";
-import { toClaudeSkillFile } from "@/connectors/skills/lib/export-claude";
+import { BundleImportModal } from "./skills-bundle-import-modal";
+import { SkillsEverywherePanel } from "./skills-everywhere";
 
 interface SkillArgument {
   name: string;
@@ -42,8 +43,20 @@ interface Skill {
   toolsAllowed?: string[];
   source: SkillSource;
   syncState?: Record<string, SkillSyncState>;
+  tags?: string[];
+  files?: { path: string; size: number }[];
+  exposeAsTool?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Agent Skills name used by skill_load (`meeting_prep` → `meeting-prep`). */
+function agentName(id: string): string {
+  return id.replace(/_/g, "-");
+}
+
+function download(href: string) {
+  window.location.href = href;
 }
 
 interface SyncTarget {
@@ -77,6 +90,8 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bundleImportOpen, setBundleImportOpen] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [versionMap, setVersionMap] = useState<Record<string, number>>({});
   const [historyOpen, setHistoryOpen] = useState<string | null>(null);
@@ -269,21 +284,6 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
     return { stale: staleTargets.length > 0, targets: staleTargets };
   };
 
-  const exportClaudeSkill = (skill: Skill) => {
-    const payload = toClaudeSkillFile(skill);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${skill.id}.skill`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const toggleHistory = async (skillId: string) => {
     if (historyOpen === skillId) {
       setHistoryOpen(null);
@@ -339,11 +339,17 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
     return <p className="text-sm text-text-muted">Loading skills...</p>;
   }
 
+  const tagCounts = new Map<string, number>();
+  for (const sk of skills)
+    for (const t of sk.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const allTags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const visible = tagFilter ? skills.filter((sk) => (sk.tags ?? []).includes(tagFilter)) : skills;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold text-text">Skills</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 [&>button]:whitespace-nowrap">
           {flash && (
             <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
               {flash}
@@ -368,11 +374,30 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
                 Compose
               </button>
               <button
+                onClick={() => setBundleImportOpen(true)}
+                className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+                title="Import SKILL.md or .zip (Claude, ChatGPT, Codex, git…)"
+                aria-label="Import SKILL.md or zip"
+              >
+                Import
+              </button>
+              <button
                 onClick={() => setImportOpen(true)}
                 className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+                title="Keep a skill in sync with a public URL (GitHub raw, Gist…)"
+                aria-label="Import from URL"
               >
-                Import from URL
+                From URL
               </button>
+              {skills.length > 0 && (
+                <button
+                  onClick={() => download("/api/config/skills/export-all")}
+                  className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+                  title="Download the whole library as Agent Skills folders (.zip)"
+                >
+                  Export all
+                </button>
+              )}
               <button
                 onClick={startCreate}
                 className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
@@ -429,9 +454,10 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
                 What is a skill?
               </h4>
               <p>
-                A reusable prompt template (markdown) bundled with optional typed{" "}
-                <strong>arguments</strong> and a list of MCP <strong>tools</strong> it&apos;s
-                allowed to call. Think of it as a small recipe your AI client can run on demand.
+                Reusable instructions in the open <strong>Agent Skills</strong> format (a{" "}
+                <code>SKILL.md</code> + optional bundled files such as references or scripts) — the
+                same format Claude, ChatGPT, Codex and Claude Code use. Optional typed{" "}
+                <strong>arguments</strong> fill <code>{`{{placeholders}}`}</code>.
               </p>
             </div>
             <div>
@@ -439,10 +465,13 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
                 How clients see it
               </h4>
               <p>
-                Each skill is exposed to MCP clients (Claude, Cursor, Windsurf, ChatGPT) as a tool
-                named <code className="text-text">skill_&lt;name&gt;</code> — and as a prompt in
-                clients that support both. The <strong>description</strong> is what the LLM reads
-                when picking which tool to call, so make it precise.
+                Every client connected to Kebab gets your catalogue (name + description) and loads a
+                skill on demand with <code className="text-text">skill_load</code> — so 50 skills
+                cost 3 tools, not 50. Skills also appear as prompts (slash commands) and{" "}
+                <code>skill://</code> resources. Older skills, or ones you opt in, additionally keep
+                a dedicated <code className="text-text">skill_&lt;name&gt;</code> tool. The{" "}
+                <strong>description</strong> is what the model reads to decide when to use a skill,
+                so make it precise.
               </p>
             </div>
             <div>
@@ -473,6 +502,20 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
         )}
       </div>
 
+      <SkillsEverywherePanel />
+
+      {bundleImportOpen && (
+        <BundleImportModal
+          onClose={() => setBundleImportOpen(false)}
+          onImported={async (summary) => {
+            setBundleImportOpen(false);
+            setFlash(`Imported: ${summary}`);
+            setTimeout(() => setFlash(null), 3000);
+            await reload();
+          }}
+        />
+      )}
+
       {importOpen && (
         <ImportSkillModal
           onClose={() => setImportOpen(false)}
@@ -497,15 +540,6 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
         />
       )}
 
-      {syncTargets.length === 0 && skills.length > 0 && (
-        <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
-          <strong>Tip:</strong> Configure sync targets by setting{" "}
-          <code>KEBAB_SKILLS_SYNC_TARGETS</code> to a JSON array. Example:{" "}
-          <code>{`[{"name":"claude-code","path":"/Users/you/.claude/skills"}]`}</code>. Skills will
-          then be syncable to Claude Code&apos;s local skills directory with one click.
-        </div>
-      )}
-
       {syncTargets.length > 0 && (
         <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
           Sync targets:{" "}
@@ -525,7 +559,30 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
         </div>
       )}
 
-      {skills.map((skill) => (
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
+          <span className="text-text-muted">Tags:</span>
+          <button
+            type="button"
+            onClick={() => setTagFilter(null)}
+            className={`px-2 py-0.5 rounded-full border ${tagFilter === null ? "border-accent text-accent" : "border-border text-text-dim"}`}
+          >
+            all ({skills.length})
+          </button>
+          {allTags.map(([t, n]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTagFilter(tagFilter === t ? null : t)}
+              className={`px-2 py-0.5 rounded-full border ${tagFilter === t ? "border-accent text-accent" : "border-border text-text-dim"}`}
+            >
+              #{t} ({n})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visible.map((skill) => (
         <SkillCard
           key={skill.id}
           skill={skill}
@@ -547,7 +604,8 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
           onSync={() => syncSkill(skill.id)}
           onToggleHistory={() => toggleHistory(skill.id)}
           onExport={() => exportSkill(skill.id)}
-          onExportClaude={() => exportClaudeSkill(skill)}
+          onDownloadZip={() => download(`/api/config/skills/${skill.id}/export?format=zip`)}
+          onDownloadRelay={() => download(`/api/config/skills/${skill.id}/export?format=relay`)}
           onRollback={(version) => rollbackTo(skill.id, version)}
         />
       ))}
@@ -573,7 +631,8 @@ function SkillCard({
   onSync,
   onToggleHistory,
   onExport,
-  onExportClaude,
+  onDownloadZip,
+  onDownloadRelay,
   onRollback,
 }: {
   skill: Skill;
@@ -593,7 +652,8 @@ function SkillCard({
   onSync: () => void;
   onToggleHistory: () => void;
   onExport: () => void;
-  onExportClaude: () => void;
+  onDownloadZip: () => void;
+  onDownloadRelay: () => void;
   onRollback: (version: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -647,7 +707,29 @@ function SkillCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-sm">{skill.name}</p>
-            <code className="text-[11px] text-text-muted">skill_{skill.id}</code>
+            <code
+              className="text-[11px] text-text-muted"
+              title={
+                skill.exposeAsTool !== false
+                  ? "Loaded via skill_load and also exposed as a dedicated tool"
+                  : "Loaded on demand via skill_load"
+              }
+            >
+              {skill.exposeAsTool !== false ? `skill_${skill.id}` : agentName(skill.id)}
+            </code>
+            {(skill.tags ?? []).map((t) => (
+              <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-bg-muted text-text-dim">
+                #{t}
+              </span>
+            ))}
+            {(skill.files?.length ?? 0) > 0 && (
+              <span
+                className="text-[11px] font-medium text-text-muted bg-bg-muted px-2 py-0.5 rounded-full"
+                title={skill.files!.map((f) => f.path).join("\n")}
+              >
+                {skill.files!.length} file{skill.files!.length === 1 ? "" : "s"}
+              </span>
+            )}
             <span
               className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
                 isRemote ? "text-accent bg-accent/10" : "text-text-muted bg-bg-muted"
@@ -730,7 +812,7 @@ function SkillCard({
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full mt-1 w-48 bg-bg border border-border rounded-md shadow-lg overflow-hidden z-10"
+              className="absolute right-0 top-full mt-1 w-56 bg-bg border border-border rounded-md shadow-lg overflow-hidden z-10"
             >
               <button
                 type="button"
@@ -775,18 +857,28 @@ function SkillCard({
               <button
                 type="button"
                 role="menuitem"
-                onClick={run(onExport)}
+                onClick={run(onDownloadZip)}
                 className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
+                title="SKILL.md + bundled files — uploadable to Claude, ChatGPT, Codex"
               >
-                Export as Markdown
+                Download .zip (Agent Skill)
               </button>
               <button
                 type="button"
                 role="menuitem"
-                onClick={run(onExportClaude)}
+                onClick={run(onDownloadRelay)}
+                className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
+                title="Tiny native skill that loads this one from Kebab — install once in claude.ai / ChatGPT, never re-upload"
+              >
+                Download relay .zip
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={run(onExport)}
                 className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
               >
-                Export as Claude Skill
+                Export as Markdown
               </button>
               <div className="border-t border-border" />
               <button

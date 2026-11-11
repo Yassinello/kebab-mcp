@@ -46,6 +46,7 @@ vi.mock("@/core/request-context", () => ({
 }));
 
 import {
+  resolveTokenSkillScope,
   resolveTokenAccess,
   resolveTokenConnectorScope,
   isConnectorAllowed,
@@ -164,6 +165,25 @@ describe("resolveTokenAccess — SEC-04 / SEC-06", () => {
     put(rootKV, "abcd1234", { label: "a", createdAt: "x", revokedAt: "now" });
     currentTenant = "acme";
     expect((await resolveTokenAccess("abcd1234")).kind).toBe("revoked");
+  });
+});
+
+describe("resolveTokenSkillScope — SEC-04 parity", () => {
+  it("EXPLOIT: a skill-tag scope stored at root still applies under an arbitrary tenant header", async () => {
+    put(rootKV, "abcd1234", { label: "a", createdAt: "x", skillTags: ["perso"] });
+    currentTenant = "anything";
+    expect(await resolveTokenSkillScope("abcd1234")).toEqual(["perso"]);
+  });
+
+  it("corrupt or revoked entries show no skill", async () => {
+    put(rootKV, "abcd1234", { label: "a", createdAt: "x", skillTags: "perso" });
+    expect(await resolveTokenSkillScope("abcd1234")).toEqual([]);
+    put(rootKV, "abcd1234", { label: "a", createdAt: "x", revokedAt: "now" });
+    expect(await resolveTokenSkillScope("abcd1234")).toEqual([]);
+  });
+
+  it("no entry → every skill", async () => {
+    expect(await resolveTokenSkillScope("abcd1234")).toBeNull();
   });
 });
 

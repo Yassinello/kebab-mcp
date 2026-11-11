@@ -3,7 +3,7 @@
  *
  * GET    → list devices (root-scope only); each device carries its
  *          optional connector allowlist (`connectors: string[] | null`).
- * POST   → { action: "rotate" | "rename" | "set-connectors" | "invite", ... }
+ * POST   → { action: "rotate" | "rename" | "set-connectors" | "set-skill-tags" | "invite", ... }
  *          set-connectors: { tokenId, connectors: string[] | null } — pin or
  *          clear a token's per-connector scope (v0.20). null = full access.
  * DELETE → ?tokenId=XXXXXXXX revoke a device
@@ -42,6 +42,7 @@ import {
   deleteDevice,
   rotateDeviceToken,
   setDeviceConnectors,
+  setDeviceSkillTags,
 } from "@/core/devices";
 import { mintDeviceInvite } from "@/core/device-invite";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
@@ -72,6 +73,30 @@ interface PostBody {
   tokenId?: string;
   label?: string;
   connectors?: string[] | null;
+  skillTags?: string[] | null;
+}
+
+async function handleSetSkillTags(body: PostBody): Promise<Response> {
+  const targetId = body.tokenId;
+  if (!targetId || typeof targetId !== "string") {
+    return NextResponse.json({ error: "missing_tokenId" }, { status: 400 });
+  }
+  // Skills v2 §6: array of tags (only skills sharing a tag are visible to
+  // the token), or null to clear the scope (every skill).
+  const tags = body.skillTags;
+  if (tags !== null && !Array.isArray(tags)) {
+    return NextResponse.json({ error: "invalid_skill_tags" }, { status: 400 });
+  }
+  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
+  if (!tokens.some((t) => tokenId(t) === targetId)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  try {
+    await setDeviceSkillTags(targetId, tags ?? null);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: "invalid_skill_tags", message: toMsg(err) }, { status: 400 });
+  }
 }
 
 async function handleRotate(body: PostBody): Promise<Response> {
@@ -195,6 +220,8 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
       return handleRename(body);
     case "set-connectors":
       return handleSetConnectors(body);
+    case "set-skill-tags":
+      return handleSetSkillTags(body);
     case "invite":
       return handleInvite(body);
     default:

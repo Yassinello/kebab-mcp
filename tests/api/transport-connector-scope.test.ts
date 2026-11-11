@@ -102,6 +102,10 @@ vi.mock("@/core/token-scope", () => ({
           : { kind: "scoped", connectors: scopeAtListing }
     ),
   runWithToolAccess: (_ctx: unknown, fn: () => unknown) => fn(),
+  resolveTokenSkillScope: async () => null,
+  runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
+  getCurrentSkillScope: () => null,
+  isSkillVisible: () => true,
   isConnectorAllowed: (scope: Set<string> | null, id: string) => {
     if (denyAtInvocation.has(id)) return false;
     return scope === null ? true : scope.has(id);

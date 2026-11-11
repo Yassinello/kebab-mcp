@@ -17,6 +17,8 @@ interface DeviceRow {
   lastSeenAt: string | null;
   /** v0.20 per-token connector allowlist. null = all connectors (full access). */
   connectors: string[] | null;
+  /** Skills v2 — skill tag scope. null = every skill. */
+  skillTags?: string[] | null;
 }
 
 /** Minimal connector descriptor the scope picker needs. */
@@ -169,7 +171,11 @@ export function DevicesTab({
     });
     setBusy(null);
   };
-  const saveScope = async (tokenId: string, connectorIds: string[] | null) => {
+  const saveScope = async (
+    tokenId: string,
+    connectorIds: string[] | null,
+    skillTags: string[] | null
+  ) => {
     setBusy(tokenId);
     await mutate({
       url: "/api/admin/devices",
@@ -177,14 +183,26 @@ export function DevicesTab({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "set-connectors", tokenId, connectors: connectorIds }),
     });
+    await mutate({
+      url: "/api/admin/devices",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "set-skill-tags", tokenId, skillTags }),
+    });
     setBusy(null);
     setScopeEditId(null);
   };
 
   const scopeSummary = (r: DeviceRow): string => {
-    if (r.connectors === null) return "All connectors";
-    if (r.connectors.length === 0) return "None (skills only)";
-    return `${r.connectors.length} connector${r.connectors.length === 1 ? "" : "s"}`;
+    const conn =
+      r.connectors === null
+        ? "All connectors"
+        : r.connectors.length === 0
+          ? "None (skills only)"
+          : `${r.connectors.length} connector${r.connectors.length === 1 ? "" : "s"}`;
+    const tags = r.skillTags;
+    if (!tags) return conn;
+    return `${conn} · skills: ${tags.length ? tags.map((t) => `#${t}`).join(" ") : "none"}`;
   };
 
   const renderRow = (r: DeviceRow) => (
@@ -262,7 +280,8 @@ export function DevicesTab({
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-text-dim">
           Each row is a token in <code className="text-xs">MCP_AUTH_TOKEN</code>. Add, rotate,
-          revoke, or scope a token to a subset of connectors — without hand-editing env vars.
+          revoke, or scope a token to a subset of connectors and skill tags — without hand-editing
+          env vars.
         </p>
         <button
           type="button"
@@ -341,13 +360,19 @@ function ScopeRowGroup({
   isEditing: boolean;
   pickable: ScopeConnector[];
   busy: boolean;
-  onSave: (tokenId: string, connectors: string[] | null) => void | Promise<void>;
+  onSave: (
+    tokenId: string,
+    connectors: string[] | null,
+    skillTags: string[] | null
+  ) => void | Promise<void>;
   onCancel: () => void;
   children: ReactNode;
 }) {
   // Local draft: "all" = full access (null); "subset" = the checked set.
   const [mode, setMode] = useState<"all" | "subset">(row.connectors === null ? "all" : "subset");
   const [selected, setSelected] = useState<Set<string>>(new Set(row.connectors ?? []));
+  // Skills v2: "" = every skill (no tag scope).
+  const [skillTagsDraft, setSkillTagsDraft] = useState((row.skillTags ?? []).join(", "));
 
   // Preset ids that actually exist in the current connector set (a preset
   // for a connector that isn't configured would be a dead checkbox).
@@ -359,8 +384,9 @@ function ScopeRowGroup({
     if (isEditing) {
       setMode(row.connectors === null ? "all" : "subset");
       setSelected(new Set(row.connectors ?? []));
+      setSkillTagsDraft((row.skillTags ?? []).join(", "));
     }
-  }, [isEditing, row.connectors]);
+  }, [isEditing, row.connectors, row.skillTags]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -372,8 +398,13 @@ function ScopeRowGroup({
   };
 
   const save = () => {
-    if (mode === "all") return void onSave(row.tokenId, null);
-    return void onSave(row.tokenId, Array.from(selected));
+    const tags = skillTagsDraft
+      .split(/[,\s]+/)
+      .map((t) => t.replace(/^#/, "").trim())
+      .filter(Boolean);
+    const skillTags = tags.length ? tags : null;
+    if (mode === "all") return void onSave(row.tokenId, null, skillTags);
+    return void onSave(row.tokenId, Array.from(selected), skillTags);
   };
 
   return (
@@ -448,6 +479,22 @@ function ScopeRowGroup({
               <p className="text-[11px] text-text-muted">
                 Core tools (admin, skills) are always available and not listed here.
               </p>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium" htmlFor={`skill-tags-${row.tokenId}`}>
+                  Skill tags visible to this token
+                </label>
+                <input
+                  id={`skill-tags-${row.tokenId}`}
+                  value={skillTagsDraft}
+                  onChange={(e) => setSkillTagsDraft(e.target.value)}
+                  placeholder="empty = every skill · e.g. perso, cadens"
+                  className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
+                />
+                <p className="text-[11px] text-text-muted">
+                  Only skills tagged with one of these appear in this client (skills_list,
+                  skill_load, prompts, native bundle).
+                </p>
+              </div>
               <div className="flex gap-2">
                 <button
                   type="button"

@@ -1,14 +1,32 @@
 ---
 title: Authoring skills
-summary: Create reusable prompt templates exposed as MCP tools and prompts
+summary: One personal skills library (Agent Skills / SKILL.md) shared by every AI client
 order: 30
 ---
 
 ## What a skill is
 
-A **skill** is a user-authored prompt template stored in Kebab MCP and exposed to your AI client as both an MCP `prompt` and an MCP `tool`. Use skills to package recurring instructions ("draft a weekly status report from these inputs", "summarize a research paper into 5 bullets") so you can invoke them by name instead of pasting the same prompt every time.
+A **skill** is a reusable set of instructions in the open **Agent Skills** format: a `SKILL.md` (name, description, instructions) plus optional bundled files (`references/…`, `scripts/…`, templates). It is the same format Claude, ChatGPT, Codex and Claude Code use — so Kebab can be the **single library** for all your AI clients instead of copy-pasting skills into each one.
 
-Skills appear under their `skill_<name>` tool name in your MCP client, and as named prompts in clients that support the prompts primitive (Claude Desktop, Claude Code).
+## How clients use your skills
+
+| Channel | Clients | What to do |
+|---|---|---|
+| **On demand over MCP** | every client connected to Kebab | nothing — the catalogue is in Kebab's server instructions; the model calls `skill_load(name)` (and `skills_list`, `skill_read_file`) |
+| **Relay skill** | claude.ai, ChatGPT | upload the skill's *relay .zip* once (Skills → Upload). It triggers natively and loads the live version from Kebab — no re-upload after edits |
+| **Native copy** | Claude Code, Codex | run the one-liner from `/config → Skills → Use your skills in every AI client` (pulls `/api/skills/bundle` with your MCP token, prunes removed skills, unzips into `~/.claude/skills` or `~/.codex/skills`) |
+| **Resources** | clients supporting MCP skills (SEP-2640) | `skill://<name>/SKILL.md` and `skill://<name>/<file>` |
+
+Skills also appear as MCP prompts (slash commands in Claude Desktop / Claude Code). Skills created before v0.23 — or any skill with **Also expose as a dedicated tool** ticked — additionally keep a `skill_<id>` tool; new skills don't, so 50 skills cost 3 tools instead of 50.
+
+## Profiles (tags)
+
+Give skills tags (`perso`, `cadens`, …). In `/config → Devices`, open a token's scope and set **Skill tags visible to this token**: that client then only sees matching skills everywhere (list, load, prompts, resources, native bundle). Empty = every skill.
+
+## Import & export
+
+- **Import** (`/config → Skills → Import`): paste a `SKILL.md` or drop a `.zip` — one skill folder (e.g. exported from Claude or ChatGPT) or a library of folders. Preview shows new vs updated skills; a skill with the same name is updated (new version), never duplicated. Text files only, ≤ 30 files / 100 KB each / 512 KB per skill.
+- **Export**: per skill *Download .zip* (Agent Skill) or *Download relay .zip*; *Export all* downloads the whole library (handy to commit to git).
 
 ## Anatomy
 
@@ -25,7 +43,7 @@ Skills appear under their `skill_<name>` tool name in your MCP client, and as na
 
 ## Fields
 
-- **Name**: slug (lowercase, dashes). Becomes the tool name `skill_<name>`.
+- **Name**: display name. The skill's id (`weekly-review`, used by `skill_load`) is derived from it at creation.
 - **Description**: one-line summary the LLM sees when picking which tool to call. Be precise — vague descriptions get ignored.
 - **Source**: the prompt body. Use `{{var_name}}` mustache placeholders for arguments.
 - **Arguments**: typed inputs. Each has a name, description, and required flag.
@@ -54,8 +72,8 @@ The composer is the fastest way to create "shortcut" skills that call a tool wit
 
 Click any skill card body to open the dedicated edit page (URL: `?edit=<id>`). The page splits into two tabs:
 
-- **Editor** — Identity (name + description), Instructions (prompt body or remote URL), Arguments (typed inputs with required flag), Allowed tools (governance list).
-- **Settings** — Version history with one-click rollback, exports (Markdown `.md` or Claude Skill `.skill`), instance metadata, and a danger zone for delete.
+- **Editor** — Identity (name, description, tags, dedicated-tool toggle), Instructions (prompt body or remote URL), Arguments (typed inputs with required flag), Allowed tools (governance list), **Bundled files** (references, templates, scripts — read on demand by clients).
+- **Settings** — Version history with one-click rollback (covers SKILL.md, not bundled files), exports (Agent Skill `.zip`, relay `.zip`, Markdown), instance metadata, and a danger zone for delete.
 
 Every save creates a new version. Rolling back never destroys history — it writes the old content as a new version, so you can always come back.
 

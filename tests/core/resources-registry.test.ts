@@ -44,6 +44,17 @@ describe("Phase 50 / MCP-01 — registerResources", () => {
     expect(mockServer.handlers.size).toBe(2);
   });
 
+  it("declares the `resources` capability before wiring handlers (SDK refuses otherwise)", () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const server = {
+      ...mockServer.server,
+      registerCapabilities: (caps: Record<string, unknown>) => calls.push(caps),
+    };
+    const p = makeProvider("demo", [{ uri: "demo://x", name: "x", mimeType: "text/plain" }]);
+    registerResources({ server }, [p]);
+    expect(calls).toEqual([{ resources: {} }]);
+  });
+
   it("list handler — concatenates every provider's list() output", async () => {
     const a = makeProvider("a", [
       { uri: "a://1", name: "A1", mimeType: "text/plain" },

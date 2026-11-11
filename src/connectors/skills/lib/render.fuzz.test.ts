@@ -38,6 +38,9 @@ function makeSkill(content: string): Skill {
     toolsAllowed: [],
     source: { type: "inline" },
     syncState: {},
+    tags: [],
+    files: [],
+    exposeAsTool: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };

@@ -1,17 +1,19 @@
 import { createMcpHandler } from "mcp-handler";
+import { getCurrentTenantId } from "@/core/request-context";
 import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
-import { getCurrentTenantId } from "@/core/request-context";
 import { getConfigRevision } from "@/core/config-revision";
 import {
   resolveTokenAccess,
   isConnectorAllowed,
   runWithToolAccess,
   type TokenAccess,
+  resolveTokenSkillScope,
+  runWithSkillScope,
 } from "@/core/token-scope";
 import {
   composeRequestPipeline,
@@ -51,7 +53,7 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
       );
       // PERF-A-03: env edit may have changed the connector list and any
       // tool-store contents; force the next transport request to re-prime.
-      primeEpoch++;
+      primeCache.clear();
     });
   }
 }
@@ -64,22 +66,21 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
 // (env.changed, skill/tool CRUD) reset the cache to keep dashboard
 // edits visible on the next request.
 const PRIME_CACHE_TTL_MS = 30_000;
-// REL-01 / REL-02 (2026-11 audit): one entry per tenant, invalidated as soon
-// as the shared config revision moves (a skill / API tool / custom tool was
-// edited on ANY lambda). The previous single global slot let tenant B
-// skip its own refresh for 30s after tenant A primed.
+// REL-01 / REL-02 (2026-11 audit): one entry per tenant (a prime done for
+// tenant A must never satisfy tenant B), invalidated as soon as the shared
+// config revision moves (a skill / API tool / custom tool was edited on ANY
+// lambda) or env.changed fires locally.
 const primeCache = new Map<string, { at: number; rev: string; promise: Promise<void> }>();
-let primeEpoch = 0;
 
 async function primeDynamicCaches(
   packs: { manifest: { refresh?: (() => Promise<void>) | undefined } }[]
 ): Promise<void> {
+  const key = getCurrentTenantId() ?? "__root__";
   const now = Date.now();
-  const tenantKey = getCurrentTenantId() ?? "__root__";
-  const rev = `${primeEpoch}:${await getConfigRevision()}`;
-  const cached = primeCache.get(tenantKey);
-  if (cached && cached.rev === rev && now - cached.at < PRIME_CACHE_TTL_MS) {
-    return cached.promise;
+  const rev = await getConfigRevision();
+  const hit = primeCache.get(key);
+  if (hit && hit.rev === rev && now - hit.at < PRIME_CACHE_TTL_MS) {
+    return hit.promise;
   }
   // The per-connector refresh() is wrapped in .catch() so individual failures
   // never reject the Promise.all. Outer .catch() is defense-in-depth: if
@@ -96,9 +97,9 @@ async function primeDynamicCaches(
   )
     .then(() => undefined)
     .catch(() => {
-      primeCache.delete(tenantKey);
+      primeCache.delete(key);
     });
-  primeCache.set(tenantKey, { at: now, rev, promise });
+  primeCache.set(key, { at: now, rev, promise });
   return promise;
 }
 
@@ -309,6 +310,24 @@ async function buildHandler(
         name: "Kebab MCP",
         version: VERSION,
       },
+      // Skills v2 (spec §5): connectors may contribute to the MCP server
+      // instructions (the skills connector publishes the caller's catalogue
+      // so any client knows when to call skill_load). Out-of-scope
+      // connectors contribute nothing.
+      ...(() => {
+        const parts: string[] = [];
+        for (const pack of enabledPacks) {
+          if (!pack.manifest.instructions) continue;
+          if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
+          try {
+            const text = pack.manifest.instructions();
+            if (text) parts.push(text);
+          } catch {
+            // A broken contributor never blocks the transport.
+          }
+        }
+        return parts.length ? { instructions: parts.join("\n\n") } : {};
+      })(),
     },
     {
       basePath: "/api",
@@ -342,10 +361,16 @@ async function transportHandler(ctx: PipelineContext): Promise<Response> {
     res.headers.set("x-request-id", ctx.requestId);
     return res;
   }
-  const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
-  const response = await mcpHandler(ctx.request);
-  response.headers.set("x-request-id", ctx.requestId);
-  return response;
+  // Skills v2 §6: resolve the token's skill tag scope once, and keep it
+  // ambient for the whole request (tools getter, tool handlers, prompts,
+  // resources and the instructions block all read it).
+  const skillScope = await resolveTokenSkillScope(ctx.tokenId);
+  return runWithSkillScope(skillScope, async () => {
+    const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
+    const response = await mcpHandler(ctx.request);
+    response.headers.set("x-request-id", ctx.requestId);
+    return response;
+  });
 }
 
 const pipeline = composeRequestPipeline(
