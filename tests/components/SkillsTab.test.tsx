@@ -41,6 +41,22 @@ describe("SkillsTab", () => {
     });
   });
 
+  it("renders the Agent Skills import button (SKILL.md / zip)", async () => {
+    render(<SkillsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /import skill\.md or zip/i })).toBeInTheDocument();
+    });
+  });
+
+  it("shows the 'use your skills in every AI client' guide", async () => {
+    render(<SkillsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/use your skills in every ai client/i)).toBeInTheDocument();
+    });
+  });
+
   it("shows empty state when no skills exist", async () => {
     render(<SkillsTab />);
 

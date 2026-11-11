@@ -911,6 +911,33 @@
     "destructive": true
   },
   {
+    "name": "skill_load",
+    "pack": "skills",
+    "schemaKeys": [
+      "arguments",
+      "name"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "skill_read_file",
+    "pack": "skills",
+    "schemaKeys": [
+      "name",
+      "path"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "skills_list",
+    "pack": "skills",
+    "schemaKeys": [
+      "query",
+      "tag"
+    ],
+    "destructive": false
+  },
+  {
     "name": "slack_channels",
     "pack": "slack",
     "schemaKeys": [

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { InfoTooltip } from "./settings/info-tooltip";
-import { toClaudeSkillFile } from "@/connectors/skills/lib/export-claude";
+import { SkillFilesEditor } from "./skill-files-editor";
 
 interface SkillArgument {
   name: string;
@@ -40,6 +40,9 @@ interface Skill {
   toolsAllowed?: string[];
   source: SkillSource;
   syncState?: Record<string, SkillSyncState>;
+  tags?: string[];
+  files?: { path: string; size: number }[];
+  exposeAsTool?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +69,16 @@ interface DraftState {
   url: string;
   arguments: SkillArgument[];
   toolsAllowed: string[];
+  /** Comma/space separated in the input; normalized server-side. */
+  tags: string;
+  exposeAsTool: boolean;
+}
+
+function parseTagsInput(s: string): string[] {
+  return s
+    .split(/[,\s]+/)
+    .map((t) => t.replace(/^#/, "").trim())
+    .filter(Boolean);
 }
 
 const emptyDraft = (): DraftState => ({
@@ -76,6 +89,8 @@ const emptyDraft = (): DraftState => ({
   url: "",
   arguments: [],
   toolsAllowed: [],
+  tags: "",
+  exposeAsTool: false,
 });
 
 type Tab = "editor" | "settings";
@@ -119,6 +134,8 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
             url: found.source.type === "remote" ? found.source.url : "",
             arguments: found.arguments.map((a: SkillArgument) => ({ ...a })),
             toolsAllowed: [...(found.toolsAllowed ?? [])],
+            tags: (found.tags ?? []).join(", "),
+            exposeAsTool: found.exposeAsTool !== false,
           });
         } else {
           setError("Skill not found");
@@ -213,6 +230,8 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
           required: !!a.required,
         })),
       toolsAllowed: draft.toolsAllowed.filter((t) => t.trim().length > 0),
+      tags: parseTagsInput(draft.tags),
+      exposeAsTool: draft.exposeAsTool,
       source:
         draft.mode === "inline"
           ? { type: "inline" as const }
@@ -261,20 +280,9 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
     window.location.href = `/api/config/skills/${skillId}/export`;
   };
 
-  const exportClaude = () => {
-    if (!skill) return;
-    const payload = toClaudeSkillFile(skill);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${skill.id}.skill`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const downloadZip = (format: "zip" | "relay") => {
+    if (isNew) return;
+    window.location.href = `/api/config/skills/${skillId}/export?format=${format}`;
   };
 
   const rollback = async (version: number) => {
@@ -409,6 +417,17 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
         />
       )}
 
+      {tab === "editor" && !isNew && skill && (
+        <div className="mt-5">
+          <SkillFilesEditor skillId={skill.id} agentName={skill.id.replace(/_/g, "-")} />
+        </div>
+      )}
+      {tab === "editor" && isNew && (
+        <p className="mt-3 text-xs text-text-muted">
+          Save the skill first to add bundled files (references, templates, scripts).
+        </p>
+      )}
+
       {tab === "settings" && !isNew && skill && (
         <SettingsTab
           skill={skill}
@@ -419,7 +438,8 @@ export function SkillEditPage({ skillId }: { skillId: string }) {
           deleting={deleting}
           onRollback={rollback}
           onExportMarkdown={exportMarkdown}
-          onExportClaude={exportClaude}
+          onDownloadZip={() => downloadZip("zip")}
+          onDownloadRelay={() => downloadZip("relay")}
           onDelete={deleteSkill}
         />
       )}
@@ -487,7 +507,7 @@ function EditorTab({
             <label className="text-sm font-medium">Name</label>
             <InfoTooltip
               title="Skill name"
-              body="Short slug used to derive the MCP tool name (lowercase, dashes only). Becomes skill_<name> when exposed to clients."
+              body="Display name. The skill's id (used by skill_load, e.g. 'weekly-review') is derived from it at creation and never changes."
             />
           </div>
           <input
@@ -514,6 +534,38 @@ function EditorTab({
             className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
           />
         </div>
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <label className="text-sm font-medium">Tags</label>
+            <InfoTooltip
+              title="Profiles"
+              body="e.g. perso, cadens. In Devices, each client token can be limited to some tags — that token then only sees matching skills."
+            />
+          </div>
+          <input
+            type="text"
+            value={draft.tags}
+            onChange={(e) => set({ tags: e.target.value })}
+            placeholder="perso, cadens"
+            className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
+          />
+        </div>
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draft.exposeAsTool}
+            onChange={(e) => set({ exposeAsTool: e.target.checked })}
+            className="mt-0.5"
+          />
+          <span>
+            Also expose as a dedicated tool
+            <span className="block text-xs text-text-dim">
+              Off (recommended): clients load it with <code>skill_load</code>, keeping their tool
+              list short. On: adds a <code>skill_&lt;id&gt;</code> tool for clients that ignore
+              server instructions.
+            </span>
+          </span>
+        </label>
       </section>
 
       <section className="border border-border rounded-lg bg-bg p-5 space-y-4">
@@ -706,7 +758,8 @@ function SettingsTab({
   deleting,
   onRollback,
   onExportMarkdown,
-  onExportClaude,
+  onDownloadZip,
+  onDownloadRelay,
   onDelete,
 }: {
   skill: Skill;
@@ -717,7 +770,8 @@ function SettingsTab({
   deleting: boolean;
   onRollback: (version: number) => void;
   onExportMarkdown: () => void;
-  onExportClaude: () => void;
+  onDownloadZip: () => void;
+  onDownloadRelay: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -774,7 +828,9 @@ function SettingsTab({
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Export</h3>
           <p className="text-xs text-text-dim mt-0.5">
-            Download this skill in different formats for sharing or archiving.
+            Download this skill as an Agent Skills folder, or as a <strong>relay</strong> to upload
+            once in claude.ai / ChatGPT (it triggers natively and always loads the live version from
+            Kebab).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -787,10 +843,19 @@ function SettingsTab({
           </button>
           <button
             type="button"
-            onClick={onExportClaude}
+            onClick={onDownloadZip}
             className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+            title="SKILL.md + bundled files — uploadable to Claude, ChatGPT, Codex, Claude Code"
           >
-            Export as Claude Skill (.skill)
+            Download Agent Skill (.zip)
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadRelay}
+            className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+            title="Install once in claude.ai / ChatGPT: triggers natively, loads the live version from Kebab"
+          >
+            Download relay (.zip)
           </button>
         </div>
       </section>

@@ -92,7 +92,8 @@ If the Kebab connector is unavailable, say so and stop.
 - Editor: tags input; "Expose as dedicated tool" toggle with explanation; **Files** panel (list, add, rename, edit in a monospace textarea, delete, size counter vs limits).
 - Import dialog: paste `SKILL.md` **or** drop a `.zip`, preview (names, files, warnings, create/update) then save.
 - Per skill "Use everywhere" panel: (1) MCP: nothing to do, (2) Relay: download button + 3-step instructions per client (claude.ai, ChatGPT), (3) Native: copyable one-liners for Claude Code / Codex using the bundle endpoint.
-- Devices tab: "Skill tags" field per token.
+- Devices tab: "Skill tags visible to this token" in the existing per-token scope panel (one Save for connectors + tags).
+- The obsolete `.skill` JSON export is replaced by the real Agent Skills `.zip`.
 
 ## 9. Safety
 
