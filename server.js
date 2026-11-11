@@ -14,7 +14,7 @@
  *
  * Config (JC-2):
  *   - Default drain: 5000 ms.
- *   - Override: MYMCP_SHUTDOWN_TIMEOUT_MS=<ms> (minimum 1000).
+ *   - Override: KEBAB_SHUTDOWN_TIMEOUT_MS=<ms> (legacy MYMCP_SHUTDOWN_TIMEOUT_MS still read; minimum 1000).
  *   - Ignored on Vercel (lambdas are SIGKILL'd by the runtime).
  *
  * Behavior:
@@ -29,7 +29,7 @@
 
 const TIMEOUT_MS = Math.max(
   1000,
-  parseInt(process.env.MYMCP_SHUTDOWN_TIMEOUT_MS ?? "5000", 10) || 5000
+  parseInt(process.env.KEBAB_SHUTDOWN_TIMEOUT_MS ?? process.env.MYMCP_SHUTDOWN_TIMEOUT_MS ?? "5000", 10) || 5000
 );
 
 // Delegate to Next standalone server. require() runs it in this process,
