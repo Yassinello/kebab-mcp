@@ -72,6 +72,26 @@ export default tseslint.config(
       ],
     },
   },
+  // 2026-11 audit §4.4: type-aware promise rules on server code. A
+  // floating promise in a route handler or core module is a silently
+  // dropped error (or a lambda frozen mid-write on Vercel). Scoped to
+  // src/**/*.ts + app/api/**/*.ts (tests excluded) to keep the
+  // type-checked lint pass affordable. Intentional fire-and-forget must be
+  // written `void promise` (see also tests/contract/fire-and-forget.test.ts).
+  {
+    files: ["src/**/*.ts", "app/api/**/*.ts"],
+    ignores: ["**/*.test.ts", "**/__tests__/**", "src/core/test-utils.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+    },
+  },
   // DUR-05 note — previously considered an ESLint advisory rule here.
   // Dropped because ESLint flat-config does not permit two
   // `no-restricted-syntax` entries at different severities without one
