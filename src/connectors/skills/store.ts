@@ -3,7 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { kvScanAll } from "@/core/kv-store";
-import { getContextKVStore } from "@/core/request-context";
+import { getContextKVStore, getCurrentTenantId } from "@/core/request-context";
 import { hasUpstashCreds } from "@/core/upstash-env";
 import { getLogger } from "@/core/logging";
 import { getConfig } from "@/core/config-facade";
@@ -73,6 +73,19 @@ export const skillSchema = z.object({
   source: skillSourceSchema,
   /** Per-target sync state. Keyed by target name. */
   syncState: z.record(z.string(), skillSyncStateSchema).default({}),
+  /** Spec v2 — profile tags (lower-case slugs). Drive per-token visibility. */
+  tags: z.array(z.string()).default([]),
+  /**
+   * Spec v2 — index of bundled files (bodies live under `skill:<id>:files`
+   * so the hot `skills:all` record stays small).
+   */
+  files: z.array(z.object({ path: z.string(), size: z.number() })).default([]),
+  /**
+   * Spec v2 — expose a dedicated `skill_<id>` tool. Defaults to TRUE when
+   * absent so skills created before v2 keep their tool; createSkill sets
+   * false for new skills (they are reached through `skill_load`).
+   */
+  exposeAsTool: z.boolean().default(true),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -88,9 +101,17 @@ export const skillCreateInputSchema = z.object({
   arguments: z.array(skillArgumentSchema).default([]),
   toolsAllowed: z.array(z.string()).default([]),
   source: skillSourceSchema,
+  tags: z.array(z.string()).optional(),
+  exposeAsTool: z.boolean().optional(),
+  /** Spec v2 — preferred id (import round-trips). Uniquified if taken. */
+  id: z
+    .string()
+    .regex(/^[a-z0-9_]+$/)
+    .max(64)
+    .optional(),
 });
 
-export const skillUpdateInputSchema = skillCreateInputSchema.partial();
+export const skillUpdateInputSchema = skillCreateInputSchema.omit({ id: true }).partial();
 
 // Authored input type (what callers pass into createSkill / updateSkill).
 // `toolsAllowed` is optional on input — defaults to [] after parse.
@@ -179,7 +200,7 @@ async function writeRaw(skills: Skill[]): Promise<void> {
   // Keep the sync cache in lock-step so the MCP transport picks up
   // newly-created/edited skills on the next tools iteration in this
   // lambda — without waiting for the next `primeSkillsCache()` roundtrip.
-  _skillsCache = skills;
+  _skillsCache.set(cacheKey(), skills);
 }
 
 // ── Write mutex ─────────────────────────────────────────────────────────
@@ -214,7 +235,18 @@ export async function listSkills(): Promise<Skill[]> {
 // clients on cold lambdas until /api/admin/status (which calls `diagnose()`)
 // happened to fire first. The ConnectorManifest.refresh hook in the
 // transport primes this cache before iterating `tools`.
-let _skillsCache: Skill[] | null = null;
+// Keyed by tenant: a process-wide single value let one tenant's skills be
+// served to another tenant's MCP request within the prime window.
+const ROOT_TENANT = "__root__";
+const _skillsCache = new Map<string, Skill[]>();
+
+function cacheKey(): string {
+  try {
+    return getCurrentTenantId() ?? ROOT_TENANT;
+  } catch {
+    return ROOT_TENANT;
+  }
+}
 
 /**
  * Populate the sync cache from the authoritative async store. Called by
@@ -223,15 +255,15 @@ let _skillsCache: Skill[] | null = null;
  */
 export async function primeSkillsCache(): Promise<void> {
   try {
-    _skillsCache = await readRaw();
+    _skillsCache.set(cacheKey(), await readRaw());
   } catch {
-    _skillsCache = _skillsCache ?? [];
+    if (!_skillsCache.has(cacheKey())) _skillsCache.set(cacheKey(), []);
   }
 }
 
 /** Reset the sync cache. Exposed for tests — prevents cross-test bleed. */
 export function _resetSkillsCacheForTests(): void {
-  _skillsCache = null;
+  _skillsCache.clear();
 }
 
 /** Synchronous snapshot — used by the pack manifest at registry scan time.
@@ -243,7 +275,12 @@ export function _resetSkillsCacheForTests(): void {
  *   3. Else (Upstash without a warm cache), return [] — callers that need
  *      a guaranteed fresh read must use the async `listSkills()` API. */
 export function listSkillsSync(): Skill[] {
-  if (_skillsCache !== null) return _skillsCache;
+  const key = cacheKey();
+  const cached = _skillsCache.get(key);
+  if (cached) return cached;
+  // The on-disk fallback below reads the ROOT tenant's record only; never
+  // serve it to another tenant.
+  if (key !== ROOT_TENANT) return [];
   const legacy = getLegacySkillsPath();
   const filePath =
     legacy ?? (hasUpstashCreds() ? null : path.resolve(process.cwd(), "data", "kv.json"));
@@ -282,8 +319,10 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
   return enqueueWrite(async () => {
     const parsed = skillCreateInputSchema.parse(input);
     const all = await readRaw();
-    const existingIds = new Set(all.map((s) => s.id));
-    const id = await uniqueId(slugify(parsed.name), existingIds);
+    // `load` / `read_file` are reserved: their legacy tool names would
+    // collide with the library tools skill_load / skill_read_file.
+    const existingIds = new Set([...all.map((s) => s.id), "load", "read_file"]);
+    const id = await uniqueId(parsed.id ?? slugify(parsed.name), existingIds);
     const now = new Date().toISOString();
     const skill: Skill = {
       id,
@@ -294,6 +333,9 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
       toolsAllowed: parsed.toolsAllowed ?? [],
       source: parsed.source,
       syncState: {},
+      tags: normalizeTags(parsed.tags ?? []),
+      files: [],
+      exposeAsTool: parsed.exposeAsTool ?? false,
       createdAt: now,
       updatedAt: now,
     };
@@ -327,6 +369,9 @@ export function updateSkill(id: string, patch: SkillUpdateInput): Promise<Skill 
       arguments: parsed.arguments ?? prev.arguments,
       toolsAllowed: parsed.toolsAllowed ?? prev.toolsAllowed ?? [],
       syncState: prev.syncState ?? {},
+      tags: parsed.tags !== undefined ? normalizeTags(parsed.tags) : (prev.tags ?? []),
+      files: prev.files ?? [],
+      exposeAsTool: parsed.exposeAsTool ?? prev.exposeAsTool ?? true,
     };
     all[idx] = next;
     await writeRaw(all);
@@ -358,6 +403,63 @@ export function replaceSkill(skill: Skill): Promise<void> {
     if (idx === -1) return;
     all[idx] = skill;
     await writeRaw(all);
+  });
+}
+
+// ── Bundled files (spec v2) ─────────────────────────────────────────
+//
+// Bodies are stored under `skill:<id>:files` (one JSON map per skill). The
+// `skill:<id>:*` prefix is already wiped by deleteSkill, and does not match
+// the version scan (`skill:<id>:v*`). The skill record keeps only the index.
+
+function filesKey(skillId: string): string {
+  return `skill:${skillId}:files`;
+}
+
+/** All bundled files of a skill (path → UTF-8 content). */
+export async function getSkillFiles(skillId: string): Promise<Record<string, string>> {
+  const raw = await getContextKVStore().get(filesKey(skillId));
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Replace a skill's bundled files wholesale (validated: paths, count, sizes).
+ * Returns the updated skill, or `{error}` on validation failure / unknown id.
+ */
+export function setSkillFiles(
+  skillId: string,
+  files: Record<string, string>
+): Promise<Skill | { error: string }> {
+  return enqueueWrite(async () => {
+    const v = validateFiles(files);
+    if (!v.ok) return { error: v.error };
+    const all = await readRaw();
+    const idx = all.findIndex((s) => s.id === skillId);
+    const prev = idx === -1 ? undefined : all[idx];
+    if (!prev) return { error: "skill_not_found" };
+    const kv = getContextKVStore();
+    const paths = Object.keys(v.files).sort();
+    if (paths.length === 0) await kv.delete(filesKey(skillId));
+    else await kv.set(filesKey(skillId), JSON.stringify(v.files));
+    const next: Skill = {
+      ...prev,
+      files: paths.map((p) => ({ path: p, size: byteLength(v.files[p]!) })),
+      updatedAt: new Date().toISOString(),
+    };
+    all[idx] = next;
+    await writeRaw(all);
+    return next;
   });
 }
 
@@ -494,6 +596,7 @@ export function rollbackSkill(skillId: string, version: number): Promise<Skill |
 // lastSyncedHash for a given target.
 
 import { createHash } from "crypto";
+import { byteLength, normalizeTags, validateFiles } from "./lib/bundle";
 
 /** Stable content hash used to detect drift. sha256(name + description + content). */
 export function computeSkillContentHash(

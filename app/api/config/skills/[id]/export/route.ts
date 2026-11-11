@@ -1,4 +1,6 @@
 import { getSkill } from "@/connectors/skills/store";
+import { exportRelayZip, exportSkillZip, zipResponse } from "@/connectors/skills/lib/exporter";
+import { toAgentName } from "@/connectors/skills/lib/bundle";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 
@@ -25,6 +27,15 @@ async function getHandler(ctx: PipelineContext) {
   const skill = await getSkill(id);
   if (!skill) {
     return new Response("Not found", { status: 404 });
+  }
+
+  // Skills v2: Agent Skills zip (SKILL.md + bundled files) or relay zip.
+  const format = new URL(ctx.request.url).searchParams.get("format");
+  if (format === "zip") {
+    return zipResponse(await exportSkillZip(skill), `${toAgentName(skill.id)}.zip`);
+  }
+  if (format === "relay") {
+    return zipResponse(exportRelayZip(skill), `${toAgentName(skill.id)}-relay.zip`);
   }
 
   // Prefer inline content; for remote skills use the last cached copy.

@@ -102,7 +102,6 @@ describe("no-err-ternary contract (TYPE-04 / Phase 49)", () => {
     if (offenders.length > 0) {
       // Print for actionable debugging on failure
       for (const o of offenders) {
-         
         console.error("no-err-ternary:", o);
       }
     }

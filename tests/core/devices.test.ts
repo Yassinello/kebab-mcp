@@ -77,6 +77,8 @@ import {
   clearDeviceRateLimit,
   getDeviceConnectors,
   setDeviceConnectors,
+  setDeviceSkillTags,
+  getDeviceSkillTags,
 } from "@/core/devices";
 import { tokenId } from "@/core/auth";
 import { createHash } from "node:crypto";
@@ -364,5 +366,70 @@ describe("clearDeviceRateLimit", () => {
     const count = await clearDeviceRateLimit(TOKEN_A);
     expect(count).toBe(3);
     expect(store.has(`ratelimit:mcp:cafebabecafebabe:100`)).toBe(true);
+  });
+});
+
+describe("skills v2 — setDeviceSkillTags / field preservation", () => {
+  it("stores normalized tags and reads them back; null clears", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "Claude", createdAt: "2026-01-01T00:00:00.000Z" })
+    );
+    await setDeviceSkillTags("abcd1234", ["Perso", "perso", "Cadens Lab"]);
+    expect(await getDeviceSkillTags("abcd1234")).toEqual(["perso", "cadens-lab"]);
+    await setDeviceSkillTags("abcd1234", null);
+    expect(await getDeviceSkillTags("abcd1234")).toBeNull();
+    expect(JSON.parse(store.get("devices:abcd1234")!).label).toBe("Claude");
+  });
+
+  it("rename keeps the connector scope and skill tags (regression: rename used to wipe the scope)", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({
+        label: "Old",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        connectors: ["apify"],
+        skillTags: ["work"],
+      })
+    );
+    await setDeviceLabel("abcd1234", "New name");
+    const parsed = JSON.parse(store.get("devices:abcd1234")!);
+    expect(parsed).toMatchObject({ label: "New name", connectors: ["apify"], skillTags: ["work"] });
+  });
+
+  it("setDeviceConnectors keeps skill tags; setDeviceSkillTags keeps connectors", async () => {
+    store.set(
+      "devices:abcd1234",
+      JSON.stringify({ label: "T", createdAt: "x", skillTags: ["work"] })
+    );
+    await setDeviceConnectors("abcd1234", ["apify"]);
+    expect(JSON.parse(store.get("devices:abcd1234")!)).toMatchObject({
+      connectors: ["apify"],
+      skillTags: ["work"],
+    });
+    await setDeviceSkillTags("abcd1234", ["perso"]);
+    expect(JSON.parse(store.get("devices:abcd1234")!)).toMatchObject({
+      connectors: ["apify"],
+      skillTags: ["perso"],
+    });
+  });
+
+  it("rotation carries skill tags to the new token", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const id = tokenId(TOKEN_A);
+    store.set(`devices:${id}`, JSON.stringify({ label: "T", createdAt: "x", skillTags: ["work"] }));
+    const { newTokenId } = await rotateDeviceToken(id);
+    expect(JSON.parse(store.get(`devices:${newTokenId}`)!).skillTags).toEqual(["work"]);
+  });
+
+  it("listDevices exposes skillTags (null when unset)", async () => {
+    envVars.MCP_AUTH_TOKEN = `${TOKEN_A},${TOKEN_B}`;
+    store.set(
+      `devices:${tokenId(TOKEN_A)}`,
+      JSON.stringify({ label: "A", createdAt: "x", skillTags: ["work"] })
+    );
+    const rows = await listDevices();
+    expect(rows.find((r) => r.tokenId === tokenId(TOKEN_A))!.skillTags).toEqual(["work"]);
+    expect(rows.find((r) => r.tokenId === tokenId(TOKEN_B))!.skillTags).toBeNull();
   });
 });

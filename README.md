@@ -211,9 +211,9 @@ Google Workspace, Obsidian Vault, Slack, Notion, GitHub, Linear, Airtable, Brows
 
 **API Connections** turns any HTTP endpoint into an MCP tool — paste an OpenAPI spec or wire a REST endpoint, define the auth, ship. No code, no PR. Useful for internal APIs, niche SaaS, or quick experiments.
 
-### ⚡ Skills — prompt-powered workflows
+### ⚡ Skills — one library for every AI client
 
-**Skills** are user-defined tools built from prompt templates. Compose existing tools in the dashboard's visual wizard, save, and the skill becomes `skill_<name>` in your MCP client. Versioned — every edit is a new revision, with one-click rollback.
+**Skills** use the open Agent Skills format (`SKILL.md` + bundled files). Kebab is your single library: every connected client loads skills on demand (`skills_list` / `skill_load`), claude.ai and ChatGPT trigger them natively through a one-time *relay* upload, and Claude Code / Codex pull them with a one-liner. Import/export zips, per-client tag profiles, versioning with one-click rollback.
 
 ### 📊 Dashboard & Ops
 

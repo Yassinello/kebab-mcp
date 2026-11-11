@@ -234,6 +234,13 @@ export interface ConnectorManifest {
    * `src/connectors/vault/resources.ts` for the reference implementation.
    */
   resources?: import("./resources").ResourceProvider | undefined;
+  /**
+   * Skills v2 — optional contribution to the MCP `initialize.instructions`
+   * block. Called per request (inside the request's async context, so
+   * per-token scopes are available); return "" to contribute nothing. The
+   * transport joins contributions of in-scope connectors.
+   */
+  instructions?: (() => string) | undefined;
 }
 
 /** Resolved state of a pack at runtime */

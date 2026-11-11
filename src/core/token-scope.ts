@@ -17,7 +17,8 @@
  * distinct from an empty Set, which means "block everything except core".
  */
 
-import { getDeviceConnectors } from "./devices";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { getDeviceConnectors, getDeviceSkillTags } from "./devices";
 import { CORE_CONNECTOR_IDS } from "./registry";
 
 /**
@@ -44,4 +45,41 @@ export async function resolveTokenConnectorScope(
 export function isConnectorAllowed(scope: Set<string> | null, connectorId: string): boolean {
   if (scope === null) return true;
   return scope.has(connectorId);
+}
+
+// ── Skills v2: per-token skill tag scope ───────────────────────────────
+
+/**
+ * Resolve the caller token's skill tag scope. `null` = every skill (no
+ * token id, no device entry, or no `skillTags` on it). Never throws.
+ */
+export async function resolveTokenSkillScope(
+  callerTokenId: string | null | undefined
+): Promise<string[] | null> {
+  if (!callerTokenId) return null;
+  try {
+    return await getDeviceSkillTags(callerTokenId);
+  } catch {
+    // Fail CLOSED: a KV error must not turn a tag-limited token into a
+    // full-library token. An empty scope shows no skill for this request.
+    return [];
+  }
+}
+
+const skillScopeStore = new AsyncLocalStorage<{ tags: string[] | null }>();
+
+/** Run `fn` with a skill tag scope ambient for the whole MCP request. */
+export function runWithSkillScope<T>(tags: string[] | null, fn: () => T): T {
+  return skillScopeStore.run({ tags }, fn);
+}
+
+/** Current request's skill tag scope (`null` = all skills / no request scope). */
+export function getCurrentSkillScope(): string[] | null {
+  return skillScopeStore.getStore()?.tags ?? null;
+}
+
+/** A skill is visible when no scope applies, or it shares at least one tag with it. */
+export function isSkillVisible(skillTags: readonly string[], scope: string[] | null): boolean {
+  if (scope === null) return true;
+  return skillTags.some((t) => scope.includes(t));
 }
