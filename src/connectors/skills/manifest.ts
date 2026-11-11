@@ -141,7 +141,7 @@ export const skillsConnector: ConnectorManifest = {
     // Legacy per-skill tools only for skills that opted in (all pre-v2
     // skills default to exposeAsTool=true) and are inside the caller's
     // tag scope. Evaluated per request inside the MCP transport.
-    let legacy: ToolDefinition[] = [];
+    let legacy: ToolDefinition[];
     try {
       const scope = getCurrentSkillScope();
       legacy = listSkillsSync()
