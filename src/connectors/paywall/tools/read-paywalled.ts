@@ -45,7 +45,7 @@ export async function handleReadPaywalled(params: { url: string }): Promise<Tool
   let html: string;
   let finalUrl: string;
   try {
-    const res = await fetchHtmlWithCookie(url, cookieHeader);
+    const res = await fetchHtmlWithCookie(url, cookieHeader, (u) => source.domainMatch(u));
     html = res.html;
     finalUrl = res.finalUrl;
   } catch (err) {

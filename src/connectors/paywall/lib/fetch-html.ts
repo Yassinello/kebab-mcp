@@ -32,9 +32,26 @@ async function assertPublicUrl(url: string): Promise<void> {
   }
 }
 
+/**
+ * SEC-10 (2026-11 audit): the session cookie is only sent to hosts the
+ * caller vouches for. By default that is the original URL's host and its
+ * subdomains — a redirect to any other origin (open redirect on the
+ * publisher, user-controlled custom domain) is still followed, but WITHOUT
+ * the cookie.
+ */
+function defaultCookieScope(originalUrl: string): (u: URL) => boolean {
+  const origin = new URL(originalUrl).hostname.toLowerCase();
+  const base = origin.replace(/^www\./, "");
+  return (u: URL) => {
+    const h = u.hostname.toLowerCase();
+    return h === origin || h === base || h.endsWith(`.${base}`);
+  };
+}
+
 export async function fetchHtmlWithCookie(
   url: string,
-  cookieHeader: string
+  cookieHeader: string,
+  cookieAllowedFor: (u: URL) => boolean = defaultCookieScope(url)
 ): Promise<{ html: string; finalUrl: string }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -54,7 +71,7 @@ export async function fetchHtmlWithCookie(
             "User-Agent": USER_AGENT,
             Accept: "text/html,application/xhtml+xml",
             "Accept-Language": "en-US,en;q=0.9",
-            Cookie: cookieHeader,
+            ...(cookieAllowedFor(new URL(currentUrl)) ? { Cookie: cookieHeader } : {}),
           },
         },
         MAX_HTML_BYTES

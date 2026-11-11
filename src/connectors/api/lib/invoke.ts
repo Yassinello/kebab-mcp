@@ -1,5 +1,5 @@
 import type { ApiConnection, ApiTool } from "../store";
-import { fetchWithTimeout } from "@/core/fetch-utils";
+import { safeFetch } from "@/core/safe-fetch";
 import { isPublicUrl } from "@/core/url-safety";
 import { getConfig } from "@/core/config-facade";
 import { toMsg } from "@/core/error-utils";
@@ -27,6 +27,61 @@ function interpolate(template: string, args: Record<string, unknown>): string {
     }
     return "";
   });
+}
+
+/**
+ * SEC-09 (2026-11 audit): path interpolation. Values are percent-encoded
+ * (`/` kept so multi-segment parameters keep working) and dot segments are
+ * refused, so an argument such as `../admin/users?x=` can no longer walk
+ * the connection's credentials to other endpoints of the same host.
+ */
+function interpolatePath(template: string, args: Record<string, unknown>): string {
+  return template.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, name) => {
+    if (!Object.prototype.hasOwnProperty.call(args, name)) return "";
+    const v = args[name];
+    if (v === null || v === undefined) return "";
+    const raw = String(v);
+    if (raw.split("/").some((seg) => seg === "." || seg === "..")) {
+      throw new Error(`Invalid path argument "${name}": dot segments are not allowed`);
+    }
+    return raw
+      .split("/")
+      .map((seg) => encodeURIComponent(seg))
+      .join("/");
+  });
+}
+
+const JSON_SCALAR_RE = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/;
+
+/**
+ * SEC-09: JSON-aware body interpolation. Inside a JSON string literal
+ * (`"{{x}}"`) the value is JSON-escaped; in a bare position (`{{n}}`) it is
+ * inserted raw only when it is a JSON scalar (number / boolean / null) and
+ * quoted as a JSON string otherwise. A value like `x","role":"admin` can no
+ * longer inject keys.
+ */
+function interpolateJsonBody(template: string, args: Record<string, unknown>): string {
+  return template.replace(
+    /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g,
+    (match, name: string, offset: number) => {
+      const has = Object.prototype.hasOwnProperty.call(args, name);
+      const v = has ? args[name] : undefined;
+      const str =
+        v === null || v === undefined ? "" : typeof v === "string" ? v : JSON.stringify(v);
+      const inString = template[offset - 1] === '"' && template[offset + match.length] === '"';
+      if (inString) return JSON.stringify(str).slice(1, -1);
+      if (v === undefined || v === null) return "null";
+      if (typeof v === "number" || typeof v === "boolean") return String(v);
+      if (typeof v === "string" && JSON_SCALAR_RE.test(v.trim())) return v.trim();
+      if (typeof v === "object") return JSON.stringify(v);
+      return JSON.stringify(str);
+    }
+  );
+}
+
+function looksLikeJson(template: string): boolean {
+  const t = template.trim();
+  return t.startsWith("{") || t.startsWith("[");
 }
 
 function interpolateQuery(
@@ -108,7 +163,7 @@ export async function invokeApiTool(
   args: Record<string, unknown>
 ): Promise<InvokeResult> {
   // 1. Build URL + query
-  const path = interpolate(tool.pathTemplate, args);
+  const path = interpolatePath(tool.pathTemplate, args);
   const url = new URL(joinUrl(connection.baseUrl, path));
   const query = interpolateQuery(tool.queryTemplate, args);
   for (const [k, v] of Object.entries(query)) {
@@ -132,7 +187,9 @@ export async function invokeApiTool(
   let body: string | undefined;
   const hasBody = tool.method !== "GET" && tool.method !== "DELETE";
   if (hasBody && tool.bodyTemplate.trim()) {
-    body = interpolate(tool.bodyTemplate, args);
+    body = looksLikeJson(tool.bodyTemplate)
+      ? interpolateJsonBody(tool.bodyTemplate, args)
+      : interpolate(tool.bodyTemplate, args);
   }
 
   // 4. Headers
@@ -158,7 +215,16 @@ export async function invokeApiTool(
     headers,
   };
   if (body !== undefined) init.body = body;
-  const res = await fetchWithTimeout(url.toString(), init, timeoutMs);
+  // SEC-08: manual redirects, SSRF re-check per hop, credentials dropped on
+  // origin change (custom connection headers count as credentials).
+  const { response: res } = await safeFetch(url.toString(), init, {
+    timeoutMs,
+    urlSafety: { allowLoopback: allowLocal(), allowPrivateNetwork: allowLocal() },
+    sensitiveHeaders: [
+      ...Object.keys(connection.headers ?? {}),
+      ...Object.keys(authHeaders(connection.auth)),
+    ],
+  });
 
   // 6. Safe body read (capped)
   let text: string;
@@ -205,10 +271,17 @@ export async function testApiConnection(
   };
   const started = Date.now();
   try {
-    const res = await fetchWithTimeout(
+    const { response: res } = await safeFetch(
       url,
       { method: "GET", headers },
-      connection.timeoutMs || 30000
+      {
+        timeoutMs: connection.timeoutMs || 30000,
+        urlSafety: { allowLoopback: allowLocal(), allowPrivateNetwork: allowLocal() },
+        sensitiveHeaders: [
+          ...Object.keys(connection.headers ?? {}),
+          ...Object.keys(authHeaders(connection.auth)),
+        ],
+      }
     );
     const ms = Date.now() - started;
     return { ok: res.ok, status: res.status, ms };
@@ -219,4 +292,4 @@ export async function testApiConnection(
 }
 
 // Re-export for tests
-export { interpolate };
+export { interpolate, interpolatePath, interpolateJsonBody };
