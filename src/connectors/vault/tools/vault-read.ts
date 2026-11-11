@@ -1,5 +1,5 @@
 import { z } from "zod";
-import yaml from "js-yaml";
+import { loadVaultYaml } from "../lib/yaml-safe";
 import { vaultRead } from "../lib/github";
 
 export const vaultReadSchema = {
@@ -18,7 +18,7 @@ export async function handleVaultRead(params: { path: string }) {
     if (endIndex !== -1) {
       const yamlBlock = file.content.slice(4, endIndex);
       try {
-        const parsed = yaml.load(yamlBlock);
+        const parsed = loadVaultYaml(yamlBlock);
         if (parsed && typeof parsed === "object") {
           frontmatter = parsed as Record<string, unknown>;
         }

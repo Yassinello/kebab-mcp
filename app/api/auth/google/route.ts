@@ -8,7 +8,7 @@ import { getConfig } from "@/core/config-facade";
  * Redirects user to Google's consent page.
  * Admin auth required.
  */
-async function getHandler(_ctx: PipelineContext) {
+async function getHandler(ctx: PipelineContext) {
   const clientId = getConfig("GOOGLE_CLIENT_ID");
   const clientSecret = getConfig("GOOGLE_CLIENT_SECRET");
 
@@ -47,7 +47,10 @@ async function getHandler(_ctx: PipelineContext) {
     status: 302,
     headers: {
       Location: url.toString(),
-      "Set-Cookie": `mymcp_oauth=${encodeURIComponent(cookieValue)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+      // SEC-15: Secure whenever the request came over HTTPS.
+      "Set-Cookie": `mymcp_oauth=${encodeURIComponent(cookieValue)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${
+        new URL(ctx.request.url).protocol === "https:" ? "; Secure" : ""
+      }`,
     },
   });
 

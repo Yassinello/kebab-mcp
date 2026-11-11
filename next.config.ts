@@ -25,6 +25,22 @@ const SECURITY_HEADERS = [
   },
 ];
 
+/**
+ * SEC-15 (2026-11 audit): HSTS for self-hosted (Docker) deployments — Vercel
+ * already sets it on its edge. Two years + includeSubDomains, no preload
+ * (preload is an operator decision tied to the domain).
+ */
+const HSTS_HEADER = {
+  key: "Strict-Transport-Security",
+  value: "max-age=63072000; includeSubDomains",
+};
+
+/**
+ * SEC-15: responses of the admin/config APIs can carry secrets (env reveal,
+ * .env export, tokens) — never let a browser or shared cache store them.
+ */
+const NO_STORE_HEADERS = [{ key: "Cache-Control", value: "no-store, max-age=0" }];
+
 const nextConfig: NextConfig = {
   output: "standalone",
 
@@ -41,8 +57,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: SECURITY_HEADERS,
+        headers: [...SECURITY_HEADERS, HSTS_HEADER],
       },
+      { source: "/api/config/:path*", headers: NO_STORE_HEADERS },
+      { source: "/api/admin/:path*", headers: NO_STORE_HEADERS },
+      { source: "/api/welcome/:path*", headers: NO_STORE_HEADERS },
+      { source: "/api/auth/:path*", headers: NO_STORE_HEADERS },
     ];
   },
 };

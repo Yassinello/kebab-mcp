@@ -1,5 +1,30 @@
 import { NextResponse } from "next/server";
-import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
+import {
+  composeRequestPipeline,
+  rehydrateStep,
+  rateLimitStep,
+  type PipelineContext,
+} from "@/core/pipeline";
+import { checkAdminAuth } from "@/core/auth";
+import { isClaimer } from "@/core/first-run";
+import { isLoopbackRequest } from "@/core/request-utils";
+
+/**
+ * SEC-15 (2026-11 audit): this endpoint replays a caller-supplied token
+ * against /api/mcp — unauthenticated it was a token-validity oracle that
+ * bypassed the MCP rate limit. Only the welcome claimer, an admin, or a
+ * loopback caller may use it; it is also rate-limited per IP.
+ */
+async function isAllowedCaller(request: Request): Promise<boolean> {
+  if (isLoopbackRequest(request)) return true;
+  // silent-swallow-ok: SigningSecretUnavailableError means no claim can be proven; admin auth below is the fallback
+  try {
+    if (await isClaimer(request)) return true;
+  } catch {
+    // Signing secret unavailable → fall through to admin auth.
+  }
+  return (await checkAdminAuth(request)) === null;
+}
 
 /**
  * POST /api/welcome/test-mcp
@@ -14,6 +39,9 @@ import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/c
  */
 async function postHandler(ctx: PipelineContext) {
   const request = ctx.request;
+  if (!(await isAllowedCaller(request))) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
   let token: string | undefined;
   try {
     const body = (await request.json()) as { token?: string };
@@ -75,9 +103,13 @@ async function postHandler(ctx: PipelineContext) {
   } catch (err) {
     return NextResponse.json({
       ok: false,
-      error: err instanceof Error ? err.message : "Network error calling /api/mcp",
+      // Do not echo raw fetch errors (internal hostnames / addresses).
+      error: err instanceof Error ? "Network error calling /api/mcp" : "Network error",
     });
   }
 }
 
-export const POST = composeRequestPipeline([rehydrateStep], postHandler);
+export const POST = composeRequestPipeline(
+  [rehydrateStep, rateLimitStep({ scope: "welcome-test", keyFrom: "ip", limit: 10 })],
+  postHandler
+);

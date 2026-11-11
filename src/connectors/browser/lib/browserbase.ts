@@ -19,6 +19,26 @@ export function sanitizeError(err: unknown): string {
 
 const ALLOWED_CONTEXTS = new Set(["default", "linkedin"]);
 
+/**
+ * SEC-13 (2026-11 audit): tools that drive the page freely (`web_act`,
+ * `web_agent`) must not run inside the logged-in `linkedin` context by
+ * default — a prompt-injected page or message could otherwise make the
+ * model send messages / connection requests as the user, bypassing every
+ * Unipile guard (confirm, rate limits, kill switch, audit). Read-only tools
+ * (`linkedin_feed`, extract/observe) keep using the context.
+ * KEBAB_BROWSER_LINKEDIN_WRITE=1 lifts the restriction.
+ */
+export function assertInteractiveContextAllowed(contextName: string): void {
+  if (contextName !== "linkedin") return;
+  const v = getConfig("KEBAB_BROWSER_LINKEDIN_WRITE");
+  if (v === "1" || v === "true") return;
+  throw new Error(
+    "Interactive browser actions in the 'linkedin' context are disabled: they act as you on " +
+      "LinkedIn with none of the Unipile safeguards. Use the Unipile tools, or set " +
+      "KEBAB_BROWSER_LINKEDIN_WRITE=1 to allow it."
+  );
+}
+
 export function validateContextName(name: string): string {
   const normalized = name.toLowerCase();
   if (!ALLOWED_CONTEXTS.has(normalized)) {

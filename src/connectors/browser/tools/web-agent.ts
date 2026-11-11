@@ -2,6 +2,7 @@ import {
   createBrowserSession,
   validatePublicUrl,
   validateContextName,
+  assertInteractiveContextAllowed,
   sanitizeError,
 } from "../lib/browserbase";
 import { clampNavTimeout } from "../lib/page-helpers";
@@ -39,6 +40,7 @@ const PER_STEP_WALLCLOCK_MS = 45_000;
 export async function handleWebAgent(params: WebAgentParams) {
   await validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
+  assertInteractiveContextAllowed(contextName);
   const stagehand = await createBrowserSession(contextName);
 
   const maxSteps = Math.min(HARD_MAX_STEPS, Math.max(1, params.max_steps ?? DEFAULT_MAX_STEPS));

@@ -22,6 +22,9 @@ describe("proxy.ts CSP middleware", () => {
     // first-run redirect branch (which would 302 and still set CSP, but
     // /api/config/logs would hit the auth path).
     process.env.MCP_AUTH_TOKEN = "middleware-test-token-1234567890";
+    // SEC-12: in production the MCP token is not an admin credential, so a
+    // realistic prod config also sets ADMIN_AUTH_TOKEN.
+    process.env.ADMIN_AUTH_TOKEN = "admin-test-token-1234567890";
     (process.env as Record<string, string>).NODE_ENV = "production";
     delete process.env.UPSTASH_REDIS_REST_URL;
   });

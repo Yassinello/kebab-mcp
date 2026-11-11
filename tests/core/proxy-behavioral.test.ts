@@ -204,4 +204,65 @@ describe("Phase 50 / COV-03 — proxy.ts middleware behavioral coverage", () => 
     const loc = res.headers.get("location") || "";
     expect(loc).toMatch(/https:\/\/example\.test\/?$/);
   });
+
+  // ── SEC-12 (2026-11 audit) ─────────────────────────────────────────
+  it("SEC-12: in production, MCP_AUTH_TOKEN alone does not open the dashboard", async () => {
+    process.env.MCP_AUTH_TOKEN = "device-token";
+    process.env.VERCEL = "1";
+    const { proxy } = await import("@/../proxy");
+    const res = await proxy(
+      makeReq("https://example.test/config", { cookies: { kebab_admin_token: "device-token" } })
+    );
+    expect(res.status).toBe(503);
+  });
+
+  it("SEC-12: ADMIN_AUTH_TOKEN set → MCP token is not an admin credential, admin token is", async () => {
+    process.env.MCP_AUTH_TOKEN = "device-token";
+    process.env.ADMIN_AUTH_TOKEN = "admin-token";
+    process.env.VERCEL = "1";
+    const { proxy } = await import("@/../proxy");
+    const denied = await proxy(
+      makeReq("https://example.test/config", { cookies: { kebab_admin_token: "device-token" } })
+    );
+    expect(denied.status).toBe(401);
+    const ok = await proxy(
+      makeReq("https://example.test/config", { cookies: { kebab_admin_token: "admin-token" } })
+    );
+    expect(ok.status).toBe(200);
+  });
+
+  it("SEC-12: explicit KEBAB_ADMIN_TOKEN_FALLBACK=1 keeps the shared-token setup working", async () => {
+    process.env.MCP_AUTH_TOKEN = "device-token";
+    process.env.VERCEL = "1";
+    process.env.KEBAB_ADMIN_TOKEN_FALLBACK = "1";
+    const { proxy } = await import("@/../proxy");
+    const res = await proxy(
+      makeReq("https://example.test/config", { cookies: { kebab_admin_token: "device-token" } })
+    );
+    expect(res.status).toBe(200);
+    delete process.env.KEBAB_ADMIN_TOKEN_FALLBACK;
+  });
+
+  it("SEC-12: ?token= with a multi-token list stores only the matched token", async () => {
+    process.env.ADMIN_AUTH_TOKEN = "tok-one,tok-two";
+    const { proxy } = await import("@/../proxy");
+    const res = await proxy(makeReq("https://example.test/config?token=tok-two"));
+    expect([307, 308]).toContain(res.status);
+    const cookies = res.headers.getSetCookie();
+    expect(cookies.some((c) => c.startsWith("kebab_admin_token=tok-two;"))).toBe(true);
+    expect(cookies.some((c) => c.includes("tok-one"))).toBe(false);
+  });
+
+  it("SEC-12: an unsafe x-request-id is replaced, a safe one is reflected", async () => {
+    process.env.MCP_AUTH_TOKEN = "admin-token";
+    const { proxy } = await import("@/../proxy");
+    const bad = await proxy(
+      makeReq("https://example.test/", { headers: { "x-request-id": "<script>alert(1)</script>" } })
+    );
+    expect(bad.headers.get("x-request-id")).not.toContain("<script>");
+    const good = await proxy(
+      makeReq("https://example.test/", { headers: { "x-request-id": "req-123.abc" } })
+    );
+    expect(good.headers.get("x-request-id")).toBe("req-123.abc");
+  });
 });
