@@ -84,11 +84,17 @@ beforeEach(() => {
   kvSetIfNotExists.mockResolvedValue({ ok: true });
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  // Hermetic: the PAT resolver reads process.env via getCredential() before
+  // the mocked getConfig(). Clear any token inherited from the host (a dev
+  // shell or a CI runner often exports GITHUB_TOKEN).
+  vi.stubEnv("KEBAB_UPDATE_PAT", undefined);
+  vi.stubEnv("GITHUB_TOKEN", undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function setEnv(extra: Record<string, string | undefined> = {}): void {

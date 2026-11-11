@@ -5,7 +5,7 @@
  * Verifies the 3 hot paths emit named spans when OTel is active, and
  * emit zero spans when OTel is not configured.
  *
- * Uses the InMemorySpanExporter from @opentelemetry/sdk-trace-base to
+ * Uses the InMemorySpanExporter from @opentelemetry/sdk-trace to
  * capture spans without needing a live collector.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
@@ -17,9 +17,7 @@ function installInMemoryOtel(): void {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const sdkBase = require("@opentelemetry/sdk-trace-base");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const sdkNode = require("@opentelemetry/sdk-trace-node");
+  const sdkTrace = require("@opentelemetry/sdk-trace");
 
   class RecordingProcessor {
     onStart(): void {}
@@ -33,15 +31,14 @@ function installInMemoryOtel(): void {
       return Promise.resolve();
     }
   }
-  // OTel SDK v2+: pass all processors via constructor; addSpanProcessor
-  // was removed.
-  const provider = new sdkNode.NodeTracerProvider({
+  // OTel SDK v3: sdk-trace-node/sdk-trace-base merged into sdk-trace;
+  // processors are passed via the constructor.
+  const provider = new sdkTrace.TracerProvider({
     spanProcessors: [
-      new sdkBase.SimpleSpanProcessor(new sdkBase.InMemorySpanExporter()),
+      new sdkTrace.SimpleSpanProcessor(new sdkTrace.InMemorySpanExporter()),
       new RecordingProcessor(),
     ],
   });
-  provider.register();
   api.trace.setGlobalTracerProvider(provider);
 }
 

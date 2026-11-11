@@ -6,27 +6,41 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: the job only reads the repo. Third-party actions are
+# pinned to full commit SHAs (tag in the trailing comment); Dependabot's
+# github-actions ecosystem keeps them current.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same PR; never cancel runs on main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    # CI-01 (v0.11 Phase 43): test on both the current LTS (20) and current
-    # stable (22) so Node-22-only syntax or Node-20-only bugs are caught
-    # pre-merge. `fail-fast: false` so a per-version failure still produces
-    # the other job's log for triage.
+    timeout-minutes: 30
+    # CI-03 (2026-11 audit): test on the maintenance LTS (22) and the active
+    # LTS (24). Node 20 reached EOL in April 2026 and the OTel 0.301 cluster
+    # requires >=22.15; package.json `engines` enforces the same floor.
+    # `fail-fast: false` so a per-version failure still produces the other
+    # job's log for triage.
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      # --include=optional is needed because the package-lock was generated on
-      # Windows; lightningcss / @next/swc native binaries for linux-x64 are
-      # optional deps that npm skips otherwise. Without this flag, the next
-      # `npm run build` step fails with "Cannot find module ../lightningcss.linux-x64-gnu.node".
+      # --include=optional: the native binaries (lightningcss, @next/swc,
+      # tailwind oxide) are platform optionalDependencies of their parents.
+      # The stale top-level linux-x64 pins were removed in 2026-11 after the
+      # lockfile was regenerated on Linux; the flag is kept as a guard in
+      # case an npm config (e.g. omit=optional) would otherwise skip them.
       - run: npm ci --include=optional
       # SCM-03 (v0.11 Phase 44): audit gate policy. FAIL on direct-dep
       # moderate+ (unless allowlisted in scripts/audit-gate.mjs with
@@ -54,12 +68,14 @@ jobs:
       # Runs immediately after build so regressions surface early.
       - name: Bundle size check (size-limit)
         run: npm run size:check
-      # CI-02 (v0.11 Phase 43): coverage threshold is enforced by vitest
-      # (see `vitest.config.ts` thresholds.lines = 46). The prior
-      # "Verify coverage thresholds" echo step was a placeholder; removed
-      # now that the real threshold is enforced. Threshold is set to
-      # `floor(actual coverage)` as a ratchet — v0.12 target is 80%.
+      # Coverage thresholds (statements/branches/functions/lines) are
+      # enforced by vitest — see `coverage.thresholds` in vitest.config.ts
+      # (src/ + app/ + proxy.ts, floor(measured) - 1 ratchet).
       - run: npm run test:coverage
+      # CI-06 (2026-11 audit): jsdom render/component suite (tests/ui,
+      # tests/components) — separate forked-pool config, previously never
+      # run in CI.
+      - run: npm run test:ui
       - run: npm run test:registry
       - run: npm run test:contract
       # Integration test — starts a real Next.js server and hits health + MCP endpoints.

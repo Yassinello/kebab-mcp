@@ -7,14 +7,25 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+# Never run two release-please jobs concurrently on main (they would race on
+# the release PR); queue instead of cancelling.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Write scopes only where needed: release-please pushes the release
+    # branch/tag and opens/updates the release PR.
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: googleapis/release-please-action@v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # Locked to v0.1.x patch-only bumps. To advance the minor (0.2,
           # 0.3, ...) edit .release-please-manifest.json directly and merge

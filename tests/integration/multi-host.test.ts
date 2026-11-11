@@ -20,7 +20,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import * as kvStore from "@/core/kv-store";
 import * as requestContext from "@/core/request-context";
 import { checkRateLimit, __resetInMemoryRateLimitForTests } from "@/core/rate-limit";
 
