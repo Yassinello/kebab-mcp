@@ -12,10 +12,16 @@ import {
 } from "./store";
 import { skillsConnector } from "./manifest";
 
+const LIBRARY_TOOLS = new Set(["skills_list", "skill_load", "skill_read_file"]);
+/** Spec v2: the per-skill (legacy) tools, excluding the 3 always-on library tools. */
+function legacyTools() {
+  return skillsConnector.tools.filter((t) => !LIBRARY_TOOLS.has(t.name));
+}
+
 /**
  * Regression coverage for the v0.14 "tools return 0 on cold lambda" bug.
  *
- * Before the refresh() hook landed, `skillsConnector.tools` read from
+ * Before the refresh() hook landed, `legacyTools()` read from
  * listSkillsSync(), which on Upstash returned [] until /api/admin/status
  * (or any diagnose call) happened to fire first. The transport route
  * therefore registered 0 user-defined tools until the operator refreshed.
@@ -50,6 +56,7 @@ describe("skills connector refresh hook (v0.14 cold-lambda fix)", () => {
   it("exposes skills after refresh() primes the cache", async () => {
     // Seed a skill via the async store.
     await createSkill({
+      exposeAsTool: true,
       name: "Coldstart",
       description: "",
       content: "body",
@@ -69,7 +76,7 @@ describe("skills connector refresh hook (v0.14 cold-lambda fix)", () => {
     const originalPath = process.env.MYMCP_SKILLS_PATH;
     process.env.MYMCP_SKILLS_PATH = path.join(tmp, "does-not-exist.json");
     _resetSkillsCacheForTests();
-    const before = skillsConnector.tools;
+    const before = legacyTools();
     expect(before).toHaveLength(0);
 
     // Prime via the manifest hook.
@@ -77,16 +84,17 @@ describe("skills connector refresh hook (v0.14 cold-lambda fix)", () => {
     await skillsConnector.refresh?.();
 
     // After refresh: tools getter returns the seeded skill.
-    const after = skillsConnector.tools;
+    const after = legacyTools();
     expect(after).toHaveLength(1);
     expect(after[0]?.name).toBe("skill_coldstart");
   });
 
   it("createSkill updates the sync cache in lock-step", async () => {
     await skillsConnector.refresh?.();
-    expect(skillsConnector.tools).toHaveLength(0);
+    expect(legacyTools()).toHaveLength(0);
 
     await createSkill({
+      exposeAsTool: true,
       name: "Inflight",
       description: "",
       content: "",
@@ -97,14 +105,14 @@ describe("skills connector refresh hook (v0.14 cold-lambda fix)", () => {
 
     // No explicit refresh — the writeRaw side-effect should have
     // populated the cache already.
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
   });
 });
 
 /**
  * Lock-step contract: every write-path in skills/store.ts that persists
  * data must also update _skillsCache immediately, so the MCP transport
- * (which reads skillsConnector.tools synchronously) sees fresh state
+ * (which reads legacyTools() synchronously) sees fresh state
  * without waiting for the next refresh() call.
  *
  * If a dev adds a write-path in store.ts without calling writeRaw() —
@@ -132,6 +140,7 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
 
   it("updateSkill reflects in tools without refresh", async () => {
     const skill = await createSkill({
+      exposeAsTool: true,
       name: "ToUpdate",
       description: "original",
       content: "",
@@ -139,19 +148,20 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
       toolsAllowed: [],
       source: { type: "inline" },
     });
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
 
     await updateSkill(skill.id, { description: "updated" });
 
     // No refresh() call — cache must be up to date.
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
     // The connector exposes the skill name (slugified), not the description directly.
     // The cache is valid if tools still lists the skill (not 0 from a stale snapshot).
-    expect(skillsConnector.tools[0]?.name).toBe("skill_toupdate");
+    expect(legacyTools()[0]?.name).toBe("skill_toupdate");
   });
 
   it("replaceSkill reflects in tools without refresh", async () => {
     const skill = await createSkill({
+      exposeAsTool: true,
       name: "ToReplace",
       description: "",
       content: "v1",
@@ -159,12 +169,12 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
       toolsAllowed: [],
       source: { type: "inline" },
     });
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
 
     await replaceSkill({ ...skill, content: "v2" });
 
-    expect(skillsConnector.tools).toHaveLength(1);
-    expect(skillsConnector.tools[0]?.name).toBe("skill_toreplace");
+    expect(legacyTools()).toHaveLength(1);
+    expect(legacyTools()[0]?.name).toBe("skill_toreplace");
   });
 
   it("rollbackSkill reflects in tools without refresh", async () => {
@@ -172,6 +182,7 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
     // which doesn't save a version. rollbackSkill with a missing version
     // returns null — the cache must still be intact (length unchanged).
     const skill = await createSkill({
+      exposeAsTool: true,
       name: "ToRollback",
       description: "",
       content: "",
@@ -179,17 +190,18 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
       toolsAllowed: [],
       source: { type: "inline" },
     });
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
 
     // Version 99 doesn't exist — rollbackSkill returns null early without
     // touching the store. Cache must still show 1 tool.
     const result = await rollbackSkill(skill.id, 99);
     expect(result).toBeNull();
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
   });
 
   it("recordSkillSyncState reflects in tools without refresh", async () => {
     const skill = await createSkill({
+      exposeAsTool: true,
       name: "ToSync",
       description: "",
       content: "",
@@ -197,7 +209,7 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
       toolsAllowed: [],
       source: { type: "inline" },
     });
-    expect(skillsConnector.tools).toHaveLength(1);
+    expect(legacyTools()).toHaveLength(1);
 
     await recordSkillSyncState(skill.id, {
       target: "notion",
@@ -207,7 +219,7 @@ describe("skills store: write paths must keep _skillsCache in lock-step", () => 
     });
 
     // The skill is still in the cache after the sync-state write.
-    expect(skillsConnector.tools).toHaveLength(1);
-    expect(skillsConnector.tools[0]?.name).toBe("skill_tosync");
+    expect(legacyTools()).toHaveLength(1);
+    expect(legacyTools()[0]?.name).toBe("skill_tosync");
   });
 });

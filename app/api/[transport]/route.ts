@@ -5,7 +5,12 @@ import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
-import { resolveTokenConnectorScope, isConnectorAllowed } from "@/core/token-scope";
+import {
+  resolveTokenConnectorScope,
+  isConnectorAllowed,
+  resolveTokenSkillScope,
+  runWithSkillScope,
+} from "@/core/token-scope";
 import {
   composeRequestPipeline,
   rehydrateStep,
@@ -291,6 +296,24 @@ async function buildHandler(
         name: "Kebab MCP",
         version: VERSION,
       },
+      // Skills v2 (spec §5): connectors may contribute to the MCP server
+      // instructions (the skills connector publishes the caller's catalogue
+      // so any client knows when to call skill_load). Out-of-scope
+      // connectors contribute nothing.
+      ...(() => {
+        const parts: string[] = [];
+        for (const pack of enabledPacks) {
+          if (!pack.manifest.instructions) continue;
+          if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
+          try {
+            const text = pack.manifest.instructions();
+            if (text) parts.push(text);
+          } catch {
+            // A broken contributor never blocks the transport.
+          }
+        }
+        return parts.length ? { instructions: parts.join("\n\n") } : {};
+      })(),
     },
     {
       basePath: "/api",
@@ -313,10 +336,16 @@ async function buildHandler(
  * credential-store.ts SEC-02 for the resolution order.
  */
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
-  const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId);
-  const response = await mcpHandler(ctx.request);
-  response.headers.set("x-request-id", ctx.requestId);
-  return response;
+  // Skills v2 §6: resolve the token's skill tag scope once, and keep it
+  // ambient for the whole request (tools getter, tool handlers, prompts,
+  // resources and the instructions block all read it).
+  const skillScope = await resolveTokenSkillScope(ctx.tokenId);
+  return runWithSkillScope(skillScope, async () => {
+    const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId);
+    const response = await mcpHandler(ctx.request);
+    response.headers.set("x-request-id", ctx.requestId);
+    return response;
+  });
 }
 
 const pipeline = composeRequestPipeline(

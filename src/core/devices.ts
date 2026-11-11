@@ -49,6 +49,8 @@ export interface DeviceRow {
    * (core connectors are always additionally allowed at resolution time).
    */
   connectors: string[] | null;
+  /** Skills v2 — per-token skill tag scope. `null` = every skill. */
+  skillTags: string[] | null;
 }
 
 interface DeviceKVEntry {
@@ -56,6 +58,86 @@ interface DeviceKVEntry {
   createdAt: string;
   /** Optional per-token connector allowlist. Absent = full access. */
   connectors?: string[];
+  /** Skills v2 — optional per-token skill tag scope. Absent = every skill. */
+  skillTags?: string[];
+}
+
+/**
+ * Read-modify-write a device entry PRESERVING every field the mutator does
+ * not touch. All writers go through this so adding a field (skillTags) can
+ * never be silently dropped by an unrelated update — the pre-v0.23
+ * setDeviceLabel rewrote {label, createdAt} only and so wiped the token's
+ * connector scope on rename (privilege escalation).
+ */
+async function updateDeviceEntry(
+  id: string,
+  mutate: (entry: DeviceKVEntry) => void
+): Promise<void> {
+  const kv = getContextKVStore();
+  const key = `${DEVICE_KEY_PREFIX}${id}`;
+  const existingRaw = await kv.get(key);
+  const entry: DeviceKVEntry = { label: "unnamed", createdAt: new Date().toISOString() };
+  if (existingRaw) {
+    try {
+      const parsed = JSON.parse(existingRaw) as Partial<DeviceKVEntry>;
+      if (typeof parsed.label === "string" && parsed.label.length > 0) entry.label = parsed.label;
+      if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
+        entry.createdAt = parsed.createdAt;
+      }
+      if (Array.isArray(parsed.connectors)) {
+        entry.connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
+      }
+      if (Array.isArray(parsed.skillTags)) {
+        entry.skillTags = parsed.skillTags.filter((c): c is string => typeof c === "string");
+      }
+    } catch {
+      // Corrupt entry — rewrite from defaults.
+    }
+  }
+  mutate(entry);
+  await kv.set(key, JSON.stringify(entry));
+}
+
+/** Read a token's skill tag scope. `null` = no scope (every skill). Never throws. */
+export async function getDeviceSkillTags(id: string): Promise<string[] | null> {
+  const raw = await getContextKVStore().get(`${DEVICE_KEY_PREFIX}${id}`);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
+    if (!Array.isArray(parsed.skillTags)) return null;
+    return parsed.skillTags.filter((c): c is string => typeof c === "string");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set (or clear with `null`) a token's skill tag scope. Tags are
+ * normalized to lower-case slugs, deduped, max 20. An empty array means
+ * "no skills at all" for that token.
+ */
+export async function setDeviceSkillTags(id: string, tags: string[] | null): Promise<void> {
+  let normalized: string[] | null = null;
+  if (tags !== null) {
+    if (!Array.isArray(tags)) throw new Error("Invalid skillTags: must be an array or null");
+    normalized = [];
+    for (const t of tags) {
+      if (typeof t !== "string") throw new Error("Invalid skillTags: tags must be strings");
+      const n = t
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 32);
+      if (n && !normalized.includes(n)) normalized.push(n);
+    }
+    normalized = normalized.slice(0, 20);
+  }
+  await updateDeviceEntry(id, (e) => {
+    if (normalized === null) delete e.skillTags;
+    else e.skillTags = normalized;
+  });
 }
 
 const DEVICE_KEY_PREFIX = "devices:";
@@ -97,6 +179,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
     let label = "unnamed";
     let createdAt = "unknown";
     let connectors: string[] | null = null;
+    let skillTags: string[] | null = null;
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<DeviceKVEntry>;
@@ -107,12 +190,15 @@ export async function listDevices(): Promise<DeviceRow[]> {
         if (Array.isArray(parsed.connectors)) {
           connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
         }
+        if (Array.isArray(parsed.skillTags)) {
+          skillTags = parsed.skillTags.filter((c): c is string => typeof c === "string");
+        }
       } catch {
         // Corrupt entry — fall back to defaults (full access).
       }
     }
     const lastSeenAt = await getLastSeenAt(t);
-    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors });
+    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors, skillTags });
   }
   return rows;
 }
@@ -172,25 +258,10 @@ export async function setDeviceConnectors(id: string, connectors: string[] | nul
     }
   }
 
-  const kv = getContextKVStore();
-  const key = `${DEVICE_KEY_PREFIX}${id}`;
-  const existingRaw = await kv.get(key);
-  let label = "unnamed";
-  let createdAt = new Date().toISOString();
-  if (existingRaw) {
-    try {
-      const parsed = JSON.parse(existingRaw) as Partial<DeviceKVEntry>;
-      if (typeof parsed.label === "string" && parsed.label.length > 0) label = parsed.label;
-      if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
-        createdAt = parsed.createdAt;
-      }
-    } catch {
-      // Corrupt entry — rewrite with fresh label/createdAt.
-    }
-  }
-  const entry: DeviceKVEntry = { label, createdAt };
-  if (validated !== null) entry.connectors = validated;
-  await kv.set(key, JSON.stringify(entry));
+  await updateDeviceEntry(id, (e) => {
+    if (validated === null) delete e.connectors;
+    else e.connectors = validated;
+  });
 }
 
 /**
@@ -207,22 +278,10 @@ export async function setDeviceLabel(id: string, label: string): Promise<void> {
     throw new Error("Invalid label: newlines are not allowed");
   }
 
-  const kv = getContextKVStore();
-  const key = `${DEVICE_KEY_PREFIX}${id}`;
-  const existingRaw = await kv.get(key);
-  let createdAt = new Date().toISOString();
-  if (existingRaw) {
-    try {
-      const parsed = JSON.parse(existingRaw) as Partial<DeviceKVEntry>;
-      if (typeof parsed.createdAt === "string" && parsed.createdAt.length > 0) {
-        createdAt = parsed.createdAt;
-      }
-    } catch {
-      // fall through to fresh createdAt
-    }
-  }
-  const entry: DeviceKVEntry = { label: trimmed, createdAt };
-  await kv.set(key, JSON.stringify(entry));
+  // Preserves connectors + skillTags (pre-v0.23 this dropped the scope).
+  await updateDeviceEntry(id, (e) => {
+    e.label = trimmed;
+  });
 }
 
 /**
@@ -307,6 +366,7 @@ export async function rotateDeviceToken(
   const oldRaw = await kv.get(oldKey);
   let label = "unnamed";
   let connectors: string[] | undefined;
+  let skillTags: string[] | undefined;
   if (oldRaw) {
     try {
       const parsed = JSON.parse(oldRaw) as Partial<DeviceKVEntry>;
@@ -317,6 +377,9 @@ export async function rotateDeviceToken(
       if (Array.isArray(parsed.connectors)) {
         connectors = parsed.connectors.filter((c): c is string => typeof c === "string");
       }
+      if (Array.isArray(parsed.skillTags)) {
+        skillTags = parsed.skillTags.filter((c): c is string => typeof c === "string");
+      }
     } catch {
       // fall through
     }
@@ -324,6 +387,7 @@ export async function rotateDeviceToken(
   }
   const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
   if (connectors !== undefined) newEntry.connectors = connectors;
+  if (skillTags !== undefined) newEntry.skillTags = skillTags;
   await kv.set(newKey, JSON.stringify(newEntry));
 
   // Clear old rate-limit buckets — the NEW token has a different idHash,

@@ -140,6 +140,10 @@ vi.mock("@/core/tool-toggles", () => ({
 // v0.20: buildHandler resolves a per-token connector scope. This E2E is not
 // about scoping — mock to "no filter" so every enabled connector is listed.
 vi.mock("@/core/token-scope", () => ({
+  resolveTokenSkillScope: async () => null,
+  runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
+  getCurrentSkillScope: () => null,
+  isSkillVisible: () => true,
   resolveTokenConnectorScope: async () => null,
   isConnectorAllowed: () => true,
 }));

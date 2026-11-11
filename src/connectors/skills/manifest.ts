@@ -4,6 +4,83 @@ import { listSkillsSync, getSkill, primeSkillsCache, type Skill } from "./store"
 import { renderSkill } from "./lib/render";
 import { maybeRefreshRemote } from "./lib/remote-fetcher";
 import { toMsg } from "@/core/error-utils";
+import { getCurrentSkillScope, isSkillVisible } from "@/core/token-scope";
+import {
+  buildSkillsInstructions,
+  skillsListPayload,
+  skillLoadText,
+  skillReadFile,
+  skillResourceProvider,
+} from "./lib/library";
+
+function json(payload: unknown): ToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+}
+
+/**
+ * Spec v2 §5 — the three library tools, always registered (even with 0
+ * skills, so a client can discover the library exists).
+ */
+function libraryTools(): ToolDefinition[] {
+  return [
+    {
+      name: "skills_list",
+      description:
+        "List the user's personal skills (reusable instructions/playbooks stored in Kebab). " +
+        "Returns {count, skills:[{name, title, description, tags, files, arguments}]}. Optional query / tag filters. " +
+        "Then call skill_load with a name to get the full instructions.",
+      destructive: false,
+      schema: {
+        query: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Words to match in name/description (accents ignored)."),
+        tag: z.string().max(40).optional().describe("Only skills with this tag."),
+      },
+      handler: async (params): Promise<ToolResult> =>
+        json(await skillsListPayload((params ?? {}) as { query?: string; tag?: string })),
+    },
+    {
+      name: "skill_load",
+      description:
+        "Load the full instructions of one of the user's skills (from skills_list or the server instructions) and follow them. " +
+        "Pass `arguments` when the skill declares some. The result lists bundled files readable with skill_read_file.",
+      destructive: false,
+      schema: {
+        name: z.string().min(1).max(100).describe("Skill name, e.g. 'meeting-prep'."),
+        arguments: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe("Values for the skill's declared arguments, if any."),
+      },
+      handler: async (params): Promise<ToolResult> => {
+        const r = await skillLoadText(
+          params as { name: string; arguments?: Record<string, string> }
+        );
+        return r.ok ? { content: [{ type: "text", text: r.text }] } : json(r.payload);
+      },
+    },
+    {
+      name: "skill_read_file",
+      description:
+        "Read one bundled file of a skill (script, reference doc, template) listed by skill_load. Returns the raw text.",
+      destructive: false,
+      schema: {
+        name: z.string().min(1).max(100).describe("Skill name."),
+        path: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe("File path as listed by skill_load, e.g. 'references/style.md'."),
+      },
+      handler: async (params): Promise<ToolResult> => {
+        const r = await skillReadFile(params as { name: string; path: string });
+        return r.ok ? { content: [{ type: "text", text: r.text }] } : json(r.payload);
+      },
+    },
+  ];
+}
 
 /**
  * Build a Zod input schema from a skill's declared arguments.
@@ -58,16 +135,25 @@ export const skillsConnector: ConnectorManifest = {
   label: "Skills",
   core: true,
   description:
-    "User-defined skills (prompts + templates) exposed as MCP tools and prompts. Always on — define skills in /config → Skills.",
+    "Your personal skills library (Agent Skills / SKILL.md format) shared by every AI client: skills_list, skill_load, skill_read_file, MCP prompts and skill:// resources. Always on — manage skills in /config → Skills.",
   requiredEnvVars: [],
   get tools(): ToolDefinition[] {
+    // Legacy per-skill tools only for skills that opted in (all pre-v2
+    // skills default to exposeAsTool=true) and are inside the caller's
+    // tag scope. Evaluated per request inside the MCP transport.
+    let legacy: ToolDefinition[] = [];
     try {
-      const skills = listSkillsSync();
-      return skills.map((s) => buildSkillTool(s));
+      const scope = getCurrentSkillScope();
+      legacy = listSkillsSync()
+        .filter((s) => s.exposeAsTool !== false && isSkillVisible(s.tags ?? [], scope))
+        .map((s) => buildSkillTool(s));
     } catch {
-      return [];
+      legacy = [];
     }
+    return [...libraryTools(), ...legacy];
   },
+  resources: skillResourceProvider,
+  instructions: () => buildSkillsInstructions(getCurrentSkillScope()),
   // Prime the KV-backed sync cache so `tools` returns fresh data on the
   // first cold-lambda request (critical for Upstash where the sync file
   // path does not exist).
@@ -120,7 +206,8 @@ export const skillsConnector: ConnectorManifest = {
     };
 
     try {
-      const skills = listSkillsSync();
+      const scope = getCurrentSkillScope();
+      const skills = listSkillsSync().filter((s) => isSkillVisible(s.tags ?? [], scope));
       for (const skill of skills) {
         const argsSchema: Record<string, z.ZodTypeAny> = {};
         for (const arg of skill.arguments) {

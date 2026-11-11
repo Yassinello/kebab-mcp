@@ -73,6 +73,19 @@ export const skillSchema = z.object({
   source: skillSourceSchema,
   /** Per-target sync state. Keyed by target name. */
   syncState: z.record(z.string(), skillSyncStateSchema).default({}),
+  /** Spec v2 — profile tags (lower-case slugs). Drive per-token visibility. */
+  tags: z.array(z.string()).default([]),
+  /**
+   * Spec v2 — index of bundled files (bodies live under `skill:<id>:files`
+   * so the hot `skills:all` record stays small).
+   */
+  files: z.array(z.object({ path: z.string(), size: z.number() })).default([]),
+  /**
+   * Spec v2 — expose a dedicated `skill_<id>` tool. Defaults to TRUE when
+   * absent so skills created before v2 keep their tool; createSkill sets
+   * false for new skills (they are reached through `skill_load`).
+   */
+  exposeAsTool: z.boolean().default(true),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -88,9 +101,17 @@ export const skillCreateInputSchema = z.object({
   arguments: z.array(skillArgumentSchema).default([]),
   toolsAllowed: z.array(z.string()).default([]),
   source: skillSourceSchema,
+  tags: z.array(z.string()).optional(),
+  exposeAsTool: z.boolean().optional(),
+  /** Spec v2 — preferred id (import round-trips). Uniquified if taken. */
+  id: z
+    .string()
+    .regex(/^[a-z0-9_]+$/)
+    .max(64)
+    .optional(),
 });
 
-export const skillUpdateInputSchema = skillCreateInputSchema.partial();
+export const skillUpdateInputSchema = skillCreateInputSchema.omit({ id: true }).partial();
 
 // Authored input type (what callers pass into createSkill / updateSkill).
 // `toolsAllowed` is optional on input — defaults to [] after parse.
@@ -283,7 +304,7 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
     const parsed = skillCreateInputSchema.parse(input);
     const all = await readRaw();
     const existingIds = new Set(all.map((s) => s.id));
-    const id = await uniqueId(slugify(parsed.name), existingIds);
+    const id = await uniqueId(parsed.id ?? slugify(parsed.name), existingIds);
     const now = new Date().toISOString();
     const skill: Skill = {
       id,
@@ -294,6 +315,9 @@ export function createSkill(input: SkillCreateInput): Promise<Skill> {
       toolsAllowed: parsed.toolsAllowed ?? [],
       source: parsed.source,
       syncState: {},
+      tags: normalizeTags(parsed.tags ?? []),
+      files: [],
+      exposeAsTool: parsed.exposeAsTool ?? false,
       createdAt: now,
       updatedAt: now,
     };
@@ -327,6 +351,9 @@ export function updateSkill(id: string, patch: SkillUpdateInput): Promise<Skill 
       arguments: parsed.arguments ?? prev.arguments,
       toolsAllowed: parsed.toolsAllowed ?? prev.toolsAllowed ?? [],
       syncState: prev.syncState ?? {},
+      tags: parsed.tags !== undefined ? normalizeTags(parsed.tags) : (prev.tags ?? []),
+      files: prev.files ?? [],
+      exposeAsTool: parsed.exposeAsTool ?? prev.exposeAsTool ?? true,
     };
     all[idx] = next;
     await writeRaw(all);
@@ -358,6 +385,63 @@ export function replaceSkill(skill: Skill): Promise<void> {
     if (idx === -1) return;
     all[idx] = skill;
     await writeRaw(all);
+  });
+}
+
+// ── Bundled files (spec v2) ─────────────────────────────────────────
+//
+// Bodies are stored under `skill:<id>:files` (one JSON map per skill). The
+// `skill:<id>:*` prefix is already wiped by deleteSkill, and does not match
+// the version scan (`skill:<id>:v*`). The skill record keeps only the index.
+
+function filesKey(skillId: string): string {
+  return `skill:${skillId}:files`;
+}
+
+/** All bundled files of a skill (path → UTF-8 content). */
+export async function getSkillFiles(skillId: string): Promise<Record<string, string>> {
+  const raw = await getContextKVStore().get(filesKey(skillId));
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Replace a skill's bundled files wholesale (validated: paths, count, sizes).
+ * Returns the updated skill, or `{error}` on validation failure / unknown id.
+ */
+export function setSkillFiles(
+  skillId: string,
+  files: Record<string, string>
+): Promise<Skill | { error: string }> {
+  return enqueueWrite(async () => {
+    const v = validateFiles(files);
+    if (!v.ok) return { error: v.error };
+    const all = await readRaw();
+    const idx = all.findIndex((s) => s.id === skillId);
+    const prev = idx === -1 ? undefined : all[idx];
+    if (!prev) return { error: "skill_not_found" };
+    const kv = getContextKVStore();
+    const paths = Object.keys(v.files).sort();
+    if (paths.length === 0) await kv.delete(filesKey(skillId));
+    else await kv.set(filesKey(skillId), JSON.stringify(v.files));
+    const next: Skill = {
+      ...prev,
+      files: paths.map((p) => ({ path: p, size: byteLength(v.files[p]!) })),
+      updatedAt: new Date().toISOString(),
+    };
+    all[idx] = next;
+    await writeRaw(all);
+    return next;
   });
 }
 
@@ -494,6 +578,7 @@ export function rollbackSkill(skillId: string, version: number): Promise<Skill |
 // lastSyncedHash for a given target.
 
 import { createHash } from "crypto";
+import { byteLength, normalizeTags, validateFiles } from "./lib/bundle";
 
 /** Stable content hash used to detect drift. sha256(name + description + content). */
 export function computeSkillContentHash(

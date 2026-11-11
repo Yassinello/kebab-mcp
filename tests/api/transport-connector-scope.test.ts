@@ -91,6 +91,10 @@ vi.mock("@/core/tool-toggles", () => ({
 let scopeAtListing: Set<string> | null = new Set(["apify"]);
 let denyAtInvocation: Set<string> = new Set();
 vi.mock("@/core/token-scope", () => ({
+  resolveTokenSkillScope: async () => null,
+  runWithSkillScope: <T>(_t: unknown, fn: () => T) => fn(),
+  getCurrentSkillScope: () => null,
+  isSkillVisible: () => true,
   resolveTokenConnectorScope: vi.fn().mockImplementation(async () => scopeAtListing),
   isConnectorAllowed: (scope: Set<string> | null, id: string) => {
     if (denyAtInvocation.has(id)) return false;
