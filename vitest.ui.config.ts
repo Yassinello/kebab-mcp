@@ -51,6 +51,9 @@ export default defineConfig({
     },
     testTimeout: 10_000,
     fileParallelism: false,
+    // CI-05: revert vi.stubEnv / vi.stubGlobal after each test (hermeticity).
+    unstubEnvs: true,
+    unstubGlobals: true,
     env: {
       // Phase 50 / BRAND-01: use KEBAB_* so the alias resolver doesn't
       // fire a deprecation warning on every test process.

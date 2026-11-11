@@ -119,6 +119,17 @@ vi.mock("@browserbasehq/sdk", () => {
   return { default: Browserbase };
 });
 
+// DNS — the SSRF guard (src/core/url-safety, resolveDns: true) resolves
+// hostnames before letting a URL through. Without a mock the suite does a
+// real lookup of example.com / linkedin.com and fails offline or in a
+// sandboxed container ("DNS lookup failed"). Resolve every hostname to a
+// fixed public IP (example.com's). IP-literal URLs never reach lookup(), so
+// the private-IP rejection cases are unaffected.
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async () => [{ address: "93.184.215.14", family: 4 }]);
+  return { lookup, default: { lookup } };
+});
+
 // --- Environment setup ------------------------------------------------------
 
 function setBrowserEnv() {

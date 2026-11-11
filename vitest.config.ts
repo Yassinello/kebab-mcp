@@ -50,6 +50,11 @@ export default defineConfig({
     // in-process cache. 15s gives headroom on slower CI runners without
     // masking genuine test hangs.
     testTimeout: 15_000,
+    // CI-05 (2026-11 audit): hermeticity. Every vi.stubEnv / vi.stubGlobal
+    // is reverted after each test so one test's env/global stubs can't leak
+    // into the next. Prefer vi.stubEnv over mutating process.env directly.
+    unstubEnvs: true,
+    unstubGlobals: true,
     // v0.6 NIT-05: tests historically relied on `http://localhost/...`
     // URLs being recognized as loopback. Production now requires explicit
     // opt-in via MYMCP_TRUST_URL_HOST=1. Set it for the test environment
