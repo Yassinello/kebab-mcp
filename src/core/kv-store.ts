@@ -372,6 +372,8 @@ function sanitizeUpstashError(text: string): string {
  * Node fetch() (undici) reuses TCP connections via its internal connection
  * pool. No manual keep-alive or agent configuration is needed.
  */
+const UPSTASH_TIMEOUT_MS = 8_000;
+
 class UpstashKV implements KVStore {
   kind = "upstash" as const;
   private url: string;
@@ -384,6 +386,9 @@ class UpstashKV implements KVStore {
 
   private async call(command: (string | number)[]): Promise<unknown> {
     const res = await fetch(this.url, {
+      // REL-09: bounded — a slow Upstash must not hold the request until the
+      // platform's maxDuration kills it.
+      signal: AbortSignal.timeout(UPSTASH_TIMEOUT_MS),
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.token}`,
@@ -449,9 +454,20 @@ class UpstashKV implements KVStore {
   }
 
   async list(prefix?: string): Promise<string[]> {
+    // REL-09 (2026-11 audit): iterate with SCAN instead of KEYS. KEYS is
+    // O(keyspace) and blocks the Redis server for its whole duration; it was
+    // on the hot path (disabled-tool lookups, webhook history, audit lists).
     const pattern = prefix ? `${prefix}*` : "*";
-    const result = await this.call(["KEYS", pattern]);
-    return Array.isArray(result) ? (result as string[]) : [];
+    const seen = new Set<string>();
+    let cursor = "0";
+    let guard = 0;
+    do {
+      const page = await this.scan(cursor, { match: pattern, count: 500 });
+      for (const k of page.keys) seen.add(k);
+      cursor = page.cursor;
+      guard++;
+    } while (cursor !== "0" && guard < 10_000);
+    return [...seen];
   }
 
   async scan(

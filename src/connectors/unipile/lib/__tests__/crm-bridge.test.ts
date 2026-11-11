@@ -69,11 +69,11 @@ describe("TwentyAdapterSkeleton (D-01)", () => {
     expect(parsed.queued_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it("does NOT pass a TTL (outbox is durable until phase 70's cron)", async () => {
+  it("REL-10: outbox rows expire after 30 days (no consumer drains them yet)", async () => {
     await crmBridge.writeOutbox("audit-456", { crm_log: null });
     const args = hoist.kvMock.set.mock.calls[0];
-    // KVStore.set(key, value, ttlSeconds?) — third arg MUST be undefined here.
-    expect(args?.[2]).toBeUndefined();
+    // KVStore.set(key, value, ttlSeconds?)
+    expect(args?.[2]).toBe(30 * 24 * 3600);
   });
 
   it("handles null crm_log", async () => {

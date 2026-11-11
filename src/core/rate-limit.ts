@@ -88,6 +88,8 @@ export function __resetInMemoryRateLimitForTests(): void {
  * that don't implement `incr` (none in production). It invokes
  * `dualReadKV` so legacy counts carry over correctly.
  */
+let warnedNonSharedStore = false;
+
 export async function checkRateLimit(
   identifier: string,
   options: { scope?: string | undefined; limit?: number | undefined } = {}
@@ -119,6 +121,15 @@ export async function checkRateLimit(
   }
 
   const kv = getContextKVStore();
+  // REL-07 (2026-11 audit): on Vercel without Upstash the store is a
+  // per-lambda /tmp file, so limits silently stop being global. Say so once.
+  if (!warnedNonSharedStore && getConfig("VERCEL") === "1" && kv.kind !== "upstash") {
+    warnedNonSharedStore = true;
+    console.warn(
+      "[Kebab MCP] Rate limiting is enabled but KV is not Upstash: counters are per-instance " +
+        "on Vercel and do not enforce a global limit. Configure Upstash for effective rate limits."
+    );
+  }
 
   try {
     // Atomic path — preferred whenever incr is implemented. TTL is set
