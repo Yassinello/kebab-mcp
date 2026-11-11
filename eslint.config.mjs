@@ -108,17 +108,6 @@ export default tseslint.config(
       sourceType: "module",
     },
   },
-  // create-mymcp is a standalone Node CLI shipped as its own package.
-  // v0.6 LOW: flat-config override instead of `/* eslint-env node */`
-  // (which flat config no longer supports) — gives the installer the
-  // Node globals it needs without polluting the rest of the repo.
-  {
-    files: ["create-mymcp/**/*.{js,mjs,cjs}"],
-    languageOptions: {
-      globals: NODE_GLOBALS,
-      sourceType: "module",
-    },
-  },
   {
     // `scripts/` used to be globally ignored — they weren't linted even
     // though they're release-critical (contract test, registry test, e2e

@@ -29,7 +29,7 @@
     "build": "next build",
     "analyze": "ANALYZE=true next build",
     "start": "next start",
-    "lint": "eslint src/ app/ scripts/ tests/",
+    "lint": "eslint src/ app/ scripts/ tests/ --max-warnings 0",
     "lint:fix": "eslint src/ app/ scripts/ tests/ --fix",
     "lint:unused": "knip --config config/knip.ts",
     "typecheck": "tsc --noEmit --skipLibCheck",
