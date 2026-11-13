@@ -30,8 +30,8 @@ function text(t: string): ToolResult {
 }
 
 const EMPTY_HELP =
-  "No personal profile yet. Ask the user a few questions (role, current projects, preferences, how they like answers), " +
-  "then save a short Markdown profile with my_context_update — or the user can write it in the Kebab House dashboard " +
+  "No personal profile yet. Call kebab_setup to run the guided setup (a short interview, then a profile the user " +
+  "validates, saved with my_context_update). The user can also write it in the Kebab House dashboard " +
   "(/config → Settings → Profile).";
 
 /** The profile name this call should use (bound profile if it exists, else default). */

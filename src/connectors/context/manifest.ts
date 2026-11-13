@@ -5,6 +5,15 @@ import {
   myContextUpdateSchema,
   handleMyContextUpdate,
 } from "./tools/my-context";
+import {
+  handleKebabSetup,
+  handleSkillTemplateInstall,
+  handleSkillTemplatesList,
+  kebabSetupSchema,
+  skillTemplateInstallSchema,
+  skillTemplatesListSchema,
+} from "./tools/setup";
+import { SETUP_PHRASE } from "@/core/client-links";
 
 /**
  * Kebab House phase 0 (CTX-01) — the personal profile, always available.
@@ -40,5 +49,71 @@ export const contextConnector: ConnectorManifest = {
       handler: async (args) => handleMyContextUpdate(args),
       destructive: true,
     }),
+    // Kebab House phase 1 (ONB-02..05) — guided setup from the AI client.
+    defineTool({
+      name: "kebab_setup",
+      title: "Set up Kebab House",
+      description:
+        "Set up or personalise Kebab House (the user's personal AI hub): interview, profile, ritual skills, connectors. " +
+        `Call it when the user says "${SETUP_PHRASE}", asks to configure or personalise their assistant/hub, or when my_context reports no profile. ` +
+        "It returns the current step and exactly what to do; call it again with action=complete to move on.",
+      schema: kebabSetupSchema,
+      handler: async (args) => handleKebabSetup(args),
+      destructive: false,
+      openWorld: false,
+    }),
+    defineTool({
+      name: "skill_templates_list",
+      title: "List ritual templates",
+      description:
+        "List the ritual skill templates that ship with Kebab House (morning brief, meeting prep, remember, weekly review, read later) and whether each is installed.",
+      schema: skillTemplatesListSchema,
+      handler: async () => handleSkillTemplatesList(),
+      destructive: false,
+      openWorld: false,
+    }),
+    defineTool({
+      name: "skill_template_install",
+      title: "Install a ritual template",
+      description:
+        "Install (or update) one ritual skill template into the user's skills library. Only after the user agreed to it.",
+      schema: skillTemplateInstallSchema,
+      handler: async (args) => handleSkillTemplateInstall(args),
+      destructive: true,
+      openWorld: false,
+    }),
   ],
+  // ONB-07: for clients that read server instructions (Claude Code, ChatGPT, Codex).
+  instructions: () =>
+    `Kebab House holds the user's profile (my_context) and personal skills. If the user says "${SETUP_PHRASE}" or my_context reports no profile, call kebab_setup and follow its steps.`,
+  // ONB-02: the same guided setup as an MCP prompt (slash command in Claude Desktop / Claude Code).
+  registerPrompts: (serverUnknown) => {
+    const server = serverUnknown as {
+      registerPrompt: (
+        name: string,
+        config: { title?: string; description: string },
+        handler: () => Promise<{
+          messages: { role: "user"; content: { type: "text"; text: string } }[];
+        }>
+      ) => void;
+    };
+    server.registerPrompt(
+      "setup",
+      {
+        title: "Set up Kebab House",
+        description: "Guided setup: interview, profile, rituals, connectors.",
+      },
+      async () => ({
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `${SETUP_PHRASE}. Call kebab_setup and guide me through each step.`,
+            },
+          },
+        ],
+      })
+    );
+  },
 };

@@ -785,6 +785,21 @@
     }
   },
   {
+    "name": "kebab_setup",
+    "pack": "context",
+    "schemaKeys": [
+      "action",
+      "step"
+    ],
+    "destructive": false,
+    "annotations": {
+      "title": "Set up Kebab House",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "linear_create_issue",
     "pack": "linear",
     "schemaKeys": [
@@ -1448,6 +1463,32 @@
     "destructive": false,
     "annotations": {
       "title": "Skill read file",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "skill_template_install",
+    "pack": "context",
+    "schemaKeys": [
+      "name"
+    ],
+    "destructive": true,
+    "annotations": {
+      "title": "Install a ritual template",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "skill_templates_list",
+    "pack": "context",
+    "schemaKeys": [],
+    "destructive": false,
+    "annotations": {
+      "title": "List ritual templates",
       "readOnlyHint": true,
       "destructiveHint": false,
       "openWorldHint": false
