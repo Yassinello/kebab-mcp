@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const registered: Record<string, "tool" | "registerTool"> = {};
+const registered: Record<string, "registerTool"> = {};
 const handlerMap: Record<string, (params: Record<string, unknown>) => Promise<unknown>> = {};
 
 vi.mock("mcp-handler", () => {
@@ -20,19 +20,11 @@ vi.mock("mcp-handler", () => {
   const createMcpHandler = (initFn: (server: any) => void) => {
     const server = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tool: (name: string, ...args: any[]) => {
-        registered[name] = "tool";
-        const cb = args[args.length - 1];
-        if (typeof cb === "function") handlerMap[name] = cb;
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       registerTool: (name: string, _config: unknown, cb: any) => {
         registered[name] = "registerTool";
         if (typeof cb === "function") handlerMap[name] = cb;
       },
-      resource: vi.fn(),
       registerResource: vi.fn(),
-      prompt: vi.fn(),
       registerPrompt: vi.fn(),
     };
     initFn(server);
