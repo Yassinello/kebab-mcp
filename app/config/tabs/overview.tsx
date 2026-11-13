@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { UsageCard } from "./overview/usage-card";
 import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
 import { ConnectorHealthWidget } from "./connector-health";
@@ -527,6 +528,9 @@ export function OverviewTab({
         />
         <StatCard label="Display name" value={config.displayName} small />
       </div>
+
+      {/* Kebab House phase 0: weekly usage */}
+      <UsageCard />
 
       {/* Version info */}
       <Section title="Version">

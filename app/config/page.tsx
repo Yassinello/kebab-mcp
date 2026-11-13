@@ -1,3 +1,4 @@
+import { PRODUCT } from "@/core/constants/brand";
 import { AppShell } from "../sidebar";
 import { getInstanceConfigAsync } from "@/core/config";
 import { resolveRegistryAsync } from "@/core/registry";
@@ -28,7 +29,10 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   },
   playground: { title: "Playground", subtitle: "Try tools interactively." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
-  documentation: { title: "Documentation", subtitle: "Guides and reference for Kebab MCP." },
+  documentation: {
+    title: "Documentation",
+    subtitle: `Guides and reference for ${PRODUCT.name}.`,
+  },
   storage: { title: "Storage", subtitle: "Where your credentials and skills live." },
   health: {
     title: "Health",

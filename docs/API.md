@@ -136,11 +136,12 @@ The first-run path. `INSTANCE_MODE=personal` deploys with no `MCP_AUTH_TOKEN` se
 - **Purpose:** validate that the token authenticates against `/api/[transport]` — dashboard "Test MCP" button.
 - **Response:** `{ ok: boolean, details: string }`.
 
-### POST /api/welcome/starter-skills
+### GET|POST /api/welcome/starter-skills
 
-- **Auth:** first-run claim cookie
-- **Body:** `{ skills: string[] }` — opt-in starter skills copied into the operator's skill store.
-- **Purpose:** bootstrap the Skills connector with sensible defaults during welcome.
+- **Auth:** admin, or the first-run claim cookie while the instance is not initialized
+- **GET:** `{ skills: [{ id, name, title, description, icon, tags, status, installed }] }` — the ritual templates (`content/skill-templates/`).
+- **POST:** `{ id }` → `{ ok, id, name, action: "created" | "updated" | "unchanged" }` — installs one template through the regular skills import (versioned, never duplicated). Unknown id → 404.
+- **Purpose:** start with a ritual during welcome.
 
 ---
 
@@ -238,7 +239,11 @@ The dashboard at `/config` is an SPA; these are its data-plane endpoints. All ga
   - `PUT /api/config/skills/:id` — update
   - `DELETE /api/config/skills/:id` — remove
   - `POST /api/config/skills/:id/refresh` — reload from vault
-  - `GET /api/config/skills/:id/export` — download as Claude-skill JSON
+  - `GET /api/config/skills/:id/export` — download as Markdown (`?format=zip` Agent Skill, `?format=relay` relay skill)
+  - `GET /api/config/skills/export-all` — whole library as an Agent Skills `.zip`
+  - `POST /api/config/skills/bundle-import` — import `SKILL.md` / `.zip` (preview → save)
+  - `GET|POST /api/config/skills/templates` — ritual templates with install status; `POST { id }` installs one
+  - `GET /api/config/skills/relay-master[?tag=]` — master relay `.zip` (`kebab-house/SKILL.md`), optionally limited to one tag
   - `GET /api/config/skill-versions` — version history
   - `POST /api/config/skill-rollback` — rollback to a version
 

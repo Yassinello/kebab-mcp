@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { isClaimer } from "@/core/first-run";
-import { STARTER_SKILLS } from "@/core/starter-skills";
-import { createSkill } from "@/connectors/skills/store";
+import { installSkillTemplate, templateCatalog } from "@/connectors/skills/lib/templates";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
- * GET  /api/welcome/starter-skills              → list curated starter skills
- * POST /api/welcome/starter-skills  { id }      → install a starter skill into the user's store
+ * GET  /api/welcome/starter-skills              → list the ritual templates
+ * POST /api/welcome/starter-skills  { id }      → install one into the user's store
+ *
+ * Kebab House RIT-02: the "starter skills" are now the ritual templates
+ * (content/skill-templates/, see src/connectors/skills/lib/templates.ts).
+ * Same contract as before: GET → { skills: [{ id, name, description, icon,
+ * … }] }, POST { id } → { ok, id } (plus `action`: created | updated |
+ * unchanged). Install goes through the regular import path, so installing
+ * twice updates instead of duplicating. Skills installed from the old
+ * hard-coded starters are left untouched (RIT-04).
  *
  * Auth: admin-authed OR (during first-run + immediately after) the original
  * /welcome claimer cookie. The relaxed path is necessary because the user
@@ -34,7 +41,7 @@ async function checkWelcomeAuth(request: Request): Promise<Response | null> {
 async function getHandler(ctx: PipelineContext) {
   const authError = await checkWelcomeAuth(ctx.request);
   if (authError) return authError;
-  return NextResponse.json({ skills: STARTER_SKILLS });
+  return NextResponse.json({ skills: await templateCatalog() });
 }
 
 async function postHandler(ctx: PipelineContext) {
@@ -49,20 +56,21 @@ async function postHandler(ctx: PipelineContext) {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const starter = STARTER_SKILLS.find((s) => s.id === body.id);
-  if (!starter) {
+  if (typeof body.id !== "string" || !body.id.trim()) {
     return NextResponse.json({ ok: false, error: "Unknown starter skill" }, { status: 404 });
   }
 
   try {
-    const created = await createSkill({
-      name: starter.name,
-      description: starter.description,
-      content: starter.content,
-      arguments: starter.arguments,
-      source: { type: "inline" },
-    });
-    return NextResponse.json({ ok: true, id: created.id });
+    const res = await installSkillTemplate(body.id);
+    if (!res.ok) {
+      // 404 for an unknown id (as before); install failures keep the
+      // historical 200 + { ok: false } shape the welcome UI reads.
+      return NextResponse.json(
+        { ok: false, error: res.status === 404 ? "Unknown starter skill" : res.error },
+        { status: res.status === 404 ? 404 : 200 }
+      );
+    }
+    return NextResponse.json({ ok: true, id: res.id, name: res.name, action: res.action });
   } catch (err) {
     return NextResponse.json({
       ok: false,

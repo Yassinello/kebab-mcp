@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useState } from "react";
 
 /**
@@ -222,9 +223,10 @@ function HelpText({
     return (
       <p className={klass}>
         In Claude Desktop: <strong>Settings → Connectors → Add custom connector</strong>. Set
-        <code className={codeKlass}> Name</code> to <code className={codeKlass}>Kebab MCP</code> and
-        paste this URL into <code className={codeKlass}>Remote MCP server URL</code>. Leave the
-        OAuth fields empty — the token travels in the query string.
+        <code className={codeKlass}> Name</code> to{" "}
+        <code className={codeKlass}>{PRODUCT.name}</code> and paste this URL into{" "}
+        <code className={codeKlass}>Remote MCP server URL</code>. Leave the OAuth fields empty — the
+        token travels in the query string.
       </p>
     );
   }
@@ -241,7 +243,7 @@ function HelpText({
   if (tab === "claude-code") {
     return (
       <p className={klass}>
-        Run this command in any terminal. It registers Kebab MCP as an HTTP MCP server in your
+        Run this command in any terminal. It registers {PRODUCT.name} as an HTTP MCP server in your
         Claude Code config.
       </p>
     );

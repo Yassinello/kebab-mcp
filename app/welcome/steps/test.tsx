@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { McpClientSnippets } from "../../components/mcp-client-snippets";
 import { useWelcomeDispatch, useWelcomeState } from "../WelcomeStateContext";
@@ -76,7 +77,7 @@ export function TestStep({ durableBackend, onBack }: TestStepProps): JSX.Element
     <section>
       <StepHeader
         title="Connect your AI client"
-        subtitle="Add Kebab MCP to your client's MCP server config, then verify it works."
+        subtitle={`Add ${PRODUCT.name} to your client's MCP server config, then verify it works.`}
       />
 
       {state.token && <TokenUsagePanel token={state.token} instanceUrl={state.instanceUrl} />}
@@ -298,8 +299,10 @@ function MultiClientNote() {
 interface StarterSkill {
   id: string;
   name: string;
+  title?: string;
   description: string;
   icon: string;
+  installed?: boolean;
 }
 
 function StarterSkillsPanel() {
@@ -321,6 +324,7 @@ function StarterSkillsPanel() {
         const data = (await res.json()) as { skills: StarterSkill[] };
         if (!cancelled) {
           setSkills(data.skills || []);
+          setInstalled(new Set((data.skills || []).filter((s) => s.installed).map((s) => s.id)));
           setLoading(false);
         }
       } catch {
@@ -364,14 +368,14 @@ function StarterSkillsPanel() {
   return (
     <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
       <div className="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
-        <p className="text-sm font-semibold text-white">Or skip credentials — start with a skill</p>
+        <p className="text-sm font-semibold text-white">Or start with a ritual</p>
         <span className="text-[11px] text-slate-500">No connector setup required</span>
       </div>
       <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-        Skills are reusable prompt templates exposed to your AI client as MCP tools. These three
-        starters work in any client without needing Google, Notion, GitHub, or any other
-        credentials. Install one now to feel the value, then come back to set up real connectors
-        when you&apos;re ready.
+        Rituals are ready-made skills your AI client loads on demand (<code>skill_load</code>):
+        remember things, a morning brief, meeting prep, a weekly review, a reading list. They use
+        your profile and notes when available and simply skip what isn&apos;t connected yet. Edit
+        them anytime in /config → Skills.
       </p>
       <ul className="space-y-2">
         {skills.map((s) => {
@@ -386,7 +390,8 @@ function StarterSkillsPanel() {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-200">
-                  <code className="font-mono text-blue-300">skill_{s.name}</code>
+                  {s.title ?? s.name}{" "}
+                  <code className="font-mono text-[11px] text-blue-300">{s.name}</code>
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">{s.description}</p>
               </div>
@@ -408,7 +413,7 @@ function StarterSkillsPanel() {
       </ul>
       {error && (
         <p className="mt-3 text-[11px] text-red-300">
-          {error} — you can also add starter skills later from /config → Skills.
+          {error} — you can also install rituals later from /config → Skills.
         </p>
       )}
     </div>

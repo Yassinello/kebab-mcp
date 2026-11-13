@@ -1,4 +1,5 @@
 import { KebabLogo } from "../components/kebab-logo";
+import { PRODUCT } from "@/core/constants/brand";
 import { REPO_URL } from "./deploy-url";
 import packageJson from "../../package.json";
 
@@ -38,11 +39,11 @@ export default function LandingFooter() {
           <div className="col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2 mb-3">
               <KebabLogo size={22} className="text-amber-400" />
-              <p className="font-mono text-white font-semibold">Kebab MCP</p>
+              <p className="font-mono text-white font-semibold">{PRODUCT.name}</p>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-              One self-hosted backend for every AI client. AGPL-3.0 licensed, open source, built
-              with the community.
+            <p className="text-xs text-slate-500 leading-relaxed max-w-xs">{PRODUCT.tagline}</p>
+            <p className="text-xs text-slate-600 leading-relaxed max-w-xs mt-2">
+              Self-hosted, AGPL-3.0, open source.
             </p>
           </div>
 
@@ -71,7 +72,7 @@ export default function LandingFooter() {
 
         <div className="pt-6 border-t border-slate-800/60 flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-slate-600">
-            © {new Date().getFullYear()} Kebab MCP contributors · AGPL-3.0 License
+            © {new Date().getFullYear()} {PRODUCT.name} contributors · AGPL-3.0 License
           </p>
           <p className="text-xs text-slate-600 font-mono">v{packageJson.version}</p>
         </div>

@@ -801,9 +801,18 @@
   },
   {
     "name": "my_context",
-    "pack": "vault",
+    "pack": "context",
     "schemaKeys": [],
     "destructive": false
+  },
+  {
+    "name": "my_context_update",
+    "pack": "context",
+    "schemaKeys": [
+      "content",
+      "mode"
+    ],
+    "destructive": true
   },
   {
     "name": "notion_create",

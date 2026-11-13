@@ -19,6 +19,8 @@ interface DeviceRow {
   connectors: string[] | null;
   /** Skills v2 — skill tag scope. null = every skill. */
   skillTags?: string[] | null;
+  /** Kebab House — profile served by my_context. null = default. */
+  profile?: string | null;
 }
 
 /** Minimal connector descriptor the scope picker needs. */
@@ -174,7 +176,8 @@ export function DevicesTab({
   const saveScope = async (
     tokenId: string,
     connectorIds: string[] | null,
-    skillTags: string[] | null
+    skillTags: string[] | null,
+    profile: string | null
   ) => {
     setBusy(tokenId);
     await mutate({
@@ -189,6 +192,12 @@ export function DevicesTab({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "set-skill-tags", tokenId, skillTags }),
     });
+    await mutate({
+      url: "/api/admin/devices",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "set-profile", tokenId, profile }),
+    });
     setBusy(null);
     setScopeEditId(null);
   };
@@ -201,8 +210,9 @@ export function DevicesTab({
           ? "None (skills only)"
           : `${r.connectors.length} connector${r.connectors.length === 1 ? "" : "s"}`;
     const tags = r.skillTags;
-    if (!tags) return conn;
-    return `${conn} · skills: ${tags.length ? tags.map((t) => `#${t}`).join(" ") : "none"}`;
+    const prof = r.profile ? ` · profile: ${r.profile}` : "";
+    if (!tags) return `${conn}${prof}`;
+    return `${conn} · skills: ${tags.length ? tags.map((t) => `#${t}`).join(" ") : "none"}${prof}`;
   };
 
   const renderRow = (r: DeviceRow) => (
@@ -363,7 +373,8 @@ function ScopeRowGroup({
   onSave: (
     tokenId: string,
     connectors: string[] | null,
-    skillTags: string[] | null
+    skillTags: string[] | null,
+    profile: string | null
   ) => void | Promise<void>;
   onCancel: () => void;
   children: ReactNode;
@@ -373,6 +384,26 @@ function ScopeRowGroup({
   const [selected, setSelected] = useState<Set<string>>(new Set(row.connectors ?? []));
   // Skills v2: "" = every skill (no tag scope).
   const [skillTagsDraft, setSkillTagsDraft] = useState((row.skillTags ?? []).join(", "));
+  // Kebab House: profile served by my_context ("" = default).
+  const [profileDraft, setProfileDraft] = useState(row.profile ?? "");
+  const [profileNames, setProfileNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isEditing) return;
+    let cancelled = false;
+    // fire-and-forget OK: profile list for the picker; failure keeps "default" only
+    void fetch("/api/config/profiles", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { profiles: [] }))
+      .then((d: { profiles?: { name: string }[] }) => {
+        if (cancelled) return;
+        setProfileNames((d.profiles ?? []).map((p) => p.name).filter((n) => n !== "default"));
+      })
+      .catch(() => {
+        // fire-and-forget OK: the picker falls back to "default" only
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditing]);
 
   // Preset ids that actually exist in the current connector set (a preset
   // for a connector that isn't configured would be a dead checkbox).
@@ -385,8 +416,9 @@ function ScopeRowGroup({
       setMode(row.connectors === null ? "all" : "subset");
       setSelected(new Set(row.connectors ?? []));
       setSkillTagsDraft((row.skillTags ?? []).join(", "));
+      setProfileDraft(row.profile ?? "");
     }
-  }, [isEditing, row.connectors, row.skillTags]);
+  }, [isEditing, row.connectors, row.skillTags, row.profile]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -403,8 +435,9 @@ function ScopeRowGroup({
       .map((t) => t.replace(/^#/, "").trim())
       .filter(Boolean);
     const skillTags = tags.length ? tags : null;
-    if (mode === "all") return void onSave(row.tokenId, null, skillTags);
-    return void onSave(row.tokenId, Array.from(selected), skillTags);
+    const profile = profileDraft ? profileDraft : null;
+    if (mode === "all") return void onSave(row.tokenId, null, skillTags, profile);
+    return void onSave(row.tokenId, Array.from(selected), skillTags, profile);
   };
 
   return (
@@ -477,7 +510,7 @@ function ScopeRowGroup({
                 </>
               )}
               <p className="text-[11px] text-text-muted">
-                Core tools (admin, skills) are always available and not listed here.
+                Core tools (skills, profile) are always available and not listed here.
               </p>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium" htmlFor={`skill-tags-${row.tokenId}`}>
@@ -493,6 +526,30 @@ function ScopeRowGroup({
                 <p className="text-[11px] text-text-muted">
                   Only skills tagged with one of these appear in this client (skills_list,
                   skill_load, prompts, native bundle).
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium" htmlFor={`profile-${row.tokenId}`}>
+                  Profile served by my_context
+                </label>
+                <select
+                  id={`profile-${row.tokenId}`}
+                  value={profileDraft}
+                  onChange={(e) => setProfileDraft(e.target.value)}
+                  className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
+                >
+                  <option value="">default</option>
+                  {profileNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                  {profileDraft && !profileNames.includes(profileDraft) && (
+                    <option value={profileDraft}>{profileDraft} (missing)</option>
+                  )}
+                </select>
+                <p className="text-[11px] text-text-muted">
+                  One profile per hat: create them in Settings → Profiles.
                 </p>
               </div>
               <div className="flex gap-2">

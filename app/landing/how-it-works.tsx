@@ -7,7 +7,7 @@ const STEPS: {
   {
     n: 1,
     title: "Deploy",
-    body: "One click on the Deploy button forks the repo, provisions Upstash Redis for durable storage, and boots the instance on your Vercel account. No CLI, no env-var wrangling.",
+    body: "Fork the repo, import it into Vercel and attach a free Upstash Redis for durable storage. The welcome page mints your token. No CLI, no env-var wrangling.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -26,7 +26,7 @@ const STEPS: {
   {
     n: 2,
     title: "Connect",
-    body: "Paste the HTTP endpoint and your token into Claude Desktop, Claude Code, Cursor, Windsurf, or any MCP-compatible client. One URL, every tool on it.",
+    body: "Add the endpoint to Claude, Claude Code, Cursor, Codex or ChatGPT — one token per client, so each one can wear its own hat.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -44,8 +44,8 @@ const STEPS: {
   },
   {
     n: 3,
-    title: "Serve",
-    body: "All 86+ built-in tools are live immediately. Your AI clients share one backend — same tools, same data, zero duplication.",
+    title: "Stock",
+    body: "Write or import your skills, fill in your profile, plug your vault. Every connected client loads them on demand — no copy-pasting between apps.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -65,7 +65,7 @@ const STEPS: {
   {
     n: 4,
     title: "Extend",
-    body: "Add new tools via API Connections (any HTTP API, no code) or Skills (prompt-driven workflows). Your backend grows with your stack.",
+    body: "Turn on the long-tail connectors you need — LinkedIn, WhatsApp, browser — or wire any HTTP API as a tool, no code.",
     icon: (
       <svg
         className="w-5 h-5"

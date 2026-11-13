@@ -47,7 +47,90 @@ export function nativeSyncCommand(origin: string, dir: string): string {
   ].join("\n");
 }
 
-export function SkillsEverywherePanel() {
+function MasterRelay({ tags }: { tags: string[] }) {
+  const [tag, setTag] = useState("");
+  const href = `/api/config/skills/relay-master${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`;
+  const steps: { client: string; items: string[] }[] = [
+    {
+      client: "claude.ai",
+      items: [
+        "Settings → Connectors: add your Kebab House MCP URL, if not done yet.",
+        "Customize → Skills → Upload skill: pick the downloaded .zip.",
+        "Check that the kebab-house skill is on, then ask e.g. “run my morning brief”.",
+      ],
+    },
+    {
+      client: "ChatGPT",
+      items: [
+        "Settings → Apps & Connectors: add your Kebab House MCP URL, if not done yet.",
+        "Skills → Create → Upload from your computer: pick the downloaded .zip.",
+        "Enable the connector in the chat, then ask e.g. “prepare my next meeting”.",
+      ],
+    },
+  ];
+  return (
+    <div>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+        2 · claude.ai / ChatGPT — one master relay for the whole library
+      </h4>
+      <p className="mb-2">
+        A single native skill, <code>kebab-house</code>, whose description lists your skills. When a
+        request matches, the model reads your profile (<code>my_context</code>), finds the skill (
+        <code>skills_list</code>) and loads it (<code>skill_load</code>). Install it once per
+        account.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => download(href)}
+          className="text-xs font-medium text-accent px-3 py-1.5 border border-accent/30 rounded-md hover:bg-accent/10 whitespace-nowrap"
+        >
+          Master relay (.zip)
+        </button>
+        {tags.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-text-muted">
+            Only skills tagged
+            <select
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              className="text-xs bg-bg border border-border rounded-md px-2 py-1 text-text"
+              aria-label="Limit the master relay to one tag"
+            >
+              <option value="">all skills</option>
+              {tags.map((t) => (
+                <option key={t} value={t}>
+                  #{t}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {steps.map((s) => (
+          <div key={s.client} className="border border-border rounded-md px-3 py-2 bg-bg">
+            <p className="text-xs font-semibold text-text mb-1">{s.client}</p>
+            <ol className="list-decimal pl-4 space-y-0.5 text-xs">
+              {s.items.map((it) => (
+                <li key={it}>{it}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-text-muted mt-2">
+        The relay only carries skill <em>names</em>: edits to a skill are live right away, but
+        download and re-upload the relay when you add, rename or remove many skills.
+      </p>
+    </div>
+  );
+}
+
+function download(href: string) {
+  window.location.href = href;
+}
+
+export function SkillsEverywherePanel({ tags = [] }: { tags?: string[] }) {
   const [open, setOpen] = useState(false);
   const [origin, setOrigin] = useState("https://your-kebab.vercel.app");
   useEffect(() => {
@@ -86,21 +169,21 @@ export function SkillsEverywherePanel() {
               doesn&apos;t pick a skill on its own, say &quot;use my <em>name</em> skill&quot;.
             </p>
           </div>
+          <MasterRelay tags={tags} />
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              2 · Native trigger in claude.ai / ChatGPT — install a relay once
+              3 · Optional — a relay per skill
             </h4>
             <p>
-              For skills you want the app to trigger by itself, download its{" "}
-              <strong>relay .zip</strong> (skill → Actions) and upload it once: Claude → Customize →
-              Skills → Upload; ChatGPT → Skills → Create → Upload from your computer. The relay only
+              For a skill you want the app to trigger on its own exact description, download its{" "}
+              <strong>relay .zip</strong> (skill → Actions) and upload it the same way. It only
               carries the description and tells the model to <code>skill_load</code> the real skill
               from Kebab, so you never have to re-upload after editing.
             </p>
           </div>
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              3 · Claude Code / Codex — native copy
+              4 · Claude Code / Codex — native copy
             </h4>
             <p className="mb-2">
               Pull the whole library (scoped to the token&apos;s skill tags) into the agent&apos;s
@@ -115,7 +198,7 @@ export function SkillsEverywherePanel() {
           </div>
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-              4 · Profiles
+              5 · Profiles
             </h4>
             <p>
               Tag skills (<code>perso</code>, <code>cadens</code>…), then in{" "}

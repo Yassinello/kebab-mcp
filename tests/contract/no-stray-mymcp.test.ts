@@ -33,6 +33,8 @@ const ALLOWLIST: readonly string[] = [
   "src/core/tracing.ts",
   // Boot-path readers that still reference legacy env-var keys directly:
   "src/core/config.ts",
+  // Kebab House phase 0: reads the legacy personal-context KV keys in place.
+  "src/core/profiles.ts",
   "src/core/env-safety.ts",
   "src/core/first-run.ts",
   "src/core/kv-store.ts",

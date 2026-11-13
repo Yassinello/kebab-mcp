@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useState } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -337,7 +338,7 @@ export const PACKS: ConnectorDef[] = [
     icon: "L",
     setupGuide: [
       "Open Linear → Settings → Account → Security & access → Personal API keys",
-      "Click New API key, label it (e.g. Kebab MCP), and copy the secret",
+      `Click New API key, label it (e.g. ${PRODUCT.name}), and copy the secret`,
       "Paste it below",
     ],
     vars: [
@@ -360,7 +361,7 @@ export const PACKS: ConnectorDef[] = [
     setupGuide: [
       "Open airtable.com/create/tokens and click Create new token",
       "Add scopes: data.records:read, data.records:write, schema.bases:read",
-      "Under Access, add every base you want Kebab MCP to reach",
+      `Under Access, add every base you want ${PRODUCT.name} to reach`,
       "Copy the generated token and paste it below",
     ],
     vars: [

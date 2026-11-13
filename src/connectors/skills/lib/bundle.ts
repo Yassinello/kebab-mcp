@@ -261,6 +261,70 @@ export function relaySkillMd(name: string, description: string): string {
   });
 }
 
+// ── Master relay (Kebab House phase 0, RLY-01/02) ───────────────────────
+
+/** Folder / Agent Skills name of the master relay. */
+export const MASTER_RELAY_NAME = "kebab-house";
+
+/**
+ * Description of the master relay: when to use it, then the names of the
+ * skills it routes to, truncated on a whole name ("…and N more") so the
+ * result always fits the Agent Skills 1024-character limit.
+ */
+export function masterRelayDescription(skillNames: string[], tag: string | null = null): string {
+  const scope = tag ? ` (#${tag})` : "";
+  const intro =
+    `Use for any personal or recurring task where the user's own way of working matters ` +
+    `(routines, notes, profile, projects, preferences) or when they mention one of their skills. ` +
+    `Kebab House holds the user's profile and personal skills library${scope}.`;
+  if (skillNames.length === 0) {
+    return `${intro} No skills yet: call skills_list to check.`;
+  }
+  const head = `${intro} Skills: `;
+  const shown: string[] = [];
+  for (let i = 0; i < skillNames.length; i++) {
+    const rest = skillNames.length - i - 1;
+    const tail = rest > 0 ? `, and ${rest} more (see skills_list).` : ".";
+    const candidate = [...shown, skillNames[i]].join(", ");
+    if ((head + candidate + tail).length > MAX_DESCRIPTION_CHARS) break;
+    shown.push(skillNames[i]!);
+  }
+  const hidden = skillNames.length - shown.length;
+  if (shown.length === 0) {
+    return `${intro} ${skillNames.length} skills: call skills_list to see them.`;
+  }
+  return hidden > 0
+    ? `${head}${shown.join(", ")}, and ${hidden} more (see skills_list).`
+    : `${head}${shown.join(", ")}.`;
+}
+
+/**
+ * One native skill for claude.ai / ChatGPT that routes every matching
+ * request to the Kebab House library (instead of one relay per skill).
+ */
+export function masterRelaySkillMd(skillNames: string[], tag: string | null = null): string {
+  const listArgs = tag ? ` with \`tag: "${tag}"\`` : "";
+  return serializeSkillMd({
+    name: MASTER_RELAY_NAME,
+    description: masterRelayDescription(skillNames, tag),
+    tags: [],
+    arguments: [],
+    metadata: { source: "kebab-mcp", kind: "master-relay", ...(tag ? { tag } : {}) },
+    body: [
+      `# Kebab House`,
+      ``,
+      `The user's profile and personal skills live in Kebab House (an MCP connector), so they stay identical in every AI client. This file only routes: the real instructions come from Kebab House.`,
+      ``,
+      `1. Call \`my_context\` to load the user's profile (who they are, projects, preferences).`,
+      `2. Call \`skills_list\`${listArgs} to see their skills and what each one is for.`,
+      `3. Pick the skill that matches the request. If none fits, answer normally, using the profile.`,
+      `4. Call \`skill_load\` with that skill's name and follow the returned instructions exactly (they replace this text). Fetch bundled files with \`skill_read_file\` only when the skill asks for them.`,
+      ``,
+      `If the Kebab House connector (tools \`my_context\`, \`skills_list\`, \`skill_load\`) is not available in this conversation, say so and stop.`,
+    ].join("\n"),
+  });
+}
+
 // ── Zip ─────────────────────────────────────────────────────────────────
 
 export interface ZipSkillInput {

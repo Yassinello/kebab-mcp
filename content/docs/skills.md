@@ -13,11 +13,16 @@ A **skill** is a reusable set of instructions in the open **Agent Skills** forma
 | Channel | Clients | What to do |
 |---|---|---|
 | **On demand over MCP** | every client connected to Kebab | nothing — the catalogue is in Kebab's server instructions; the model calls `skill_load(name)` (and `skills_list`, `skill_read_file`) |
+| **Master relay** | claude.ai, ChatGPT | upload *Master relay (.zip)* once per account (`/config → Skills → Use your skills in every AI client`). One native `kebab-house` skill whose description lists your skill names; it calls `my_context`, `skills_list`, then `skill_load`. Optional tag filter (one relay per account / hat). Re-download it when you add, rename or remove many skills |
 | **Relay skill** | claude.ai, ChatGPT | upload the skill's *relay .zip* once (Skills → Upload). It triggers natively and loads the live version from Kebab — no re-upload after edits |
 | **Native copy** | Claude Code, Codex | run the one-liner from `/config → Skills → Use your skills in every AI client` (pulls `/api/skills/bundle` with your MCP token, prunes removed skills, unzips into `~/.claude/skills` or `~/.codex/skills`) |
 | **Resources** | clients supporting MCP skills (SEP-2640) | `skill://<name>/SKILL.md` and `skill://<name>/<file>` |
 
 Skills also appear as MCP prompts (slash commands in Claude Desktop / Claude Code). Skills created before v0.23 — or any skill with **Also expose as a dedicated tool** ticked — additionally keep a `skill_<id>` tool; new skills don't, so 50 skills cost 3 tools instead of 50.
+
+## Templates (rituals)
+
+`/config → Skills → Templates` offers ready-made rituals: `remember`, `morning-brief`, `meeting-prep`, `weekly-review`, `read-later`. **Install** copies one into your library (tag `rituals`) through the regular import, so it is versioned and yours to edit. Installing again updates it in place (new version, never a duplicate) and keeps your display name and extra tags. They read your profile (`my_context`), use your notes when the vault is connected, use a calendar or email tool when the client has one, and skip what is not available. The sources live in `content/skill-templates/<name>/SKILL.md`; after editing one, run `npm run gen:skill-templates`.
 
 ## Profiles (tags)
 

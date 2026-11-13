@@ -12,7 +12,6 @@ import { vaultRecentSchema, handleVaultRecent } from "./tools/vault-recent";
 import { vaultStatsSchema, handleVaultStats } from "./tools/vault-stats";
 import { vaultBacklinksSchema, handleVaultBacklinks } from "./tools/vault-backlinks";
 import { vaultDueSchema, handleVaultDue } from "./tools/vault-due";
-import { handleMyContext } from "./tools/my-context";
 import { getConfig } from "@/core/config-facade";
 import { vaultResources } from "./resources";
 
@@ -181,14 +180,6 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Find notes with a 'resurface' frontmatter field whose date has passed. Supports resurface: YYYY-MM-DD (date-based) and resurface: when_relevant (always included). Use for spaced repetition, reminders, and resurfacing forgotten insights.",
       schema: vaultDueSchema,
       handler: async (args) => handleVaultDue(args),
-      destructive: false,
-    }),
-    defineTool({
-      name: "my_context",
-      description:
-        "Get personal context (role, active projects, priorities, tech stack). Reads from a configurable path in the vault (default: System/context.md).",
-      schema: {},
-      handler: async () => handleMyContext(),
       destructive: false,
     }),
   ],

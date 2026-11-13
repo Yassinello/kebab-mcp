@@ -90,7 +90,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Obsidian Vault",
     description: "Read, search, and write markdown notes in a GitHub-hosted Obsidian vault.",
     requiredEnvVars: ["GITHUB_PAT", "GITHUB_REPO"],
-    toolCount: 14,
+    toolCount: 13,
     loader: () => import("@/connectors/vault/manifest").then((m) => m.vaultConnector),
   },
   {
@@ -133,6 +133,15 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     requiredEnvVars: ["COMPOSIO_API_KEY"],
     toolCount: 2,
     loader: () => import("@/connectors/composio/manifest").then((m) => m.composioConnector),
+  },
+  {
+    id: "context",
+    label: "Profile",
+    description: "Your personal profile (who you are, current projects, preferences), one per hat.",
+    requiredEnvVars: [],
+    toolCount: 2,
+    core: true,
+    loader: () => import("@/connectors/context/manifest").then((m) => m.contextConnector),
   },
   {
     id: "skills",

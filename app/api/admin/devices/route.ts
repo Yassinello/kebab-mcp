@@ -43,6 +43,7 @@ import {
   rotateDeviceToken,
   setDeviceConnectors,
   setDeviceSkillTags,
+  setDeviceProfile,
 } from "@/core/devices";
 import { mintDeviceInvite } from "@/core/device-invite";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
@@ -74,6 +75,32 @@ interface PostBody {
   label?: string;
   connectors?: string[] | null;
   skillTags?: string[] | null;
+  profile?: string | null;
+}
+
+async function handleSetProfile(body: PostBody): Promise<Response> {
+  const targetId = body.tokenId;
+  if (!targetId || typeof targetId !== "string") {
+    return NextResponse.json({ error: "missing_tokenId" }, { status: 400 });
+  }
+  const profile = body.profile;
+  if (profile !== null && profile !== undefined && typeof profile !== "string") {
+    return NextResponse.json({ error: "invalid_profile" }, { status: 400 });
+  }
+  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
+  if (!tokens.some((t) => tokenId(t) === targetId)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  try {
+    await setDeviceProfile(targetId, profile ?? null);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const msg = toMsg(err);
+    if (msg.toLowerCase().includes("profile")) {
+      return NextResponse.json({ error: "invalid_profile", message: msg }, { status: 400 });
+    }
+    return NextResponse.json({ error: "set_profile_failed", message: msg }, { status: 500 });
+  }
 }
 
 async function handleSetSkillTags(body: PostBody): Promise<Response> {
@@ -222,6 +249,8 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
       return handleSetConnectors(body);
     case "set-skill-tags":
       return handleSetSkillTags(body);
+    case "set-profile":
+      return handleSetProfile(body);
     case "invite":
       return handleInvite(body);
     default:
