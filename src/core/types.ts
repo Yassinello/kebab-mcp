@@ -70,6 +70,12 @@ export interface ToolDefinition {
    * every other connector. See `src/core/tool-annotations.ts`.
    */
   openWorld?: boolean;
+  /**
+   * Kebab House phase 1 (TRU-02): the tool returns content written by third
+   * parties; its text output is framed as untrusted. Most tools are listed in
+   * src/core/untrusted-content.ts instead.
+   */
+  externalContent?: boolean;
   /** Short one-line summary (optional, for docs/dashboard) */
   summary?: string;
   /** Usage example (optional, for docs/dashboard) */
@@ -113,6 +119,12 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   deprecated?: string;
   destructive: boolean;
   openWorld?: boolean;
+  /**
+   * Kebab House phase 1 (TRU-02): the tool returns content written by third
+   * parties; its text output is framed as untrusted. Most tools are listed in
+   * src/core/untrusted-content.ts instead.
+   */
+  externalContent?: boolean;
 }
 
 /**

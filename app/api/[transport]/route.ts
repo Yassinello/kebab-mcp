@@ -33,6 +33,7 @@ import {
 import { toMsg } from "@/core/error-utils";
 import { registerResources, type ResourceProvider } from "@/core/resources";
 import { toolAnnotations } from "@/core/tool-annotations";
+import { frameUntrustedResult } from "@/core/untrusted-content";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -187,6 +188,9 @@ async function buildHandler(
   // env.changed which already invalidates the cache below.
   await primeDynamicCaches(enabledPacks);
 
+  // TRU-05: read-only OAuth clients (resolved once per request).
+  const writeAllowed = getCallerMeta()?.writeAllowed ?? true;
+
   return createMcpHandler(
     (server) => {
       for (const pack of enabledPacks) {
@@ -196,6 +200,9 @@ async function buildHandler(
         if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
 
         for (const tool of pack.manifest.tools) {
+          // TRU-05: an OAuth client without write access never sees
+          // destructive tools (and is refused below if it calls one).
+          if (tool.destructive && !writeAllowed) continue;
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
             : tool.description;
@@ -240,6 +247,19 @@ async function buildHandler(
                   isError: true,
                 };
               }
+              if (tool.destructive && !writeAllowed) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: JSON.stringify({
+                        error: `Tool "${tool.name}" changes things and this client is read-only. Allow writes for it in Kebab House → Settings → Devices.`,
+                      }),
+                    },
+                  ],
+                  isError: true,
+                };
+              }
               // v0.11 Phase 41: the pipeline wraps the whole request in
               // `runWithCredentials` (hydrateCredentialsStep) and the
               // outer / authStep's nested `requestContext.run` already
@@ -253,8 +273,11 @@ async function buildHandler(
               void tenantId; // silence unused (kept for signature compatibility)
               // SEC-05: expose the caller's connector scope to code that
               // invokes other tools on its behalf (Custom Tools runner).
-              const result = await runWithToolAccess({ connectorScope }, () =>
-                tool.handler(params)
+              // TRU-02: third-party content is framed as untrusted data.
+              const result = frameUntrustedResult(
+                tool.name,
+                await runWithToolAccess({ connectorScope }, () => tool.handler(params)),
+                { externalContent: tool.externalContent }
               );
               // Kebab House phase 0 (USE-01): weekly usage counters —
               // names only, recorded after the response is sent.
