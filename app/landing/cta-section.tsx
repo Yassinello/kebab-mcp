@@ -5,10 +5,11 @@ export default function CtaSection() {
     <section className="py-24 px-6 border-t border-slate-800">
       <div className="max-w-3xl mx-auto text-center">
         <h2 className="text-4xl font-bold text-white mb-4 tracking-tight">
-          Build your AI backend. Add extra sauce later.
+          Stock the kitchen once. Eat everywhere.
         </h2>
         <p className="text-slate-400 text-lg mb-10 leading-relaxed">
-          One deploy. Every AI client gets the same superpowers.
+          One deploy. Every AI client you use gets the same skills, the same profile and the same
+          memory.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a

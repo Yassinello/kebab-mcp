@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
+import { PRODUCT } from "@/core/constants/brand";
 
 export const runtime = "edge";
-export const alt = "Kebab MCP — Your AI's tools. Your tokens. Your infra.";
+export const alt = `${PRODUCT.name} — ${PRODUCT.tagline}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -68,7 +69,7 @@ export default async function OpengraphImage() {
           <circle cx="22.5" cy="14.7" r="3" fill="#fbbf24" />
           <path d="M26 14.2 L29 14.5 L26.5 16 Z" fill="#fbbf24" />
         </svg>
-        <span>Kebab MCP</span>
+        <span>{PRODUCT.name}</span>
       </div>
 
       {/* Main headline */}
@@ -76,17 +77,17 @@ export default async function OpengraphImage() {
         style={{
           display: "flex",
           flexDirection: "column",
-          fontSize: 72,
+          fontSize: 60,
           fontWeight: 800,
-          lineHeight: 1.05,
+          lineHeight: 1.08,
           letterSpacing: "-0.03em",
-          maxWidth: 720,
+          maxWidth: 760,
           marginBottom: 28,
         }}
       >
-        <span>Your AI&apos;s tools.</span>
-        <span>Your tokens.</span>
-        <span>Your infra.</span>
+        <span>Create your personal AI brain</span>
+        <span>with all the ingredients,</span>
+        <span style={{ color: "#fbbf24" }}>and eat it everywhere.</span>
       </div>
 
       {/* Subheadline */}
@@ -95,12 +96,12 @@ export default async function OpengraphImage() {
           display: "flex",
           fontSize: 30,
           color: "#94a3b8",
-          maxWidth: 820,
+          maxWidth: 700,
           lineHeight: 1.3,
           marginBottom: "auto",
         }}
       >
-        One MCP endpoint, every AI client. Self-hosted on your Vercel, with your keys.
+        One skills library, one profile, one memory vault — for every AI client you use.
       </div>
 
       {/* Footer row */}
@@ -117,11 +118,13 @@ export default async function OpengraphImage() {
         <div style={{ display: "flex", gap: 28 }}>
           <span>Claude</span>
           <span>·</span>
+          <span>Claude Code</span>
+          <span>·</span>
           <span>Cursor</span>
           <span>·</span>
-          <span>Windsurf</span>
+          <span>Codex</span>
           <span>·</span>
-          <span>any MCP client</span>
+          <span>ChatGPT</span>
         </div>
         <span style={{ color: "#fbbf24" }}>kebab-mcp</span>
       </div>

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { PRODUCT } from "@/core/constants/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kebab MCP — Dashboard",
-  description: "Personal MCP Server Dashboard",
+  title: `${PRODUCT.name} — Dashboard`,
+  description: PRODUCT.tagline,
 };
 
 /**

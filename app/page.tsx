@@ -2,18 +2,22 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import LandingPage from "./landing/landing-page";
 import { getConfig } from "@/core/config-facade";
+import { PRODUCT } from "@/core/constants/brand";
 import { isFirstRunMode, rehydrateBootstrapAsync } from "@/core/first-run";
 
 export const dynamic = "force-dynamic";
 
+const LANDING_TITLE = `${PRODUCT.name} — ${PRODUCT.tagline}`;
+const LANDING_DESCRIPTION =
+  "One skills library, one profile and one memory vault, shared by every AI client you use — Claude, Claude Code, Cursor, Codex, and ChatGPT (partial). A self-hosted hub, not an agent. Your Vercel, your keys, AGPL-3.0.";
+
 export const metadata: Metadata = {
-  title: "Kebab MCP — Your AI's tools. Your tokens. Your infra.",
-  description:
-    "One MCP endpoint that speaks to every AI client — Claude, Cursor, Windsurf, ChatGPT. Self-hosted on your Vercel, with your keys. 86+ pre-built tools, 5-minute deploy, AGPL-3.0.",
+  title: LANDING_TITLE,
+  description: LANDING_DESCRIPTION,
   openGraph: {
-    title: "Kebab MCP — Your AI's tools. Your tokens. Your infra.",
-    description:
-      "One MCP endpoint that speaks to every AI client — Claude, Cursor, Windsurf, ChatGPT. Self-hosted on your Vercel, with your keys. 86+ pre-built tools, 5-minute deploy, AGPL-3.0.",
+    title: LANDING_TITLE,
+    description: LANDING_DESCRIPTION,
+    siteName: PRODUCT.name,
   },
 };
 
