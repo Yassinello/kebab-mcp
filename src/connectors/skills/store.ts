@@ -97,7 +97,7 @@ export type Skill = z.infer<typeof skillSchema>;
 
 export const skillCreateInputSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().max(500).default(""),
+  description: z.string().max(1024).default(""),
   content: z.string().default(""),
   arguments: z.array(skillArgumentSchema).default([]),
   toolsAllowed: z.array(z.string()).default([]),

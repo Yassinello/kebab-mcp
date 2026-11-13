@@ -99,8 +99,8 @@ describe("template loader (RIT-01/02)", () => {
     expect(parsed.warnings).toEqual([]);
     expect(parsed.name).toBe(name);
     expect(parsed.description.length).toBeGreaterThan(80);
-    // Agent Skills limit is 1024; the Kebab store caps descriptions at 500.
-    expect(parsed.description.length).toBeLessThanOrEqual(500);
+    // Agent Skills limit: 1024 characters (the store accepts the same).
+    expect(parsed.description.length).toBeLessThanOrEqual(1024);
     expect(parsed.description).toMatch(/^Use /);
     expect(parsed.tags).toEqual([RITUALS_TAG]);
     expect(parsed.arguments).toEqual([]);
