@@ -82,9 +82,12 @@ export class ResourceDispatchError extends Error {
  * Their `list()` outputs are interleaved; resources/list preserves order.
  *
  * The `server` parameter is typed loosely as `unknown` to avoid leaking
- * the `mcp-handler` / `@modelcontextprotocol/sdk` internals into core —
- * consistent with the `registerPrompts` hook. Concrete shape: the SDK's
- * `McpServer` class exposes `server.server.setRequestHandler(schema, cb)`.
+ * the `mcp-handler` / `@modelcontextprotocol/server` internals into core —
+ * consistent with the `registerPrompts` hook. Concrete shape: the SDK v2
+ * `McpServer` exposes its low-level `Server` as `server.server`, whose
+ * `setRequestHandler(method, handler)` takes the spec method string
+ * (`"resources/list"`, `"resources/read"`) and parses the request with the
+ * spec schema for the era being served (2025 or 2026-07-28).
  */
 export function registerResources(server: unknown, providers: ResourceProvider[]): void {
   if (providers.length === 0) return;
@@ -106,7 +109,7 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
   // Cast through — we documented above why this is loose.
   const s = server as {
     server?: {
-      setRequestHandler: (schema: unknown, cb: (req: unknown) => Promise<unknown>) => void;
+      setRequestHandler: (method: string, cb: (req: unknown) => Promise<unknown>) => void;
       registerCapabilities?: (caps: Record<string, unknown>) => void;
     };
   };
@@ -118,23 +121,7 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
     return;
   }
 
-  // Lazy-import SDK schemas to avoid loading them when no connector
-  // exposes resources (zero-overhead for the base case).
-  //
-  // Cross-version-safe: if the SDK hasn't shipped these schemas (older
-  // version), we skip registration and warn the operator.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("@modelcontextprotocol/sdk/types.js") as Record<string, unknown>;
-    const ListResourcesRequestSchema = mod.ListResourcesRequestSchema;
-    const ReadResourceRequestSchema = mod.ReadResourceRequestSchema;
-    if (!ListResourcesRequestSchema || !ReadResourceRequestSchema) {
-      console.warn(
-        "[resources] SDK version missing ListResourcesRequestSchema / ReadResourceRequestSchema — skipping registration"
-      );
-      return;
-    }
-
     // The SDK refuses resources/* handlers unless the server advertises the
     // `resources` capability ("Server does not support resources"). McpServer
     // only declares it when resources go through its own registerResource()
@@ -144,7 +131,7 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
       rpc.registerCapabilities({ resources: {} });
     }
 
-    rpc.setRequestHandler(ListResourcesRequestSchema, async () => {
+    rpc.setRequestHandler("resources/list", async () => {
       const all: ResourceSpec[] = [];
       for (const p of providers) {
         try {
@@ -159,7 +146,7 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
       return { resources: all };
     });
 
-    rpc.setRequestHandler(ReadResourceRequestSchema, async (req: unknown) => {
+    rpc.setRequestHandler("resources/read", async (req: unknown) => {
       const uri = (req as { params?: { uri?: string } })?.params?.uri;
       if (!uri || typeof uri !== "string") {
         throw new ResourceDispatchError("missing 'uri' param", "invalid_request");
@@ -193,15 +180,15 @@ export function registerResources(server: unknown, providers: ResourceProvider[]
  */
 export function __testMockServer(): {
   server: {
-    setRequestHandler: (schema: unknown, cb: (req: unknown) => Promise<unknown>) => void;
+    setRequestHandler: (method: string, cb: (req: unknown) => Promise<unknown>) => void;
   };
-  handlers: Map<unknown, (req: unknown) => Promise<unknown>>;
+  handlers: Map<string, (req: unknown) => Promise<unknown>>;
 } {
-  const handlers = new Map<unknown, (req: unknown) => Promise<unknown>>();
+  const handlers = new Map<string, (req: unknown) => Promise<unknown>>();
   return {
     server: {
-      setRequestHandler: (schema, cb) => {
-        handlers.set(schema, cb);
+      setRequestHandler: (method, cb) => {
+        handlers.set(method, cb);
       },
     },
     handlers,

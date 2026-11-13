@@ -1,16 +1,17 @@
 /**
- * Tests for the transport route's conditional tool registration:
- * - tool without outputSchema → server.tool() called (legacy)
- * - tool with outputSchema → server.registerTool() called
- * - Both branches produce ToolResult with matching shape
+ * Tests for the transport route's tool registration (SDK v2 / TRU-01):
+ * - every tool goes through server.registerTool() with title + annotations
+ * - tool without outputSchema → no outputSchema in the registration config
+ * - tool with outputSchema → outputSchema present (structuredContent path)
+ * - Both registrations produce ToolResult with matching shape
  *
  * We test this by spying on the McpServer methods injected into createMcpHandler.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Spy registry: captures which registration fn was called for which tool name
-const registered: Record<string, "tool" | "registerTool"> = {};
+// Spy registry: captures the registration config + callback per tool name
+const configs: Record<string, Record<string, unknown>> = {};
 const handlerMap: Record<string, (params: Record<string, unknown>) => Promise<unknown>> = {};
 
 // Mock mcp-handler to intercept server calls
@@ -20,21 +21,12 @@ vi.mock("mcp-handler", () => {
     // Build a fake server and immediately run initFn to populate our spy maps
     const server = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tool: (name: string, ...args: any[]) => {
-        registered[name] = "tool";
-        // last arg is the callback
-        const cb = args[args.length - 1];
-        if (typeof cb === "function") handlerMap[name] = cb;
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      registerTool: (name: string, _config: unknown, cb: any) => {
-        registered[name] = "registerTool";
+      registerTool: (name: string, config: Record<string, unknown>, cb: any) => {
+        configs[name] = config;
         if (typeof cb === "function") handlerMap[name] = cb;
       },
       // Stub out resources/prompts registration
-      resource: vi.fn(),
       registerResource: vi.fn(),
-      prompt: vi.fn(),
       registerPrompt: vi.fn(),
     };
     initFn(server);
@@ -138,10 +130,10 @@ vi.mock("@/core/resources", () => ({
   registerResources: vi.fn(),
 }));
 
-describe("transport — conditional tool registration", () => {
+describe("transport — tool registration", () => {
   beforeEach(async () => {
     // Clear spy maps
-    for (const k of Object.keys(registered)) delete registered[k];
+    for (const k of Object.keys(configs)) delete configs[k];
     for (const k of Object.keys(handlerMap)) delete handlerMap[k];
 
     // Trigger route module evaluation to populate registered map
@@ -154,12 +146,29 @@ describe("transport — conditional tool registration", () => {
     );
   });
 
-  it("tool without outputSchema uses server.tool() (legacy path)", () => {
-    expect(registered["plain_tool"]).toBe("tool");
+  it("tool without outputSchema registers without an outputSchema", () => {
+    expect(configs["plain_tool"]).toBeDefined();
+    expect(configs["plain_tool"]).not.toHaveProperty("outputSchema");
+    expect(configs["plain_tool"]?.description).toBe("A tool without outputSchema");
   });
 
-  it("tool with outputSchema uses server.registerTool()", () => {
-    expect(registered["schema_tool"]).toBe("registerTool");
+  it("tool with outputSchema registers with an outputSchema", () => {
+    expect(configs["schema_tool"]?.outputSchema).toBeDefined();
+  });
+
+  it("TRU-01: every tool carries a title and annotations derived from the manifest", () => {
+    expect(configs["plain_tool"]?.title).toBe("Plain tool");
+    expect(configs["plain_tool"]?.annotations).toEqual({
+      title: "Plain tool",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    });
+    expect(configs["schema_tool"]?.annotations).toMatchObject({
+      title: "Schema tool",
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
   });
 
   it("both registration paths produce ToolResult with content array", async () => {

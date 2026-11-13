@@ -156,7 +156,7 @@ export const skillsConnector: ConnectorManifest = {
       legacy = listSkillsSync()
         .filter((s) => s.exposeAsTool !== false && isSkillVisible(s.tags ?? [], scope))
         // A legacy `skill_<id>` named like a library tool (ids `load`,
-        // `read_file`) would make server.tool() throw for every request.
+        // `read_file`) would make registerTool() throw for every request.
         .filter((s) => !RESERVED_SKILL_IDS.has(s.id))
         .map((s) => buildSkillTool(s));
     } catch {
@@ -203,14 +203,13 @@ export const skillsConnector: ConnectorManifest = {
    * itself has zero knowledge of skills-specific wiring.
    */
   registerPrompts: (serverUnknown) => {
-    // mcp-handler's server type isn't exported cleanly, so we narrow via
-    // a local shape that matches what we actually call. This keeps the
-    // core ConnectorManifest type independent of mcp-handler internals.
+    // We narrow the SDK v2 McpServer via a local shape that matches what we
+    // actually call. This keeps the core ConnectorManifest type independent
+    // of mcp-handler / @modelcontextprotocol/server internals.
     const server = serverUnknown as {
-      prompt: (
+      registerPrompt: (
         name: string,
-        description: string,
-        args: Record<string, z.ZodTypeAny>,
+        config: { description: string; argsSchema: z.ZodObject<Record<string, z.ZodTypeAny>> },
         handler: (
           args: Record<string, string | undefined>
         ) => Promise<{ messages: { role: "user"; content: { type: "text"; text: string } }[] }>
@@ -232,7 +231,11 @@ export const skillsConnector: ConnectorManifest = {
         }
 
         try {
-          server.prompt(skill.id, skill.description || skill.name, argsSchema, async (args) => {
+          const config = {
+            description: skill.description || skill.name,
+            argsSchema: z.object(argsSchema),
+          };
+          server.registerPrompt(skill.id, config, async (args) => {
             const latest = await getSkill(skill.id);
             if (!latest || !isSkillVisible(latest.tags ?? [], getCurrentSkillScope())) {
               return {

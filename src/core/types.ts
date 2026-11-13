@@ -42,6 +42,12 @@ export interface ToolResult {
 export interface ToolDefinition {
   /** MCP tool name (e.g., "gmail_inbox") */
   name: string;
+  /**
+   * Human-readable display title (MCP `title` + `annotations.title`).
+   * Optional — when omitted the transport derives one from `name`
+   * ("vault_read" → "Vault read"). See `src/core/tool-annotations.ts`.
+   */
+  title?: string;
   /** MCP tool description shown to the LLM */
   description: string;
   /** Zod schema for input validation (shape passed to `z.object(...)`) */
@@ -50,11 +56,20 @@ export interface ToolDefinition {
   handler: (args: Record<string, unknown>) => Promise<ToolResult>;
   /**
    * Optional JSON Schema for the tool's structured output.
-   * When present, the MCP transport uses server.registerTool() instead of
-   * the legacy server.tool() — enabling structured content in ToolResult.
-   * Only applies to custom API tools (api-connections connector).
+   * When present, the MCP transport registers the tool with an
+   * `outputSchema` so the client receives `structuredContent` alongside
+   * `content[]`. Only applies to custom API tools (api-connections connector).
    */
   outputSchema?: Record<string, unknown>;
+  /**
+   * TRU-01 — MCP `openWorldHint`. `true` when the tool interacts with an
+   * open world of external entities (a third-party API, the web, someone's
+   * inbox); `false` when its domain is closed (the user's own vault,
+   * skills, profile, server-local state). Optional — when omitted the
+   * transport defaults to `false` for local connectors and `true` for
+   * every other connector. See `src/core/tool-annotations.ts`.
+   */
+  openWorld?: boolean;
   /** Short one-line summary (optional, for docs/dashboard) */
   summary?: string;
   /** Usage example (optional, for docs/dashboard) */
@@ -89,6 +104,7 @@ export interface ToolDefinition {
  */
 export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   name: string;
+  title?: string;
   description: string;
   schema: TSchema;
   handler: (args: z.infer<z.ZodObject<TSchema>>) => Promise<ToolResult>;
@@ -96,6 +112,7 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   example?: string;
   deprecated?: string;
   destructive: boolean;
+  openWorld?: boolean;
 }
 
 /**
