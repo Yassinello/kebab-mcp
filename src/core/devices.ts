@@ -53,6 +53,10 @@ export interface DeviceRow {
   skillTags: string[] | null;
   /** Kebab House phase 0 — profile ("hat") served by my_context. `null` = default. */
   profile: string | null;
+  /** Kebab House phase 1 — `oauth` for clients authorized via OAuth, else `token`. */
+  kind?: "token" | "oauth";
+  /** OAuth clients: whether destructive (write) tools are allowed. */
+  writeAllowed?: boolean;
 }
 
 interface DeviceKVEntry {
@@ -64,6 +68,13 @@ interface DeviceKVEntry {
   skillTags?: string[];
   /** Kebab House phase 0 — optional profile name. Absent = default profile. */
   profile?: string;
+  /** Kebab House phase 1 — set for devices created by the OAuth flow. */
+  oauth?: { clientId: string; clientName: string };
+  /**
+   * Kebab House phase 1 (TRU-05) — OAuth devices are read-only unless this
+   * is true. Absent on static-token devices (no change for them).
+   */
+  writeAllowed?: boolean;
   /**
    * SEC-06 (2026-11 audit): set when the token was rotated or revoked.
    * On Vercel the `MCP_AUTH_TOKEN` env edit only lands on the next
@@ -159,6 +170,8 @@ async function updateDeviceEntry(
     if (prev.connectors !== undefined) entry.connectors = prev.connectors;
     if (prev.skillTags !== undefined) entry.skillTags = prev.skillTags;
     if (typeof prev.profile === "string") entry.profile = prev.profile;
+    if (prev.oauth && typeof prev.oauth === "object") entry.oauth = prev.oauth;
+    if (typeof prev.writeAllowed === "boolean") entry.writeAllowed = prev.writeAllowed;
     if (typeof prev.revokedAt === "string") entry.revokedAt = prev.revokedAt;
   }
   mutate(entry);
@@ -342,7 +355,90 @@ export async function listDevices(): Promise<DeviceRow[]> {
     const lastSeenAt = await getLastSeenAt(t);
     rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors, skillTags, profile });
   }
+  rows.push(...(await listOAuthDevices()));
   return rows;
+}
+
+/** Kebab House phase 1 — devices created by the OAuth flow (not revoked). */
+export async function listOAuthDevices(): Promise<DeviceRow[]> {
+  const kv = getContextKVStore();
+  const keys = await kvScanAll(kv, `${DEVICE_KEY_PREFIX}*`);
+  const rows: DeviceRow[] = [];
+  for (const key of keys) {
+    const id = key.slice(key.lastIndexOf(DEVICE_KEY_PREFIX) + DEVICE_KEY_PREFIX.length);
+    if (!/^[0-9a-f]{8}$/.test(id)) continue;
+    const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
+    if (state.kind !== "ok" || !state.entry.oauth || isRevoked(state.entry)) continue;
+    const e = state.entry;
+    rows.push({
+      tokenId: id,
+      label: typeof e.label === "string" && e.label ? e.label : "OAuth client",
+      createdAt: typeof e.createdAt === "string" ? e.createdAt : "unknown",
+      lastSeenAt: null,
+      connectors: e.connectors ?? null,
+      skillTags: e.skillTags ?? null,
+      profile: typeof e.profile === "string" ? e.profile : null,
+      kind: "oauth",
+      writeAllowed: e.writeAllowed === true,
+    });
+  }
+  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** True when `id` is an active (not revoked) OAuth device. */
+export async function isOAuthDevice(id: string): Promise<boolean> {
+  const state = parseDeviceEntry(await getContextKVStore().get(`${DEVICE_KEY_PREFIX}${id}`));
+  return state.kind === "ok" && Boolean(state.entry.oauth) && !isRevoked(state.entry);
+}
+
+/** Create the device entry of a newly authorized OAuth client. */
+export async function createOAuthDevice(input: {
+  id: string;
+  label: string;
+  clientId: string;
+  clientName: string;
+  connectors: string[] | null;
+  skillTags: string[] | null;
+  profile: string | null;
+  writeAllowed: boolean;
+}): Promise<void> {
+  const entry: DeviceKVEntry = {
+    label: input.label.trim().slice(0, LABEL_MAX_LEN) || "OAuth client",
+    createdAt: new Date().toISOString(),
+    oauth: { clientId: input.clientId, clientName: input.clientName },
+    writeAllowed: input.writeAllowed,
+  };
+  if (input.connectors !== null) entry.connectors = input.connectors;
+  if (input.skillTags !== null) entry.skillTags = input.skillTags;
+  if (input.profile) entry.profile = input.profile;
+  await getContextKVStore().set(`${DEVICE_KEY_PREFIX}${input.id}`, JSON.stringify(entry));
+}
+
+/** Toggle write access of an OAuth device (TRU-05). */
+export async function setDeviceWriteAllowed(id: string, allowed: boolean): Promise<void> {
+  await updateDeviceEntry(id, (e) => {
+    e.writeAllowed = allowed;
+  });
+}
+
+/** Revoke an OAuth device: tombstone (its tokens stop resolving at once). */
+export async function revokeOAuthDevice(id: string): Promise<void> {
+  const kv = getContextKVStore();
+  await writeRevocationTombstone(kv, `${DEVICE_KEY_PREFIX}${id}`);
+}
+
+/**
+ * Whether the caller device may use destructive tools (TRU-05). Static
+ * tokens: always (unchanged behaviour). OAuth devices: only when allowed.
+ */
+export async function getDeviceWriteAllowedFrom(
+  id: string,
+  kv: { get(key: string): Promise<string | null> }
+): Promise<boolean> {
+  const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
+  if (state.kind !== "ok") return true;
+  if (!state.entry.oauth) return true;
+  return state.entry.writeAllowed === true;
 }
 
 /**

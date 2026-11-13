@@ -115,13 +115,21 @@ function escHtml(s: string): string {
  * clean URL.
  */
 function renderSignInPage(returnPath: string): string {
-  const safeReturn = escHtml(returnPath);
+  // A GET form replaces the action's query string, so carry the return
+  // path's parameters as hidden fields (OAuth authorize requests and
+  // /config?tab=… links keep them after sign-in).
+  const parsed = new URL(returnPath, "http://local");
+  const safeReturn = escHtml(parsed.pathname);
+  const hiddenFields = Array.from(parsed.searchParams.entries())
+    .filter(([k]) => k !== "token")
+    .map(([k, v]) => `<input type="hidden" name="${escHtml(k)}" value="${escHtml(v)}">`)
+    .join("");
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in — Kebab MCP</title>
+<title>Sign in — Kebab House</title>
 <style>
   :root {
     --bg: #fafaf7;
@@ -206,7 +214,7 @@ function renderSignInPage(returnPath: string): string {
   <div class="logo">🥙</div>
   <h1>Sign in to Kebab MCP</h1>
   <p>Paste your admin token to access the dashboard.</p>
-  <form method="get" action="${safeReturn}" autocomplete="off">
+  <form method="get" action="${safeReturn}" autocomplete="off">${hiddenFields}
     <label for="token">Admin token</label>
     <input
       id="token"
@@ -370,6 +378,9 @@ export async function proxy(request: NextRequest) {
   const adminGated =
     pathname === "/config" ||
     pathname.startsWith("/config/") ||
+    // Kebab House phase 1: OAuth consent page and send approvals are owner-only.
+    pathname === "/oauth/authorize" ||
+    pathname.startsWith("/approve/") ||
     pathname.startsWith("/api/config/") ||
     pathname === "/setup"; // legacy: still gate it in case someone hits it before redirect
 
@@ -422,6 +433,22 @@ export async function proxy(request: NextRequest) {
       // API consumers (curl, fetch, MCP clients hitting /api/config/*)
       // still get a machine-friendly text response so they fail loudly.
       const isApiPath = pathname.startsWith("/api/");
+      // The admin cookie is SameSite=Strict, so it is not sent when an MCP
+      // client (claude.ai, ChatGPT…) navigates here from its own site. A
+      // same-origin reload does send it: an already signed-in owner goes
+      // straight to the consent page instead of a sign-in form.
+      if (
+        !isApiPath &&
+        request.method === "GET" &&
+        request.headers.get("sec-fetch-site") === "cross-site"
+      ) {
+        return finalize(
+          new NextResponse(
+            `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0"><title>Kebab House</title><p>Continuing…</p>`,
+            { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+          )
+        );
+      }
       if (isApiPath) {
         return finalize(
           new NextResponse(
