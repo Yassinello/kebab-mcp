@@ -7,6 +7,7 @@ import { SkillComposer } from "./skill-composer";
 import { SkillEditPage } from "./skill-edit-page";
 import { BundleImportModal } from "./skills-bundle-import-modal";
 import { SkillsEverywherePanel } from "./skills-everywhere";
+import { SkillTemplatesSection } from "./skills-templates";
 
 interface SkillArgument {
   name: string;
@@ -502,7 +503,16 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
         )}
       </div>
 
-      <SkillsEverywherePanel />
+      <SkillsEverywherePanel tags={allTags.map(([t]) => t)} />
+
+      <SkillTemplatesSection
+        refreshKey={skills.map((sk) => `${sk.id}:${sk.updatedAt}`).join("|")}
+        onInstalled={async (message) => {
+          setFlash(message);
+          setTimeout(() => setFlash(null), 2500);
+          await reload();
+        }}
+      />
 
       {bundleImportOpen && (
         <BundleImportModal
@@ -554,7 +564,8 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
       {skills.length === 0 && (
         <div className="border border-border rounded-lg p-8 text-center">
           <p className="text-sm text-text-dim">
-            No skills defined yet. Click <strong>+ New skill</strong> to create your first one.
+            No skills defined yet. Install a template above, or click <strong>+ New skill</strong>{" "}
+            to create your own.
           </p>
         </div>
       )}
