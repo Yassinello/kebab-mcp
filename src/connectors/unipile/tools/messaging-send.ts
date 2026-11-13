@@ -25,7 +25,12 @@ import {
   WHATSAPP_ATTACHMENT_MIMETYPES,
   type AttachmentInput,
 } from "../lib/attachments";
-import { accountIdField, actorUserIdField, confirmField } from "../lib/common-schema";
+import {
+  accountIdField,
+  actorUserIdField,
+  confirmField,
+  previewIdField,
+} from "../lib/common-schema";
 import { digitsOnly } from "../lib/text-match";
 import { envelope, runGuardedWrite, verifyOutbound, type PrepareResult } from "../lib/write-guard";
 import {
@@ -56,6 +61,7 @@ export const whatsappSendMessageSchema = {
   text: z.string().min(1).max(4096).describe("Message text (≤4096 chars)."),
   attachments: attachmentsSchema(WHATSAPP_ATTACHMENT_MIMETYPES),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountIdField("WhatsApp"),
   actor_user_id: actorUserIdField,
 };
@@ -70,6 +76,7 @@ export const linkedinReplySchema = {
   text: z.string().min(1).max(8000).describe("Reply text (≤8000 chars)."),
   attachments: attachmentsSchema(LINKEDIN_ATTACHMENT_MIMETYPES),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountIdField("LinkedIn"),
   actor_user_id: actorUserIdField,
 };

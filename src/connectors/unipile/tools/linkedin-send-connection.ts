@@ -40,6 +40,7 @@
  */
 
 import { z } from "zod";
+import { previewIdField } from "../lib/common-schema";
 import type { ToolResult } from "@/core/types";
 import { getUnipileClient } from "../lib/client";
 import { withRetry } from "../lib/retry";
@@ -76,6 +77,7 @@ export const linkedinSendConnectionSchema = {
     .describe(
       "Optional connection request note (≤300 chars LinkedIn cap). Changing 1 char in the note bypasses dedup — this is intentional (D-05)."
     ),
+  preview_id: previewIdField,
   account_id: z
     .string()
     .optional()

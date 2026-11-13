@@ -115,7 +115,14 @@ function escHtml(s: string): string {
  * clean URL.
  */
 function renderSignInPage(returnPath: string): string {
-  const safeReturn = escHtml(returnPath);
+  // A GET form replaces the action's query string with its own fields, so
+  // the return URL's parameters (e.g. the approval link's `sig`) are carried
+  // as hidden inputs; otherwise signing in would drop them.
+  const ret = new URL(returnPath, "http://placeholder.invalid");
+  const safeReturn = escHtml(ret.pathname);
+  const hiddenInputs = [...ret.searchParams]
+    .map(([k, v]) => `<input type="hidden" name="${escHtml(k)}" value="${escHtml(v)}">`)
+    .join("\n    ");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -207,6 +214,7 @@ function renderSignInPage(returnPath: string): string {
   <h1>Sign in to Kebab MCP</h1>
   <p>Paste your admin token to access the dashboard.</p>
   <form method="get" action="${safeReturn}" autocomplete="off">
+    ${hiddenInputs}
     <label for="token">Admin token</label>
     <input
       id="token"
@@ -229,6 +237,28 @@ function renderSignInPage(returnPath: string): string {
     </ul>
   </details>
 </main>
+</body>
+</html>`;
+}
+
+/**
+ * TRU-04: tiny same-origin hop for approval links opened from another site.
+ * A meta refresh (no script, so no CSP nonce needed) re-navigates from our
+ * own origin, which makes the browser attach the SameSite=Strict admin
+ * cookie. The visible link is a fallback for browsers that ignore it.
+ */
+function renderSameSiteBounce(returnPath: string): string {
+  const safe = escHtml(returnPath);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=${safe}">
+<title>Opening approval — Kebab MCP</title>
+</head>
+<body style="font:15px system-ui,sans-serif;padding:24px">
+<p><a href="${safe}">Continue to the approval page</a></p>
 </body>
 </html>`;
 }
@@ -371,6 +401,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/config" ||
     pathname.startsWith("/config/") ||
     pathname.startsWith("/api/config/") ||
+    // TRU-04: out-of-band approval of outgoing actions (same admin auth as /config).
+    pathname.startsWith("/approve/") ||
     pathname === "/setup"; // legacy: still gate it in case someone hits it before redirect
 
   // SEC-12 (2026-11 audit): mirror the Node-side SEC-A-03 guard
@@ -435,6 +467,27 @@ export async function proxy(request: NextRequest) {
       const returnUrl = new URL(request.url);
       returnUrl.searchParams.delete("token");
       const returnPath = returnUrl.pathname + returnUrl.search;
+      // TRU-04: approval links are opened from the AI client (claude.ai,
+      // ChatGPT…), a cross-site navigation on which browsers withhold the
+      // SameSite=Strict admin cookie. Re-request the same URL once from our
+      // own origin (a same-site navigation carries the cookie); a second
+      // miss falls through to the sign-in page below.
+      if (
+        pathname.startsWith("/approve/") &&
+        request.method === "GET" &&
+        request.headers.get("sec-fetch-site") === "cross-site"
+      ) {
+        return finalize(
+          new NextResponse(renderSameSiteBounce(returnPath), {
+            status: 200,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-store",
+              "Referrer-Policy": "no-referrer",
+            },
+          })
+        );
+      }
       return finalize(
         new NextResponse(renderSignInPage(returnPath), {
           status: 401,

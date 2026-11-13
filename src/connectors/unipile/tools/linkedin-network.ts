@@ -19,6 +19,7 @@ import {
   actorUserIdField,
   confirmField,
   jsonResult,
+  previewIdField,
 } from "../lib/common-schema";
 import { matchesAllTerms, queryTerms } from "../lib/text-match";
 import { runGuardedWrite, type PrepareResult } from "../lib/write-guard";
@@ -227,6 +228,7 @@ export const linkedinReactPostSchema = {
     .default("like")
     .describe("Reaction type (default like)."),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountField,
   actor_user_id: actorUserIdField,
 };
@@ -263,6 +265,7 @@ export const linkedinCommentPostSchema = {
   post: postField,
   text: z.string().min(1).max(1250).describe("Comment text (≤1250 chars)."),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountField,
   actor_user_id: actorUserIdField,
 };
@@ -301,6 +304,7 @@ export const linkedinCreatePostSchema = {
     .max(3000)
     .describe("Post text (≤3000 chars). Published publicly from the account."),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountField,
   actor_user_id: actorUserIdField,
 };
@@ -337,6 +341,7 @@ export const linkedinCancelInvitationSchema = {
     .max(200)
     .describe("Pending invitation id from linkedin_list_pending."),
   confirm: confirmField,
+  preview_id: previewIdField,
   account_id: accountField,
   actor_user_id: actorUserIdField,
 };
