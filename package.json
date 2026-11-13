@@ -34,6 +34,7 @@
     "lint:unused": "knip --config config/knip.ts",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "scaffold:connector": "npx tsx scripts/scaffold-connector.ts",
+    "gen:skill-templates": "npx tsx scripts/generate-skill-templates.ts",
     "format": "prettier --write \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
     "test:contract": "npx tsx scripts/contract-test.ts",

@@ -3,7 +3,7 @@
  */
 import "./setup";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SkillsTab } from "../../app/config/tabs/skills";
 
 // Mock next/navigation — SkillsTab reads useRouter() + useSearchParams()
@@ -108,5 +108,72 @@ describe("SkillsTab", () => {
       expect(screen.getByText("weekly-status")).toBeInTheDocument();
       expect(screen.getByText("Draft a weekly status report")).toBeInTheDocument();
     });
+  });
+
+  it("lists ritual templates with an Install button that posts to the templates route", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      calls.push({ url, ...(init ? { init } : {}) });
+      const body = url.startsWith("/api/config/skills/templates")
+        ? init?.method === "POST"
+          ? { ok: true, id: "morning_brief", action: "created" }
+          : {
+              ok: true,
+              templates: [
+                {
+                  id: "remember",
+                  name: "remember",
+                  title: "Remember",
+                  description: "Use when the user says remember this",
+                  icon: "🧠",
+                  tags: ["rituals"],
+                  status: "installed",
+                },
+                {
+                  id: "morning-brief",
+                  name: "morning-brief",
+                  title: "Morning brief",
+                  description: "Use when the user starts their day",
+                  icon: "☀️",
+                  tags: ["rituals"],
+                  status: "available",
+                },
+              ],
+            }
+        : { ok: true, skills: [] };
+      return { ok: true, json: () => Promise.resolve(body) } as unknown as Response;
+    });
+
+    render(<SkillsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "Templates" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("Morning brief")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Installed remember" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Install morning-brief" }));
+    await waitFor(() => {
+      const install = calls.find(
+        (c) => c.url === "/api/config/skills/templates" && c.init?.method === "POST"
+      );
+      expect(install).toBeDefined();
+      expect(JSON.parse(String(install!.init!.body))).toEqual({ id: "morning-brief" });
+    });
+  });
+
+  it("offers the master relay download with install steps in 'Use everywhere'", async () => {
+    render(<SkillsTab />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/use your skills in every ai client/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/use your skills in every ai client/i));
+    expect(screen.getByRole("button", { name: "Master relay (.zip)" })).toBeInTheDocument();
+    expect(screen.getByText("claude.ai")).toBeInTheDocument();
+    expect(screen.getByText("ChatGPT")).toBeInTheDocument();
+    expect(
+      screen.getByText(/re-upload the relay when you add, rename or remove/i)
+    ).toBeInTheDocument();
   });
 });

@@ -5,7 +5,13 @@
 
 import { isSkillVisible } from "@/core/token-scope";
 import { getSkillFiles, listSkills, type Skill } from "../store";
-import { buildSkillsZip, relaySkillMd, toAgentName } from "./bundle";
+import {
+  MASTER_RELAY_NAME,
+  buildSkillsZip,
+  masterRelaySkillMd,
+  relaySkillMd,
+  toAgentName,
+} from "./bundle";
 import { skillMdFor } from "./library";
 
 /** Root manifest used by the native-sync one-liner to prune removed skills. */
@@ -26,6 +32,24 @@ export function exportRelayZip(skill: Skill): Uint8Array {
   return buildSkillsZip([
     { name, skillMd: relaySkillMd(name, skill.description || skill.name), files: {} },
   ]);
+}
+
+/**
+ * Master relay (Kebab House RLY-01/02): one `kebab-house/SKILL.md` whose
+ * description lists the library's skill names — optionally only those
+ * carrying `tag` (one relay per "hat" / client account).
+ */
+export async function exportMasterRelayZip(
+  tag: string | null
+): Promise<{ zip: Uint8Array; count: number }> {
+  const names = (await listSkills())
+    .filter((s) => !tag || (s.tags ?? []).includes(tag))
+    .map((s) => toAgentName(s.id))
+    .sort((a, b) => a.localeCompare(b));
+  const zip = buildSkillsZip([
+    { name: MASTER_RELAY_NAME, skillMd: masterRelaySkillMd(names, tag), files: {} },
+  ]);
+  return { zip, count: names.length };
 }
 
 export async function exportLibraryZip(
