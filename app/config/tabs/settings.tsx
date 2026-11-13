@@ -209,7 +209,7 @@ export function SettingsTab({
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                <label className="text-sm font-medium">Personal context</label>
+                <label className="text-sm font-medium">Profile (default)</label>
                 <InfoTooltip
                   title="What is the personal context file?"
                   body="A short markdown document that describes you (role, current projects, preferences). MCP clients can fetch it via the my_context tool to ground responses without you re-explaining everything every conversation. Two storage modes: store the markdown inline here (persists in the KV store), or point at a file inside your Obsidian vault if the Vault connector is active."
