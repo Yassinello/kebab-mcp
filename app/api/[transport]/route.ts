@@ -14,7 +14,11 @@ import {
   type TokenAccess,
   resolveTokenSkillScope,
   runWithSkillScope,
+  resolveCallerMeta,
+  runWithCallerMeta,
+  getCallerMeta,
 } from "@/core/token-scope";
+import { recordToolCall } from "@/core/usage";
 import {
   composeRequestPipeline,
   rehydrateStep,
@@ -101,6 +105,21 @@ async function primeDynamicCaches(
     });
   primeCache.set(key, { at: now, rev, promise });
   return promise;
+}
+
+/**
+ * Skill name a tool call counts for (USE-01): `skill_load` carries it in
+ * `name`; legacy per-skill tools are named `skill_<id>`.
+ */
+function skillNameForUsage(toolName: string, params: unknown): string | null {
+  if (toolName === "skill_load") {
+    const name = (params as { name?: unknown } | null)?.name;
+    return typeof name === "string" ? name : null;
+  }
+  if (toolName.startsWith("skill_") && toolName !== "skill_read_file") {
+    return toolName.slice("skill_".length);
+  }
+  return null;
 }
 
 /** Test-only: reset the prime cache. */
@@ -231,7 +250,20 @@ async function buildHandler(
               void tenantId; // silence unused (kept for signature compatibility)
               // SEC-05: expose the caller's connector scope to code that
               // invokes other tools on its behalf (Custom Tools runner).
-              return runWithToolAccess({ connectorScope }, () => tool.handler(params));
+              const result = await runWithToolAccess({ connectorScope }, () =>
+                tool.handler(params)
+              );
+              // Kebab House phase 0 (USE-01): weekly usage counters —
+              // names only, recorded after the response is sent.
+              if (!result.isError) {
+                const meta = getCallerMeta();
+                recordToolCall({
+                  tool: tool.name,
+                  client: meta?.label || meta?.tokenId || callerTokenId || "local",
+                  skill: skillNameForUsage(tool.name, params),
+                });
+              }
+              return result;
             },
             callerTokenId,
             pack.manifest.id,
@@ -364,13 +396,20 @@ async function transportHandler(ctx: PipelineContext): Promise<Response> {
   // Skills v2 §6: resolve the token's skill tag scope once, and keep it
   // ambient for the whole request (tools getter, tool handlers, prompts,
   // resources and the instructions block all read it).
-  const skillScope = await resolveTokenSkillScope(ctx.tokenId);
-  return runWithSkillScope(skillScope, async () => {
-    const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
-    const response = await mcpHandler(ctx.request);
-    response.headers.set("x-request-id", ctx.requestId);
-    return response;
-  });
+  const [skillScope, callerMeta] = await Promise.all([
+    resolveTokenSkillScope(ctx.tokenId),
+    // Kebab House phase 0: the caller's bound profile (my_context) and
+    // device label (usage counters), resolved once per request.
+    resolveCallerMeta(ctx.tokenId),
+  ]);
+  return runWithCallerMeta(callerMeta, () =>
+    runWithSkillScope(skillScope, async () => {
+      const mcpHandler = await buildHandler(ctx.tokenId, ctx.tenantId, ctx.requestId, access);
+      const response = await mcpHandler(ctx.request);
+      response.headers.set("x-request-id", ctx.requestId);
+      return response;
+    })
+  );
 }
 
 const pipeline = composeRequestPipeline(

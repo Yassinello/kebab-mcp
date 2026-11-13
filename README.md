@@ -49,7 +49,7 @@
    ┌────────────────────────────────────────────────────────────────────┐
    │                Kebab MCP  (your Vercel deploy)                     │
    │                                                                    │
-   │   /api/mcp  →  registry  →  97+ tools across 17 connectors         │
+   │   /api/mcp  →  registry  →  97+ tools across 18 connectors         │
    │                                                                    │
    │   Dashboard at /config: enable connectors, write Skills,           │
    │   add custom HTTP API tools, watch live logs.                      │
@@ -62,7 +62,7 @@
    └────────────────────────────────────────────────────────────────────┘
 ```
 
-**What it is.** A self-hosted MCP server framework that ships with 97+ pre-built tools across 17 connectors. Deploys to Vercel free tier. Open-source, AGPL-3.0.
+**What it is.** A self-hosted MCP server framework that ships with 97+ pre-built tools across 18 connectors. Deploys to Vercel free tier. Open-source, AGPL-3.0.
 
 **Why it exists.** Every AI client wants its own MCP server. Five clients × five tool sources = 25 half-broken integrations. Kebab is one backend that every client talks to.
 
@@ -303,7 +303,7 @@ src/
       manifest.ts      ← Connector definition (single source of truth)
       lib/             ← Gmail, Calendar, Contacts, Drive, Chat wrappers
       tools/           ← Individual tool handlers
-    vault/             ← Obsidian Vault (14 tools)
+    vault/             ← Obsidian Vault (13 tools)
     browser/ slack/ notion/ apify/ paywall/ composio/
     github/ linear/ airtable/ webhook/ skills/ admin/
 

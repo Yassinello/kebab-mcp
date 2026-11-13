@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { InstanceConfig } from "@/core/types";
+import { ProfilesField } from "./settings/profiles-field";
 import { ContextFileField } from "./settings/context-file-field";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
 import { InfoTooltip } from "./settings/info-tooltip";
@@ -216,9 +217,20 @@ export function SettingsTab({
               </div>
               <ContextFileField vaultEnabled={vaultEnabled} initialPath={config.contextPath} />
               <p className="text-xs text-text-muted mt-2">
-                Pick where this context lives. Inline = stored in Kebab MCP&apos;s KV store. Vault =
-                a file inside your Obsidian vault, fetched on demand.
+                This is the default profile. Pick where it lives. Inline = stored in the KV store.
+                Vault = a file inside your Obsidian vault, fetched on demand.
               </p>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <label className="text-sm font-medium">Other profiles (one per hat)</label>
+                <InfoTooltip
+                  title="Profiles per hat"
+                  body="Each client token can be bound to its own profile (Devices → Edit scope). my_context then returns that profile instead of the default one — e.g. a 'perso' profile for your personal Claude and a 'work' profile for your work account."
+                />
+              </div>
+              <ProfilesField />
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">

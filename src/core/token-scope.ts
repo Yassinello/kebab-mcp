@@ -21,7 +21,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { getDeviceAccess, getDeviceSkillTagsFrom } from "./devices";
+import { getDeviceAccess, getDeviceMetaFrom, getDeviceSkillTagsFrom } from "./devices";
 import { getKVStore, getTenantKVStore } from "./kv-store";
 import { getCurrentTenantId } from "./request-context";
 import { CORE_CONNECTOR_IDS } from "./registry";
@@ -182,4 +182,55 @@ export function getCurrentSkillScope(): string[] | null {
 export function isSkillVisible(skillTags: readonly string[], scope: string[] | null): boolean {
   if (scope === null) return true;
   return skillTags.some((t) => scope.includes(t));
+}
+
+// ── Kebab House phase 0: caller metadata (profile, label) ─────────────
+
+export interface CallerMeta {
+  /** 8-hex token id of the caller, `null` for loopback / no auth. */
+  tokenId: string | null;
+  /** Device label (for usage counters). `null` when the token has no entry. */
+  label: string | null;
+  /** Profile bound to the token. `null` = default profile. */
+  profile: string | null;
+}
+
+/**
+ * Resolve the caller's device label and bound profile once per request.
+ * The tenant namespace wins over the root one (a tenant may bind its own
+ * profile); neither field grants access, so no "most restrictive" merge
+ * is needed. Never throws.
+ */
+export async function resolveCallerMeta(
+  callerTokenId: string | null | undefined
+): Promise<CallerMeta> {
+  const empty: CallerMeta = { tokenId: callerTokenId ?? null, label: null, profile: null };
+  if (!callerTokenId) return empty;
+  try {
+    const tenantId = getCurrentTenantId();
+    const namespaces = [getKVStore()];
+    if (tenantId) namespaces.push(getTenantKVStore(tenantId));
+    const metas = await Promise.all(namespaces.map((kv) => getDeviceMetaFrom(callerTokenId, kv)));
+    let label: string | null = null;
+    let profile: string | null = null;
+    for (const m of metas) {
+      if (m.label) label = m.label;
+      if (m.profile) profile = m.profile;
+    }
+    return { tokenId: callerTokenId, label, profile };
+  } catch {
+    return empty;
+  }
+}
+
+const callerMetaStore = new AsyncLocalStorage<CallerMeta>();
+
+/** Run `fn` with the caller's metadata ambient for the whole MCP request. */
+export function runWithCallerMeta<T>(meta: CallerMeta, fn: () => T): T {
+  return callerMetaStore.run(meta, fn);
+}
+
+/** The current MCP caller's metadata, or `null` outside an MCP request. */
+export function getCallerMeta(): CallerMeta | null {
+  return callerMetaStore.getStore() ?? null;
 }

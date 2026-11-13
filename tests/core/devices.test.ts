@@ -79,6 +79,8 @@ import {
   setDeviceConnectors,
   setDeviceSkillTags,
   getDeviceSkillTags,
+  setDeviceProfile,
+  getDeviceMetaFrom,
 } from "@/core/devices";
 import { tokenId } from "@/core/auth";
 import { createHash } from "node:crypto";
@@ -483,5 +485,43 @@ describe("skills v2 — setDeviceSkillTags / field preservation", () => {
     const rows = await listDevices();
     expect(rows.find((r) => r.tokenId === tokenId(TOKEN_A))!.skillTags).toEqual(["work"]);
     expect(rows.find((r) => r.tokenId === tokenId(TOKEN_B))!.skillTags).toBeNull();
+  });
+});
+
+describe("device profile (Kebab House CTX-04)", () => {
+  it("binds a profile, shows it in listDevices and keeps it across rename, scope edits and rotation", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const id = tokenId(TOKEN_A);
+    await setDeviceConnectors(id, []);
+    await setDeviceProfile(id, "Work");
+    expect((await listDevices())[0]!.profile).toBe("work");
+
+    await setDeviceLabel(id, "laptop");
+    await setDeviceSkillTags(id, ["perso"]);
+    await setDeviceConnectors(id, null);
+    const kv = { get: async (k: string) => store.get(k) ?? null };
+    expect(await getDeviceMetaFrom(id, kv)).toEqual({ label: "laptop", profile: "work" });
+
+    const { newTokenId } = await rotateDeviceToken(id);
+    expect(await getDeviceMetaFrom(newTokenId, kv)).toEqual({ label: "laptop", profile: "work" });
+    // The rotated (tombstoned) entry carries nothing.
+    expect(await getDeviceMetaFrom(id, kv)).toEqual({ label: null, profile: null });
+  });
+
+  it("clears the binding with null or 'default' and rejects invalid names", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const id = tokenId(TOKEN_A);
+    await setDeviceProfile(id, "perso");
+    await setDeviceProfile(id, "default");
+    expect((await listDevices())[0]!.profile).toBeNull();
+    await expect(setDeviceProfile(id, "not valid!")).rejects.toThrow(/profile/i);
+  });
+
+  it("a malformed profile field never makes the entry corrupt (no access change)", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const id = tokenId(TOKEN_A);
+    store.set(`devices:${id}`, JSON.stringify({ label: "x", createdAt: "t", profile: 42 }));
+    expect(await getDeviceConnectors(id)).toBeNull();
+    expect((await listDevices())[0]!.profile).toBeNull();
   });
 });

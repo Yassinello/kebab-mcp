@@ -51,6 +51,8 @@ export interface DeviceRow {
   connectors: string[] | null;
   /** Skills v2 — per-token skill tag scope. `null` = every skill. */
   skillTags: string[] | null;
+  /** Kebab House phase 0 — profile ("hat") served by my_context. `null` = default. */
+  profile: string | null;
 }
 
 interface DeviceKVEntry {
@@ -60,6 +62,8 @@ interface DeviceKVEntry {
   connectors?: string[];
   /** Skills v2 — optional per-token skill tag scope. Absent = every skill. */
   skillTags?: string[];
+  /** Kebab House phase 0 — optional profile name. Absent = default profile. */
+  profile?: string;
   /**
    * SEC-06 (2026-11 audit): set when the token was rotated or revoked.
    * On Vercel the `MCP_AUTH_TOKEN` env edit only lands on the next
@@ -99,6 +103,9 @@ export function parseDeviceEntry(raw: string | null): DeviceEntryState {
   if (entry.connectors !== undefined && !isStringArray(entry.connectors))
     return { kind: "corrupt" };
   if (entry.skillTags !== undefined && !isStringArray(entry.skillTags)) return { kind: "corrupt" };
+  // A malformed profile is ignored (falls back to the default profile) —
+  // it carries no access right, so it never makes the entry corrupt.
+  if (entry.profile !== undefined && typeof entry.profile !== "string") delete entry.profile;
   return { kind: "ok", entry: entry as Partial<DeviceKVEntry> };
 }
 
@@ -151,6 +158,7 @@ async function updateDeviceEntry(
     }
     if (prev.connectors !== undefined) entry.connectors = prev.connectors;
     if (prev.skillTags !== undefined) entry.skillTags = prev.skillTags;
+    if (typeof prev.profile === "string") entry.profile = prev.profile;
     if (typeof prev.revokedAt === "string") entry.revokedAt = prev.revokedAt;
   }
   mutate(entry);
@@ -207,6 +215,42 @@ export async function setDeviceSkillTags(id: string, tags: string[] | null): Pro
     },
     { allowCorruptReset: true }
   );
+}
+
+/**
+ * Label + profile carried by one device entry in one namespace. Revoked or
+ * corrupt entries carry nothing. Never throws on a missing entry.
+ */
+export async function getDeviceMetaFrom(
+  id: string,
+  kv: { get(key: string): Promise<string | null> }
+): Promise<{ label: string | null; profile: string | null }> {
+  const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
+  if (state.kind !== "ok" || isRevoked(state.entry)) return { label: null, profile: null };
+  const label = typeof state.entry.label === "string" ? state.entry.label : null;
+  const profile = typeof state.entry.profile === "string" ? state.entry.profile : null;
+  return { label, profile };
+}
+
+/**
+ * Bind a token to a profile (or clear with `null` → default profile). The
+ * name is normalized; existence is checked by the caller (an unknown name
+ * simply falls back to the default profile at read time).
+ */
+export async function setDeviceProfile(id: string, profile: string | null): Promise<void> {
+  let normalized: string | null = null;
+  if (profile !== null) {
+    if (typeof profile !== "string") throw new Error("Invalid profile: must be a string or null");
+    normalized = profile.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(normalized)) {
+      throw new Error("Invalid profile name");
+    }
+    if (normalized === "default") normalized = null;
+  }
+  await updateDeviceEntry(id, (e) => {
+    if (normalized === null) delete e.profile;
+    else e.profile = normalized;
+  });
 }
 
 const DEVICE_KEY_PREFIX = "devices:";
@@ -273,6 +317,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
     let createdAt = "unknown";
     let connectors: string[] | null = null;
     let skillTags: string[] | null = null;
+    let profile: string | null = null;
     // Display what resolution enforces: a corrupt entry is fail-closed and a
     // tombstoned token (rotated/revoked, still in a not-yet-redeployed env)
     // is refused — never show either as "All connectors".
@@ -287,6 +332,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
       if (typeof e.createdAt === "string" && e.createdAt.length > 0) createdAt = e.createdAt;
       connectors = e.connectors ?? null;
       skillTags = e.skillTags ?? null;
+      profile = typeof e.profile === "string" ? e.profile : null;
       if (isRevoked(e)) {
         label = `${label} (revoked — pending redeploy)`;
         connectors = [];
@@ -294,7 +340,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
       }
     }
     const lastSeenAt = await getLastSeenAt(t);
-    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors, skillTags });
+    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors, skillTags, profile });
   }
   return rows;
 }
@@ -474,6 +520,7 @@ export async function rotateDeviceToken(
   let label = "unnamed";
   let connectors: string[] | undefined;
   let skillTags: string[] | undefined;
+  let profile: string | undefined;
   if (oldState.kind === "ok") {
     if (typeof oldState.entry.label === "string" && oldState.entry.label.length > 0) {
       label = oldState.entry.label;
@@ -483,6 +530,7 @@ export async function rotateDeviceToken(
     // access (privilege escalation).
     connectors = oldState.entry.connectors;
     skillTags = oldState.entry.skillTags;
+    if (typeof oldState.entry.profile === "string") profile = oldState.entry.profile;
   } else if (oldState.kind === "corrupt") {
     connectors = []; // fail closed, mirrors token-scope resolution
     skillTags = [];
@@ -490,6 +538,7 @@ export async function rotateDeviceToken(
   const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
   if (connectors !== undefined) newEntry.connectors = connectors;
   if (skillTags !== undefined) newEntry.skillTags = skillTags;
+  if (profile !== undefined) newEntry.profile = profile;
   await kv.set(newKey, JSON.stringify(newEntry));
 
   // Splice env list.
