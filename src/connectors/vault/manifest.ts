@@ -133,6 +133,8 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
       schema: saveArticleSchema,
       handler: async (args) => handleSaveArticle(args),
       destructive: true,
+      // TRU-01: fetches an arbitrary URL — open world, unlike the rest of the vault.
+      openWorld: true,
     }),
     defineTool({
       name: "vault_append",
