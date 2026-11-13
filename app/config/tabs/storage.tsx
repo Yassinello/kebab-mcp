@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useState, useEffect, useCallback } from "react";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded";
@@ -127,7 +128,7 @@ export function StorageTab() {
 }
 
 /**
- * First-time orientation: what "storage" means in Kebab MCP terms, why the
+ * First-time orientation: what "storage" means in Kebab House terms, why the
  * user should care, and which backends are viable. Kept collapsible so it
  * doesn't clutter the page for users who already know the layout — but
  * open by default the first time the tab loads, since the subsequent
@@ -142,7 +143,7 @@ function WhatIsStorageExplainer() {
       </summary>
       <div className="border-t border-border px-4 py-4 space-y-3 text-xs text-text-dim leading-relaxed">
         <p>
-          Kebab MCP persists three things: your{" "}
+          {PRODUCT.name} persists three things: your{" "}
           <strong className="text-text">connector credentials</strong> (API keys for Google, Notion,
           Slack, etc.), your <strong className="text-text">skills</strong> (user-defined prompts),
           and your <strong className="text-text">context</strong> (the markdown file every AI

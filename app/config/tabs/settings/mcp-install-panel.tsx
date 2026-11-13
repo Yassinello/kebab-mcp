@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useState } from "react";
 import { McpClientSnippets } from "../../../components/mcp-client-snippets";
 
@@ -53,9 +54,9 @@ export function McpInstallPanel({ baseUrl, hasToken }: { baseUrl: string; hasTok
   return (
     <div className="space-y-5">
       <p className="text-sm text-text-dim">
-        Install Kebab MCP in any MCP client below. The same token works in every client — paste it
-        everywhere. Use multiple comma-separated tokens (in <code>MCP_AUTH_TOKEN</code>) only if you
-        want to revoke one client without breaking the others.
+        Install {PRODUCT.name} in any MCP client below. The same token works in every client — paste
+        it everywhere. Use multiple comma-separated tokens (in <code>MCP_AUTH_TOKEN</code>) only if
+        you want to revoke one client without breaking the others.
       </p>
 
       <div className="border border-border rounded-lg p-4">

@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useCallback, useEffect } from "react";
 import {
   WelcomeStateProvider,
@@ -38,8 +39,9 @@ function ClaimErrorPanel({ error, onRetry }: { error: string; onRetry: () => Pro
       {isUpstashMissing ? (
         <div className="space-y-2 text-slate-300 leading-relaxed text-sm">
           <p>
-            Kebab MCP needs an Upstash KV store to safely initialize your instance. The integration
-            was added, but its environment variables haven&apos;t been linked to this project yet.
+            {PRODUCT.name} needs an Upstash KV store to safely initialize your instance. The
+            integration was added, but its environment variables haven&apos;t been linked to this
+            project yet.
           </p>
           <ol className="list-decimal list-inside space-y-1.5 text-slate-400">
             <li>

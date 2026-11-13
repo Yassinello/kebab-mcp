@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import type { ReactNode } from "react";
 import { KebabLogo } from "../components/kebab-logo";
 
@@ -23,7 +24,7 @@ export function Shell({ children, wide }: { children: ReactNode; wide?: boolean 
       <header className="border-b border-slate-900/80 px-6 py-4">
         <div className="flex items-center gap-2.5 text-white">
           <KebabLogo size={26} className="text-amber-400" />
-          <span className="font-mono text-lg font-bold tracking-tight">Kebab MCP</span>
+          <span className="font-mono text-lg font-bold tracking-tight">{PRODUCT.name}</span>
         </div>
       </header>
       {/* The wizard layout needs more horizontal room for the 3-card storage

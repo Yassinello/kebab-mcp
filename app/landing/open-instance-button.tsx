@@ -89,15 +89,15 @@ export default function OpenInstanceButton() {
             setOpen((v) => !v);
           }
         }}
-        className="text-sm text-slate-900 bg-white hover:bg-slate-100 transition-colors px-3 py-1.5 rounded-md font-medium"
+        className="text-sm whitespace-nowrap text-slate-900 bg-white hover:bg-slate-100 transition-colors px-3 py-1.5 rounded-md font-medium"
       >
         {savedUrl ? "Open my instance" : "Open my instance"}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-slate-700 bg-slate-900 shadow-xl p-4 text-left">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-700 bg-slate-900 shadow-xl p-4 text-left">
           <p className="text-xs text-slate-400 mb-2">
-            Enter the URL of your deployed Kebab MCP instance.
+            Enter the URL of your deployed Kebab House instance.
           </p>
           <form
             onSubmit={(e) => {

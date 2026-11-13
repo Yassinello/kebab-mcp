@@ -1,25 +1,25 @@
 /**
  * Connectors section — split into two tiers:
- * 1. Pre-wired integrations (12 API connectors that ship ready to use)
- * 2. Extension primitives (3 ways to grow the backend without forking)
+ * 1. Pre-wired integrations, long tail first (what native client
+ *    connectors don't cover, or cover in one client only)
+ * 2. Extension primitives (3 ways to grow the hub without forking)
  *
- * This split removes the dissonance from the "15 connectors" claim
- * lumping primitives in with API integrations, and clarifies what
- * Skills / API Connections / Admin actually are.
+ * Kebab House (ADR 0004): no tool counts in marketing copy — each card
+ * says what the connector does instead.
  */
 const INTEGRATIONS = [
-  { name: "Google Workspace", count: 18 },
-  { name: "Obsidian Vault", count: 14 },
-  { name: "Apify / LinkedIn", count: 8 },
-  { name: "Airtable", count: 7 },
-  { name: "Slack", count: 6 },
-  { name: "GitHub Issues", count: 6 },
-  { name: "Linear", count: 6 },
-  { name: "Notion", count: 5 },
-  { name: "Browser Automation", count: 4 },
-  { name: "Webhooks", count: 3 },
-  { name: "Composio Bridge", count: 2 },
-  { name: "Paywall Readers", count: 2 },
+  { name: "LinkedIn", what: "Profiles, posts, messages" },
+  { name: "WhatsApp", what: "Inbox, search, send" },
+  { name: "Browser Automation", what: "Browse, extract, act" },
+  { name: "Paywall Readers", what: "Read full articles" },
+  { name: "Obsidian Vault", what: "Your notes on GitHub" },
+  { name: "Google Workspace", what: "Gmail, Calendar, Drive" },
+  { name: "Slack", what: "Channels and threads" },
+  { name: "Notion", what: "Pages and databases" },
+  { name: "GitHub Issues · Linear", what: "Issues and tickets" },
+  { name: "Airtable", what: "Bases and records" },
+  { name: "Composio Bridge", what: "1000+ apps" },
+  { name: "Webhooks", what: "Inbound events" },
 ];
 
 const PRIMITIVES = [
@@ -29,9 +29,9 @@ const PRIMITIVES = [
     body: "Wire any HTTP API as a tool — no code. URL, method, JSON Schema. Kebab infers types and registers the tool at runtime.",
   },
   {
-    name: "Skills",
+    name: "Custom Tools",
     icon: <BookIcon />,
-    body: "Reusable prompt-driven tools defined from the dashboard. Great for team SOPs and recurring AI workflows.",
+    body: "Compose existing tools into a new one with pre-filled arguments — declarative, from the dashboard.",
   },
   {
     name: "Admin & observability",
@@ -49,11 +49,11 @@ export default function Connectors() {
             Everything in the wrap
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            12 integrations on the skewer.
+            The long tail, on the skewer.
           </h2>
           <p className="text-slate-400 text-base mt-3 max-w-2xl mx-auto leading-relaxed">
-            Drop in an API key — the connector lights up. 86+ tools across the apps you already use,
-            no glue code required.
+            The tools your clients don&apos;t ship natively, or ship in only one of them. Drop in an
+            API key — the connector lights up, in every client at once.
           </p>
         </div>
 
@@ -64,7 +64,7 @@ export default function Connectors() {
               className="bg-slate-900/60 border border-slate-800 rounded-lg px-4 py-3.5 hover:border-amber-500/40 hover:bg-amber-500/5 transition-colors"
             >
               <p className="text-sm font-semibold text-white">{conn.name}</p>
-              <p className="text-xs text-slate-500 font-mono mt-0.5">{conn.count} tools</p>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">{conn.what}</p>
             </div>
           ))}
         </div>
@@ -77,7 +77,7 @@ export default function Connectors() {
             Extend without forking.
           </h3>
           <p className="text-slate-400 text-sm mt-3 max-w-xl mx-auto leading-relaxed">
-            Three primitives that ship inside every Kebab — your backend grows with your stack.
+            Three primitives that ship inside every Kebab — your hub grows with your stack.
           </p>
         </div>
 

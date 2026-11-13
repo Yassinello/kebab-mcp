@@ -1,17 +1,18 @@
+import { PRODUCT } from "@/core/constants/brand";
 import FeatureCard from "./feature-card";
 
 const CARDS = [
   {
-    title: "Same tools everywhere.",
+    title: "Same skills everywhere.",
     description:
-      "Connect once. Every AI client — Claude, Cursor, Windsurf — gets the exact same 86+ tools from a single endpoint. No per-client setup, no drift.",
+      "One Agent Skills library (SKILL.md), served to Claude, Claude Code, Cursor, Codex and ChatGPT. Write or import a skill once, scope it per client token — one hat for work, one for home.",
     icon: <ThreeSkewersIcon />,
   },
   {
-    title: "Bring your own sauce.",
+    title: "Same you everywhere.",
     description:
-      "Define custom HTTP tools against any API via API Connections. No code to deploy — just a URL, a method, and a schema. Your workflow, your rules.",
-    icon: <SauceBottleIcon />,
+      "Your profile and your memory vault travel with you. Every client knows who you are and what you're working on, and can read and write the notes in your vault.",
+    icon: <RecipeCardIcon />,
   },
   {
     title: "Your kitchen, your rules.",
@@ -27,10 +28,10 @@ export default function WhyKebab() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
           <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">
-            Why Kebab MCP
+            Why {PRODUCT.name}
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Your AI stack is hungry. Feed it once.
+            Your AI clients are hungry. Feed them once.
           </h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -65,8 +66,8 @@ function ThreeSkewersIcon() {
   );
 }
 
-/** Sauce/condiment bottle — "bring your own sauce" */
-function SauceBottleIcon() {
+/** Recipe card with a portrait — "same you everywhere" (profile + vault) */
+function RecipeCardIcon() {
   return (
     <svg
       className="w-7 h-7"
@@ -75,21 +76,15 @@ function SauceBottleIcon() {
       stroke="currentColor"
       strokeWidth="1.5"
     >
-      {/* Cap */}
-      <rect x="9" y="2" width="6" height="3" rx="0.5" fill="currentColor" />
-      {/* Neck */}
-      <line x1="10.5" y1="5" x2="10.5" y2="8" strokeLinecap="round" />
-      <line x1="13.5" y1="5" x2="13.5" y2="8" strokeLinecap="round" />
-      {/* Body */}
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 8 L9 20 a2 2 0 002 2 h2 a2 2 0 002 -2 L15 8 Z"
-      />
-      {/* Label */}
-      <rect x="9.5" y="12" width="5" height="5" fill="currentColor" opacity="0.25" />
-      {/* Drip */}
-      <circle cx="17.5" cy="14" r="0.8" fill="currentColor" />
+      {/* Card */}
+      <rect x="3" y="4" width="18" height="16" rx="2" strokeLinejoin="round" />
+      {/* Portrait */}
+      <circle cx="8.5" cy="10" r="2" fill="currentColor" />
+      <path strokeLinecap="round" d="M5.5 16 a3 3 0 016 0" />
+      {/* Notes */}
+      <line x1="14" y1="9" x2="18" y2="9" strokeLinecap="round" />
+      <line x1="14" y1="12.5" x2="18" y2="12.5" strokeLinecap="round" />
+      <line x1="14" y1="16" x2="16.5" y2="16" strokeLinecap="round" />
     </svg>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { McpClientSnippets } from "../../components/mcp-client-snippets";
 import { useWelcomeDispatch, useWelcomeState } from "../WelcomeStateContext";
@@ -76,7 +77,7 @@ export function TestStep({ durableBackend, onBack }: TestStepProps): JSX.Element
     <section>
       <StepHeader
         title="Connect your AI client"
-        subtitle="Add Kebab MCP to your client's MCP server config, then verify it works."
+        subtitle={`Add ${PRODUCT.name} to your client's MCP server config, then verify it works.`}
       />
 
       {state.token && <TokenUsagePanel token={state.token} instanceUrl={state.instanceUrl} />}

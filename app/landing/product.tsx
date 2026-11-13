@@ -1,8 +1,36 @@
+import { PRODUCT } from "@/core/constants/brand";
+
 /**
  * Product section — gives the visitor a tangible look at the dashboard
- * before they're asked to deploy. SVG mockup so we don't ship binary
+ * before they're asked to deploy. SVG/HTML mockup so we don't ship binary
  * screenshots (keeps bundle in budget and survives rebrands).
+ *
+ * Kebab House: the mockup shows the Skills tab — the library is the
+ * product, connectors are the long tail.
  */
+const MOCK_SKILLS: { name: string; description: string; tags: string[] }[] = [
+  {
+    name: "meeting-prep",
+    description: "Brief me before a meeting: attendees, history, open points.",
+    tags: ["work"],
+  },
+  {
+    name: "morning-brief",
+    description: "Today's agenda, priorities and what's waiting on me.",
+    tags: ["rituals"],
+  },
+  {
+    name: "linkedin-reply",
+    description: "Draft a reply in my voice. Never send without asking.",
+    tags: ["work", "social"],
+  },
+  {
+    name: "read-later",
+    description: "Clip an article into my vault with a three-line summary.",
+    tags: ["perso"],
+  },
+];
+
 export default function Product() {
   return (
     <section id="product" className="py-20 px-6 border-t border-slate-800">
@@ -12,11 +40,11 @@ export default function Product() {
             The dashboard
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Built-in admin UI. No extra tooling.
+            Your recipes, in one kitchen.
           </h2>
           <p className="text-slate-400 text-base mt-3 max-w-2xl mx-auto leading-relaxed">
-            Health, logs, connector status, custom tools and skills — all behind one auth-gated
-            dashboard. Configure your kebab without leaving the browser.
+            Write, import and version your skills, decide which client sees which, and keep an eye
+            on every call — all behind one auth-gated dashboard.
           </p>
         </div>
 
@@ -37,16 +65,16 @@ export default function Product() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10 max-w-4xl mx-auto">
           {[
             {
-              label: "Live connector status",
-              body: "See at a glance which integrations are wired up — and exactly which env var is missing for the rest.",
+              label: "Skills library",
+              body: "Agent Skills (SKILL.md) with bundled files. Import from Claude or ChatGPT, version, roll back in one click.",
+            },
+            {
+              label: "One token per client",
+              body: "Scope each client to its hat: which skills and connectors it sees. Rotate or revoke anytime.",
             },
             {
               label: "Structured logs",
-              body: "Every tool call traced with duration, status, payload size. Filter, search, export.",
-            },
-            {
-              label: "Custom tool builder",
-              body: "Define HTTP tools or skills from the UI. Schema inferred, registered at runtime.",
+              body: "Every tool call traced with duration, status and client. Filter, search, export.",
             },
           ].map((feat) => (
             <div
@@ -71,9 +99,9 @@ function DashboardMockup() {
         <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
         <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
         <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-        <div className="ml-3 flex-1 max-w-md">
+        <div className="ml-3 flex-1 min-w-0 max-w-md">
           <div className="bg-slate-800/60 rounded px-3 py-1 text-xs font-mono text-slate-400 truncate">
-            your-instance.vercel.app/config
+            your-instance.vercel.app/config?tab=skills
           </div>
         </div>
       </div>
@@ -84,14 +112,15 @@ function DashboardMockup() {
         <aside className="col-span-3 bg-slate-950/60 border-r border-slate-800 p-4 hidden sm:block">
           <div className="flex items-center gap-2 mb-6">
             <div className="w-5 h-5 rounded bg-amber-500/20 border border-amber-500/40" />
-            <span className="text-xs font-mono text-white font-semibold">Kebab MCP</span>
+            <span className="text-xs font-mono text-white font-semibold">{PRODUCT.name}</span>
           </div>
           <nav className="space-y-1">
             {[
-              { label: "Connectors", active: true },
+              { label: "Overview" },
+              { label: "Skills", active: true },
+              { label: "Connectors" },
               { label: "Tools" },
-              { label: "Skills" },
-              { label: "API Connections" },
+              { label: "Devices" },
               { label: "Logs" },
               { label: "Settings" },
             ].map((item) => (
@@ -111,47 +140,47 @@ function DashboardMockup() {
 
         {/* Main content */}
         <main className="col-span-12 sm:col-span-9 p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-white font-semibold text-base">Connectors</h3>
-              <p className="text-xs text-slate-500 mt-0.5">15 available · 4 active</p>
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="min-w-0">
+              <h3 className="text-white font-semibold text-base">Skills</h3>
+              <p className="text-xs text-slate-500 mt-0.5">One library, every AI client.</p>
             </div>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 rounded">
-              ● healthy
+            <span className="shrink-0 text-[10px] font-mono uppercase tracking-widest text-amber-300 border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 rounded">
+              + Import
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {[
-              { name: "Google", on: true, count: "18" },
-              { name: "Slack", on: true, count: "6" },
-              { name: "Notion", on: true, count: "5" },
-              { name: "GitHub", on: true, count: "6" },
-              { name: "Linear", on: false, count: "6" },
-              { name: "Airtable", on: false, count: "7" },
-              { name: "Apify", on: false, count: "8" },
-              { name: "Vault", on: false, count: "14" },
-              { name: "Browser", on: false, count: "4" },
-            ].map((c) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {MOCK_SKILLS.map((s) => (
               <div
-                key={c.name}
-                className={`border rounded-lg p-2.5 ${
-                  c.on ? "bg-amber-500/5 border-amber-500/30" : "bg-slate-900/40 border-slate-800"
-                }`}
+                key={s.name}
+                className="border rounded-lg p-3 bg-amber-500/5 border-amber-500/30"
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className={`text-xs font-semibold ${c.on ? "text-white" : "text-slate-500"}`}
-                  >
-                    {c.name}
-                  </span>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${c.on ? "bg-amber-400" : "bg-slate-600"}`}
-                  />
+                <p className="text-xs font-mono font-semibold text-white mb-1">{s.name}</p>
+                <p className="text-[11px] text-slate-400 leading-snug mb-2">{s.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {s.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="text-[10px] font-mono text-slate-400 border border-slate-700 rounded px-1.5"
+                    >
+                      #{t}
+                    </span>
+                  ))}
                 </div>
-                <span className="text-[10px] font-mono text-slate-500">{c.count} tools</span>
               </div>
             ))}
+          </div>
+
+          <div className="mt-4 border border-slate-800 rounded-lg px-3 py-2.5 bg-slate-950/40">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-1.5">
+              Served to
+            </p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
+              <span>Claude · #perso #rituals</span>
+              <span>Cursor · #work</span>
+              <span>Codex · #work</span>
+            </div>
           </div>
         </main>
       </div>
