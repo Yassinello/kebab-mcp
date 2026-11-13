@@ -23,14 +23,15 @@ Routes below are grouped by concern (9 groups).
 - **Pipeline:** rehydrate → auth → rateLimit → firstRunGate → bodyParse → csrf → handler
 - **Rate limit:** `KEBAB_RATE_LIMIT_RPM` (default 60 per token, per-tenant bucket)
 - **Tenant header:** `x-mymcp-tenant: <id>` optional (Phase 42 — renamed to `x-kebab-tenant` is a Phase 51+ candidate; legacy accepted for the 2-release transition)
-- **Response:** Streamable HTTP response forwarded from `mcp-handler`
-- **Example methods:** `tools/list`, `tools/call`, `resources/list`, `resources/read` (Phase 50)
+- **Response:** Streamable HTTP response forwarded from `mcp-handler` 2.x — JSON or a one-event SSE stream
+- **Protocol generations:** 2026-07-28 clients (`server/discover`, per-request `_meta` envelope + `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers) and 2025-era clients (`initialize`, served statelessly) on the same URL — see [ADR 0005](adr/0005-mcp-protocol-generation.md)
+- **Example methods:** `tools/list`, `tools/call`, `resources/list`, `resources/read` (Phase 50), `prompts/list`, `prompts/get`
+- **Path:** only `/api/mcp` is served; any other `[transport]` value (including the retired HTTP+SSE paths `/api/sse` and `/api/message`) answers `404 Not found` after auth
 
-### GET /api/[transport]
+### GET / DELETE /api/[transport]
 
 - **Auth:** Bearer `MCP_AUTH_TOKEN`
-- **Purpose:** SSE event stream (Server-Sent Events fallback for clients that prefer GET over POST for long-poll transport)
-- **Response:** Text stream with `data: {...}` frames
+- **Response:** `405 Method not allowed` — serving is stateless, so there is no 2025 session stream to open (GET) or terminate (DELETE)
 
 ---
 

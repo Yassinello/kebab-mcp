@@ -11,7 +11,7 @@ Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 
 ## Architecture
 
 - **Runtime**: Next.js on Vercel (serverless). The MCP transport route declares `maxDuration = 90` (90s); Vercel Hobby plans silently clamp this to 60s, Pro allows up to 300s
-- **MCP SDK**: `mcp-handler` wraps `@modelcontextprotocol/sdk` for Streamable HTTP
+- **MCP SDK**: `mcp-handler` 2.x wraps `@modelcontextprotocol/server` 2.x — one stateless handler serves both protocol generations: 2026-07-28 (`server/discover`, per-request `_meta` envelope) and 2025-era Streamable HTTP (`initialize`). See [ADR 0005](adr/0005-mcp-protocol-generation.md)
 - **Registry**: Static manifests in `src/connectors/*/manifest.ts` — single source of truth
 - **Config**: All via env vars (no config files). See `src/core/config.ts`
 - **Auth**: MCP_AUTH_TOKEN (endpoint) + ADMIN_AUTH_TOKEN (dashboard, optional fallback)
@@ -53,7 +53,7 @@ app/config/                      — Unified dashboard (connectors, tools, skill
 1. `src/core/registry.ts` holds `ALL_CONNECTOR_LOADERS` — one lazy loader entry per connector (17 today)
 2. For each connector, checks if all `requiredEnvVars` are present
 3. Returns `ConnectorState[]` with enabled/disabled + reason
-4. `route.ts` iterates enabled connectors, registers tools via `server.tool()`
+4. `route.ts` iterates enabled connectors, registers tools via `server.registerTool()` with a title and MCP annotations derived from the manifest (`src/core/tool-annotations.ts`)
 5. Dashboard, health, admin API all read from the same registry
 
 ## Per-token connector scoping
