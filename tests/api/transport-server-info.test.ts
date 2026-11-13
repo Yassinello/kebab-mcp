@@ -4,7 +4,8 @@
  * (not the technical "Kebab MCP" name kept for logs and the repo).
  *
  * Same fake-mcp-server harness as transport-output-schema.test.ts: we
- * capture the server options the route hands to createMcpHandler.
+ * capture the options object the route hands to createMcpHandler
+ * (mcp-handler 2.x takes a single options object).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -18,11 +19,8 @@ vi.mock("mcp-handler", () => {
   ) => {
     capturedServerOptions = serverOptions;
     initFn({
-      tool: vi.fn(),
       registerTool: vi.fn(),
-      resource: vi.fn(),
       registerResource: vi.fn(),
-      prompt: vi.fn(),
       registerPrompt: vi.fn(),
     });
     return async (_req: Request) => new Response("ok");

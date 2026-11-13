@@ -81,6 +81,11 @@ import {
   getDeviceSkillTags,
   setDeviceProfile,
   getDeviceMetaFrom,
+  createOAuthDevice,
+  isOAuthDevice,
+  revokeOAuthDevice,
+  setDeviceWriteAllowed,
+  getDeviceWriteAllowedFrom,
 } from "@/core/devices";
 import { tokenId } from "@/core/auth";
 import { createHash } from "node:crypto";
@@ -523,5 +528,43 @@ describe("device profile (Kebab House CTX-04)", () => {
     store.set(`devices:${id}`, JSON.stringify({ label: "x", createdAt: "t", profile: 42 }));
     expect(await getDeviceConnectors(id)).toBeNull();
     expect((await listDevices())[0]!.profile).toBeNull();
+  });
+});
+
+describe("OAuth devices (Kebab House OAU-08, TRU-05)", () => {
+  const kv = { get: async (k: string) => store.get(k) ?? null };
+
+  it("are listed next to static tokens, read-only by default, and revocable", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    await createOAuthDevice({
+      id: "0a1b2c3d",
+      label: "Claude",
+      clientId: "kc_x",
+      clientName: "Claude",
+      connectors: null,
+      skillTags: ["perso"],
+      profile: "perso",
+      writeAllowed: false,
+    });
+    const rows = await listDevices();
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({
+      tokenId: "0a1b2c3d",
+      kind: "oauth",
+      writeAllowed: false,
+      profile: "perso",
+    });
+    expect(await getDeviceWriteAllowedFrom("0a1b2c3d", kv)).toBe(false);
+    // Static tokens keep their behaviour (no entry, or no oauth marker → writes allowed).
+    expect(await getDeviceWriteAllowedFrom(tokenId(TOKEN_A), kv)).toBe(true);
+
+    await setDeviceWriteAllowed("0a1b2c3d", true);
+    await setDeviceLabel("0a1b2c3d", "Claude perso");
+    expect(await getDeviceWriteAllowedFrom("0a1b2c3d", kv)).toBe(true);
+    expect(await isOAuthDevice("0a1b2c3d")).toBe(true);
+
+    await revokeOAuthDevice("0a1b2c3d");
+    expect(await isOAuthDevice("0a1b2c3d")).toBe(false);
+    expect(await listDevices()).toHaveLength(1);
   });
 });

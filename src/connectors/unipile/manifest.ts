@@ -4,6 +4,13 @@ import { getConfig } from "@/core/config-facade";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
 import { isWritesDisabled, isWhatsappWritesDisabled } from "./lib/kill-switch";
+import { approvalHint, gateGuardedWrite, gateLegacyWrite } from "./lib/approval-gate";
+import {
+  engageApproval,
+  sendConnectionApproval,
+  sendInmailApproval,
+  sendMessageApproval,
+} from "./lib/legacy-approvals";
 
 function normalizeDsnForProbe(dsn: string): string {
   return /^https?:\/\//i.test(dsn) ? dsn : `https://${dsn}`;
@@ -201,7 +208,7 @@ export const unipileConnector: ConnectorManifest = {
   id: "unipile",
   label: "Unipile (LinkedIn + WhatsApp)",
   description:
-    "LinkedIn networking & prospection (invites, DMs, InMail, replies, profiles, search, posts) and personal WhatsApp (find chats, read, search, send to people or groups) via Unipile. Every outgoing action previews first and needs confirm:true.",
+    "LinkedIn networking & prospection (invites, DMs, InMail, replies, profiles, search, posts) and personal WhatsApp (find chats, read, search, send to people or groups) via Unipile. Every outgoing action previews first and needs the user's approval (an approval link by default).",
   guide: `Drive your LinkedIn and your personal WhatsApp from any AI client through [Unipile](https://www.unipile.com) — a hosted API that holds the LinkedIn / WhatsApp sessions (no browser automation on Kebab's side).
 
 ### Prerequisites
@@ -220,7 +227,7 @@ A Unipile account (from 49 €/month for up to 10 connected accounts, all channe
 - **LinkedIn content**: \`linkedin_list_posts\`, \`linkedin_react_post\`, \`linkedin_comment_post\`, \`linkedin_create_post\`.
 
 ### Safety
-- New send/post tools return a **preview** unless called with \`confirm: true\` — let the AI show you the exact text and recipient first.
+- Every send/post/invite returns a **preview** first and sends nothing. By default (\`KEBAB_APPROVAL_MODE=link\`) the AI hands you an **approval link**: open it, check the exact recipient and text, approve — only then can the AI send, and only what you approved. \`KEBAB_APPROVAL_MODE=confirm\` restores the older in-chat \`confirm: true\` flow (the AI can then approve on its own).
 - Per-account daily caps (LinkedIn: 25 invites, 50 DMs, 15 InMail, 40 reactions/comments, 3 posts; WhatsApp: 100 messages), overridable via \`KEBAB_UNIPILE_*_CAP\`. Identical sends within 10 minutes are blocked.
 - Emergency brakes: \`KEBAB_UNIPILE_WRITES_DISABLED=true\` (everything), or per channel \`KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED\` / \`KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED\`.
 - Audit log (90 days, Upstash KV) stores hashes only — never message text.
@@ -255,10 +262,13 @@ function buildTools(): ToolDefinition[] {
         "Send a LinkedIn connection request via Unipile. Verified-after-write (3 polls @ 2s/5s/10s). " +
         "DEDUP: same (profile_url, note) combination is blocked for 90 days — change the note to retry. " +
         "Per-account daily/weekly caps enforced (25/day, 100/week default). " +
-        "Returns {provider_ok, verified, crm_sync: 'pending', dedup_hit, audit_id, invitation_id?, error?, blocked_by_rate_limit?}.",
+        "Returns {provider_ok, verified, crm_sync: 'pending', dedup_hit, audit_id, invitation_id?, error?, blocked_by_rate_limit?}. " +
+        approvalHint({ legacy: true }),
       schema: linkedinSendConnectionSchema,
       handler: async (args) =>
-        handleLinkedinSendConnection(args as Parameters<typeof handleLinkedinSendConnection>[0]),
+        gateLegacyWrite(sendConnectionApproval, args, (a) =>
+          handleLinkedinSendConnection(a as Parameters<typeof handleLinkedinSendConnection>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -278,10 +288,13 @@ function buildTools(): ToolDefinition[] {
       description:
         "Send a LinkedIn DM to a 1st-degree connection. " +
         "Attachments supported (PDF / PNG / JPEG / GIF, ≤15MB per file, ≤5 files). " +
-        "Verified-after-write (polls at 5s + 10s). Refuses if recipient is not 1st-degree.",
+        "Verified-after-write (polls at 5s + 10s). Refuses if recipient is not 1st-degree. " +
+        approvalHint({ legacy: true }),
       schema: linkedinSendMessageSchema,
       handler: async (args) =>
-        handleLinkedinSendMessage(args as Parameters<typeof handleLinkedinSendMessage>[0]),
+        gateLegacyWrite(sendMessageApproval, args, (a) =>
+          handleLinkedinSendMessage(a as Parameters<typeof handleLinkedinSendMessage>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -289,10 +302,13 @@ function buildTools(): ToolDefinition[] {
       description:
         "Send a LinkedIn InMail (paid). REQUIRES allow_inmail: true to confirm credit usage. " +
         "Tracks credits_used / credits_remaining via inmail_balance bracketing. " +
-        "Requires Premium / Sales Navigator / Recruiter subscription.",
+        "Requires Premium / Sales Navigator / Recruiter subscription. " +
+        approvalHint({ legacy: true }),
       schema: linkedinSendInmailSchema,
       handler: async (args) =>
-        handleLinkedinSendInmail(args as Parameters<typeof handleLinkedinSendInmail>[0]),
+        gateLegacyWrite(sendInmailApproval, args, (a) =>
+          handleLinkedinSendInmail(a as Parameters<typeof handleLinkedinSendInmail>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -300,10 +316,13 @@ function buildTools(): ToolDefinition[] {
       description:
         "Super-tool: routes to send_message (1st-degree), send_connection (2nd/3rd), " +
         "send_inmail (out-of-network with allow_inmail: true + inmail_subject), or skip. " +
-        "Supports dry_run: true to preview the action without executing.",
+        "Supports dry_run: true to preview the action without executing. " +
+        approvalHint({ legacy: true }),
       schema: linkedinEngageSchema,
       handler: async (args) =>
-        handleLinkedinEngage(args as Parameters<typeof handleLinkedinEngage>[0]),
+        gateLegacyWrite(engageApproval, args, (a) =>
+          handleLinkedinEngage(a as Parameters<typeof handleLinkedinEngage>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -390,11 +409,14 @@ function buildTools(): ToolDefinition[] {
       name: "whatsapp_send_message",
       description:
         "Send a WhatsApp message to an existing chat (chat_id — person or group) OR to a phone number (international format). " +
-        "SAFETY: without confirm:true it only returns a preview (recipient name + exact text) and sends nothing — show it to the user and resend with confirm:true only after explicit approval. " +
+        approvalHint() +
+        " " +
         "Daily cap 100, identical sends within 10 min blocked, verified-after-send. Returns {executed, provider_ok, verified, chat_id, message_id, audit_id, preview?, error?}.",
       schema: whatsappSendMessageSchema,
       handler: async (args) =>
-        handleWhatsappSendMessage(args as Parameters<typeof handleWhatsappSendMessage>[0]),
+        gateGuardedWrite("whatsapp_send_message", args, (a) =>
+          handleWhatsappSendMessage(a as Parameters<typeof handleWhatsappSendMessage>[0])
+        ),
       destructive: true,
     }),
     // ── Spec v2 (ADR 0002) — LinkedIn ──
@@ -412,10 +434,13 @@ function buildTools(): ToolDefinition[] {
       name: "linkedin_reply",
       description:
         "Reply in an existing LinkedIn conversation by chat_id (from linkedin_list_inbox) — works for any thread (DM, InMail reply, group). " +
-        "SAFETY: preview only unless confirm:true. Shares the 50/day LinkedIn DM cap. Returns {executed, verified, chat_id, message_id, audit_id, preview?, error?}.",
+        approvalHint() +
+        " Shares the 50/day LinkedIn DM cap. Returns {executed, verified, chat_id, message_id, audit_id, preview?, error?}.",
       schema: linkedinReplySchema,
       handler: async (args) =>
-        handleLinkedinReply(args as Parameters<typeof handleLinkedinReply>[0]),
+        gateGuardedWrite("linkedin_reply", args, (a) =>
+          handleLinkedinReply(a as Parameters<typeof handleLinkedinReply>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -462,40 +487,51 @@ function buildTools(): ToolDefinition[] {
       name: "linkedin_react_post",
       description:
         "React to a LinkedIn post (like, celebrate, support, love, insightful, funny). Post = URL, urn or post_id. " +
-        "SAFETY: preview only unless confirm:true. Shares a 40/day engagement cap with comments.",
+        approvalHint() +
+        " Shares a 40/day engagement cap with comments.",
       schema: linkedinReactPostSchema,
       handler: async (args) =>
-        handleLinkedinReactPost(args as Parameters<typeof handleLinkedinReactPost>[0]),
+        gateGuardedWrite("linkedin_react_post", args, (a) =>
+          handleLinkedinReactPost(a as Parameters<typeof handleLinkedinReactPost>[0])
+        ),
       destructive: true,
     }),
     defineTool({
       name: "linkedin_comment_post",
       description:
         "Comment on a LinkedIn post (≤1250 chars). Post = URL, urn or post_id. " +
-        "SAFETY: preview only unless confirm:true. Shares a 40/day engagement cap with reactions.",
+        approvalHint() +
+        " Shares a 40/day engagement cap with reactions.",
       schema: linkedinCommentPostSchema,
       handler: async (args) =>
-        handleLinkedinCommentPost(args as Parameters<typeof handleLinkedinCommentPost>[0]),
+        gateGuardedWrite("linkedin_comment_post", args, (a) =>
+          handleLinkedinCommentPost(a as Parameters<typeof handleLinkedinCommentPost>[0])
+        ),
       destructive: true,
     }),
     defineTool({
       name: "linkedin_create_post",
       description:
-        "Publish a public text post (≤3000 chars) from the LinkedIn account. SAFETY: preview only unless confirm:true. Cap 3 posts/day.",
+        "Publish a public text post (≤3000 chars) from the LinkedIn account. " +
+        approvalHint() +
+        " Cap 3 posts/day.",
       schema: linkedinCreatePostSchema,
       handler: async (args) =>
-        handleLinkedinCreatePost(args as Parameters<typeof handleLinkedinCreatePost>[0]),
+        gateGuardedWrite("linkedin_create_post", args, (a) =>
+          handleLinkedinCreatePost(a as Parameters<typeof handleLinkedinCreatePost>[0])
+        ),
       destructive: true,
     }),
     defineTool({
       name: "linkedin_cancel_invitation",
       description:
         "Withdraw a pending LinkedIn invitation (invitation_id from linkedin_list_pending) — cleans up stale invites to protect your acceptance rate. " +
-        "SAFETY: preview only unless confirm:true. LinkedIn blocks re-inviting the same person for ~3 weeks.",
+        approvalHint() +
+        " LinkedIn blocks re-inviting the same person for ~3 weeks.",
       schema: linkedinCancelInvitationSchema,
       handler: async (args) =>
-        handleLinkedinCancelInvitation(
-          args as Parameters<typeof handleLinkedinCancelInvitation>[0]
+        gateGuardedWrite("linkedin_cancel_invitation", args, (a) =>
+          handleLinkedinCancelInvitation(a as Parameters<typeof handleLinkedinCancelInvitation>[0])
         ),
       destructive: true,
     }),

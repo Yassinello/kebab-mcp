@@ -81,3 +81,18 @@ Hors périmètre : passkey, gestion multi-utilisateur, Kebab Cloud, installeur s
 - **Validation hors modèle (TRU-04)** : un clic de plus par envoi. C'est le but ; le mode `confirm` reste disponible pour qui l'assume.
 - **Encadrement du contenu (TRU-02)** : change la sortie de nombreux outils ; l'opt-out existe pour un client qui l'interpréterait mal.
 - **Migration de protocole** : le risque principal de la phase ; d'où la porte de décision PRO-01.
+
+## 9. Bilan de réalisation
+
+| Exigence | Statut | Note |
+| --- | --- | --- |
+| TRU-01 | ✅ | Annotations dérivées du manifest (`src/core/tool-annotations.ts`), livrées avec la migration de protocole. |
+| TRU-02 | ✅ | Liste explicite d'outils dans `src/core/untrusted-content.ts` (plus un opt-in `externalContent` par outil) ; notes du vault encadrées si `provenance: external`. |
+| TRU-03, TRU-04, TRU-06 | ✅ | Provenance, validation hors modèle (`/approve/<id>`, `src/core/approvals.ts`), section « Trust model » de `SECURITY.md`. |
+| TRU-05 | ✅ | Les outils `destructive` sont retirés de `tools/list` et refusés pour un client OAuth sans droit d'écriture. |
+| OAU-01 à OAU-10 | ✅ | `src/core/oauth.ts` ; consentement `/oauth/authorize`. |
+| ONB-01 à ONB-05, ONB-07 | ✅ | `kebab_setup`, `skill_templates_list`, `skill_template_install`, prompt `setup`, boutons « Add to Claude » et « Add to Cursor ». |
+| ONB-06 | ✅ avec écart | Le lien vers `/config` ne porte **aucun** identifiant : un lien signé ouvrant une session admin aurait transité par le fournisseur du modèle. Le propriétaire se connecte normalement. |
+| PRO-01, PRO-02 | ✅ | `mcp-handler` 2.x et SDK v2, les deux générations servies (ADR 0005). |
+
+Écart d'ordre : la migration de protocole (PRO) a été faite avant le modèle de confiance, car elle réécrit l'enregistrement des outils dont dépendent TRU-01 et TRU-05.

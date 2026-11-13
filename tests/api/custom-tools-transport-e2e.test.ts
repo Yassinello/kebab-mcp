@@ -33,14 +33,12 @@ import path from "node:path";
 // ── mcp-handler interception (must be hoisted before route import) ────
 
 // Track every (name → handler) registration the route makes against
-// the McpServer. We grab both `server.tool` (legacy) and
-// `server.registerTool` (outputSchema path) so we don't miss any
-// registration mode the route might use.
+// the McpServer (SDK v2: every tool goes through `server.registerTool`).
 const registered: Record<
   string,
   {
-    via: "tool" | "registerTool";
     description?: string;
+    annotations?: Record<string, unknown>;
     handler: (params: Record<string, unknown>) => Promise<unknown>;
   }
 > = {};
@@ -49,21 +47,19 @@ vi.mock("mcp-handler", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createMcpHandler = (initFn: (server: any) => void) => {
     const server = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tool: (name: string, description: string, _schema: unknown, cb: any) => {
-        registered[name] = { via: "tool", description, handler: cb };
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      registerTool: (name: string, config: { description?: string }, cb: any) => {
+      registerTool: (
+        name: string,
+        config: { description?: string; annotations?: Record<string, unknown> },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        cb: any
+      ) => {
         registered[name] = {
-          via: "registerTool",
           ...(config.description !== undefined ? { description: config.description } : {}),
+          ...(config.annotations !== undefined ? { annotations: config.annotations } : {}),
           handler: cb,
         };
       },
-      resource: vi.fn(),
       registerResource: vi.fn(),
-      prompt: vi.fn(),
       registerPrompt: vi.fn(),
     };
     initFn(server);
@@ -266,8 +262,17 @@ describe("transport E2E — Custom Tools surface", () => {
     expect(dangerous?.destructive).toBe(true);
 
     // And both end up registered through the transport (already
-    // verified by `driveRoute` above).
+    // verified by `driveRoute` above), with TRU-01 annotations mirroring
+    // the destructive flag.
     expect(registered["safe_greet"]).toBeDefined();
     expect(registered["explicit_destructive"]).toBeDefined();
+    expect(registered["safe_greet"]!.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
+    expect(registered["explicit_destructive"]!.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+    });
   });
 });

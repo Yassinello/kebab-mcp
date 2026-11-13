@@ -24,6 +24,7 @@
 import { createHash } from "node:crypto";
 import type { Step, PipelineContext } from "./types";
 import { checkMcpAuth, checkAdminAuth, safeCompare } from "../auth";
+import { publicOrigin, resolveAccessToken, wwwAuthenticate } from "../oauth";
 import { isLoopbackRequest } from "../request-utils";
 import { requestContext } from "../request-context";
 import { getConfig } from "../config-facade";
@@ -58,7 +59,28 @@ export function authStep(kind: AuthKind): Step {
   if (kind === "mcp") {
     return async (ctx, next) => {
       const { error, tokenId, tenantId } = checkMcpAuth(ctx.request);
-      if (error) return error;
+      if (error) {
+        // Kebab House phase 1 (OAU-08): an OAuth access token resolves to
+        // its device id; every per-token feature then applies unchanged.
+        const bearer = ctx.request.headers
+          .get("authorization")
+          ?.replace(/^Bearer\s+/i, "")
+          .trim();
+        const deviceId = bearer ? await resolveAccessToken(bearer).catch(() => null) : null;
+        if (deviceId) {
+          ctx.tokenId = deviceId;
+          ctx.tenantId = null;
+          ctx.authKind = "mcp";
+          return runWithResolvedContext(ctx, next);
+        }
+        // OAU-03: point MCP clients at the protected resource metadata.
+        if (error.status === 401) {
+          const headers = new Headers(error.headers);
+          headers.set("WWW-Authenticate", wwwAuthenticate(publicOrigin(ctx.request)));
+          return new Response(await error.text(), { status: 401, headers });
+        }
+        return error;
+      }
       ctx.tokenId = tokenId;
       ctx.tenantId = tenantId;
       ctx.authKind = "mcp";

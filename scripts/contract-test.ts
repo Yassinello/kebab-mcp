@@ -23,6 +23,7 @@ import { resolve } from "path";
 // contract test measures). One-time CI cost, not a request-time cost.
 import { ALL_CONNECTOR_LOADERS } from "../src/core/registry";
 import type { ConnectorManifest } from "../src/core/types";
+import { toolAnnotations, type KebabToolAnnotations } from "../src/core/tool-annotations";
 const SNAPSHOT_PATH = resolve(__dirname, "contract-snapshot.json");
 
 interface ToolContract {
@@ -30,6 +31,8 @@ interface ToolContract {
   pack: string;
   schemaKeys: string[];
   destructive: boolean;
+  /** TRU-01: the MCP annotations (incl. title) published in tools/list. */
+  annotations: KebabToolAnnotations;
 }
 
 async function loadAllManifests(): Promise<ConnectorManifest[]> {
@@ -48,6 +51,7 @@ async function getCurrentContract(): Promise<{
         pack: pack.id,
         schemaKeys: Object.keys(tool.schema).sort(),
         destructive: tool.destructive,
+        annotations: toolAnnotations(tool, pack),
       }))
     )
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -121,6 +125,13 @@ async function main() {
       console.error(
         `  DESTRUCTIVE FLAG CHANGED: ${cur.name} — was ${snap.destructive} → now ${cur.destructive}`
       );
+      failures++;
+    }
+
+    const curAnn = JSON.stringify(cur.annotations);
+    const snapAnn = JSON.stringify(snap.annotations);
+    if (curAnn !== snapAnn) {
+      console.error(`  ANNOTATIONS CHANGED: ${cur.name} — was ${snapAnn} → now ${curAnn}`);
       failures++;
     }
   }

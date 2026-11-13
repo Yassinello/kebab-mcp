@@ -72,6 +72,7 @@
  */
 
 import { z } from "zod";
+import { previewIdField } from "../lib/common-schema";
 import type { ToolResult } from "@/core/types";
 import { getUnipileClient } from "../lib/client";
 import { withRetry } from "../lib/retry";
@@ -124,6 +125,7 @@ export const linkedinSendMessageSchema = {
     .describe(
       "Optional attachments. Decoded server-side from base64 to [filename, Buffer] tuples (D-46). Per-file ≤15MB hard cap. Max 5 files."
     ),
+  preview_id: previewIdField,
   account_id: z
     .string()
     .optional()

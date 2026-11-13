@@ -71,6 +71,8 @@ Required: `GITHUB_PAT`, `GITHUB_REPO` (in `owner/repo` format), and optionally `
 
 The vault connector treats a GitHub repo as the storage backend for your Obsidian vault. Create a private repo, push your vault to it, and the connector reads/writes files via the GitHub Contents API.
 
+Notes carry a `provenance` in their frontmatter: `save_article` writes `provenance: external` (plus `source: <url>`), `vault_write` / `vault_append` add `provenance: assistant` when the note has none, and notes without the field count as `user`. An existing value is never overwritten. `vault_search` shows the provenance of each result; `vault_list` does not.
+
 ## Apify
 
 Required: `APIFY_TOKEN`. Find it under [Apify Console → Account → Integrations](https://console.apify.com/account/integrations).
@@ -97,16 +99,23 @@ Provides 23 tools — LinkedIn prospection, messaging, networking and content, p
 - `whatsapp_read_messages` — read one WhatsApp conversation by `chat_id`. Returns inbound + outbound messages, sorted oldest-first.
 - `whatsapp_find_chat` — find a WhatsApp group or 1:1 chat (and contacts) by name fragment or phone number to get its `chat_id`.
 - `whatsapp_search_messages` / `linkedin_search_messages` — keyword search over recent messages (one chat or the whole inbox, last 30 days by default).
-- `whatsapp_send_message` — send to a chat (person or group) or to a phone number. Preview first; sends only with `confirm: true`.
-- `linkedin_reply` — reply in any existing LinkedIn conversation by `chat_id`. Preview first; `confirm: true` to send.
+- `whatsapp_send_message` — send to a chat (person or group) or to a phone number. Preview first; sends only once you approve it (see below).
+- `linkedin_reply` — reply in any existing LinkedIn conversation by `chat_id`. Preview first; sends once approved.
 - `linkedin_get_profile` — person or company profile from a URL.
 - `linkedin_list_connections` — your 1st-degree connections, optionally filtered by name/headline words.
 - `linkedin_search` — search people / companies by keywords or replay a LinkedIn / Sales Navigator search URL.
 - `linkedin_list_posts` — recent posts of a person or company.
-- `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post` — engage and publish (preview first; `confirm: true` to act).
+- `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post` — engage and publish (preview first; acts once approved).
 - `linkedin_cancel_invitation` — withdraw a stale pending invitation.
 
-Every spec-v2 outgoing action (marked "preview first") returns exactly what it would do and acts only on `confirm: true`; daily caps, a 10-minute duplicate guard, and the kill switches `KEBAB_UNIPILE_WRITES_DISABLED` / `KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED` / `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` apply.
+Every outgoing action (the spec-v2 tools above and `linkedin_send_connection`, `linkedin_send_message`, `linkedin_send_inmail`, `linkedin_engage`) first returns exactly what it would do and sends nothing. Daily caps, a 10-minute duplicate guard, and the kill switches `KEBAB_UNIPILE_WRITES_DISABLED` / `KEBAB_UNIPILE_WHATSAPP_WRITES_DISABLED` / `KEBAB_UNIPILE_LINKEDIN_WRITES_DISABLED` apply when it runs.
+
+**Approving sends — `KEBAB_APPROVAL_MODE`.**
+
+- `link` (default): the preview comes with an approval link. Open it (you sign in like on `/config`), check the account, recipient and exact text, then click **Approve** or **Reject**. Tell the assistant it is approved: it calls the tool again with the `preview_id` and Kebab sends the approved payload, once — whatever the assistant passes on that call. Links expire after 15 minutes. `confirm: true` on its own is refused. Attachments must be resent identical (they are checked by hash, not stored). On Docker / self-hosted instances set `KEBAB_PUBLIC_URL` (e.g. `https://mcp.example.com`) so the link points to your host; on Vercel it is derived automatically.
+- `confirm`: the previous behaviour — the assistant sends after `confirm: true` (spec-v2 tools) or directly (historical LinkedIn tools). The assistant can then approve on its own; use it only if you accept that.
+
+See `docs/SECURITY.md` → *Trust model* for what is and is not protected.
 
 All read tools are strictly read-only — no audit log, no rate-limit, no message sending.
 

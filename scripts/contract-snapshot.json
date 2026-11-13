@@ -6,7 +6,13 @@
       "chunks",
       "delayMs"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Admin stream test",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "airtable_create_record",
@@ -16,7 +22,13 @@
       "fields",
       "table"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Airtable create record",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_get_record",
@@ -26,7 +38,13 @@
       "record_id",
       "table"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Airtable get record",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_list_bases",
@@ -34,7 +52,13 @@
     "schemaKeys": [
       "_placeholder"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Airtable list bases",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_list_records",
@@ -48,7 +72,13 @@
       "table",
       "view"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Airtable list records",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_list_tables",
@@ -56,7 +86,13 @@
     "schemaKeys": [
       "base_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Airtable list tables",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_search_records",
@@ -68,7 +104,13 @@
       "search_field",
       "table"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Airtable search records",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "airtable_update_record",
@@ -79,7 +121,13 @@
       "record_id",
       "table"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Airtable update record",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_fetch_doc",
@@ -87,7 +135,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify fetch doc",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_company",
@@ -95,7 +149,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin company",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_company_insights",
@@ -103,7 +163,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin company insights",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_company_posts",
@@ -112,7 +178,13 @@
       "maxPosts",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin company posts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_post",
@@ -120,7 +192,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin post",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_profile",
@@ -128,7 +206,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin profile",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_linkedin_profile_posts",
@@ -137,7 +221,13 @@
       "maxPosts",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify linkedin profile posts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_run_actor",
@@ -146,7 +236,13 @@
       "actorId",
       "input"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Apify run actor",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_search_actors",
@@ -154,7 +250,13 @@
     "schemaKeys": [
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify search actors",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "apify_search_docs",
@@ -165,7 +267,13 @@
       "query",
       "source"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Apify search docs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_create",
@@ -179,7 +287,13 @@
       "start",
       "summary"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Calendar create",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_delete",
@@ -189,7 +303,13 @@
       "calendar_id",
       "event_id"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Calendar delete",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_events",
@@ -198,7 +318,13 @@
       "account",
       "days"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Calendar events",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_find_free",
@@ -209,7 +335,13 @@
       "duration_minutes",
       "start_date"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Calendar find free",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_rsvp",
@@ -220,7 +352,13 @@
       "event_id",
       "response"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Calendar rsvp",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "calendar_update",
@@ -235,7 +373,13 @@
       "start",
       "summary"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Calendar update",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "composio_action",
@@ -245,7 +389,13 @@
       "connected_account_id",
       "params"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Composio action",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "composio_list",
@@ -253,7 +403,13 @@
     "schemaKeys": [
       "app"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Composio list",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "contacts_search",
@@ -263,7 +419,13 @@
       "max_results",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Contacts search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "drive_read",
@@ -272,7 +434,13 @@
       "account",
       "file_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Drive read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "drive_search",
@@ -282,7 +450,13 @@
       "max_results",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Drive search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "extract_links",
@@ -296,7 +470,13 @@
       "selector",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Extract links",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_add_comment",
@@ -306,7 +486,13 @@
       "issue_number",
       "repo"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Github add comment",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_create_issue",
@@ -319,7 +505,13 @@
       "repo",
       "title"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Github create issue",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_get_issue",
@@ -329,7 +521,13 @@
       "issue_number",
       "repo"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Github get issue",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_list_issues",
@@ -342,7 +540,13 @@
       "repo",
       "state"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Github list issues",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_search_issues",
@@ -351,7 +555,13 @@
       "limit",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Github search issues",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "github_update_issue",
@@ -366,7 +576,13 @@
       "state",
       "title"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Github update issue",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_attachment",
@@ -376,7 +592,13 @@
       "attachment_id",
       "message_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Gmail attachment",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_draft",
@@ -389,7 +611,13 @@
       "subject",
       "to"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Gmail draft",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_inbox",
@@ -399,7 +627,13 @@
       "max_results",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Gmail inbox",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_label",
@@ -410,7 +644,13 @@
       "message_id",
       "remove"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Gmail label",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_read",
@@ -419,7 +659,13 @@
       "account",
       "message_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Gmail read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_reply",
@@ -430,7 +676,13 @@
       "cc",
       "message_id"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Gmail reply",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_search",
@@ -441,7 +693,13 @@
       "max_results",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Gmail search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_send",
@@ -454,7 +712,13 @@
       "subject",
       "to"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Gmail send",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "gmail_trash",
@@ -463,7 +727,13 @@
       "account",
       "message_id"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Gmail trash",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "google_chat_list_messages",
@@ -474,7 +744,13 @@
       "page_token",
       "space_name"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Google chat list messages",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "google_chat_list_spaces",
@@ -484,7 +760,13 @@
       "page_size",
       "page_token"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Google chat list spaces",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "google_chat_send_message",
@@ -494,7 +776,28 @@
       "space_name",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Google chat send message",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "kebab_setup",
+    "pack": "context",
+    "schemaKeys": [
+      "action",
+      "step"
+    ],
+    "destructive": false,
+    "annotations": {
+      "title": "Set up Kebab House",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "linear_create_issue",
@@ -508,7 +811,13 @@
       "team",
       "title"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linear create issue",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linear_get_issue",
@@ -517,7 +826,13 @@
       "identifier",
       "include_comments"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linear get issue",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linear_list_issues",
@@ -529,7 +844,13 @@
       "state",
       "team"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linear list issues",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linear_list_projects",
@@ -538,7 +859,13 @@
       "limit",
       "team"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linear list projects",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linear_search_issues",
@@ -547,7 +874,13 @@
       "limit",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linear search issues",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linear_update_issue",
@@ -561,7 +894,13 @@
       "state",
       "title"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linear update issue",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_cancel_invitation",
@@ -570,9 +909,16 @@
       "account_id",
       "actor_user_id",
       "confirm",
-      "invitation_id"
+      "invitation_id",
+      "preview_id"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin cancel invitation",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_comment_post",
@@ -582,9 +928,16 @@
       "actor_user_id",
       "confirm",
       "post",
+      "preview_id",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin comment post",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_create_post",
@@ -593,9 +946,16 @@
       "account_id",
       "actor_user_id",
       "confirm",
+      "preview_id",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin create post",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_engage",
@@ -610,9 +970,16 @@
       "inmail_subject",
       "message",
       "note",
+      "preview_id",
       "profile_url"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin engage",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_feed",
@@ -620,7 +987,13 @@
     "schemaKeys": [
       "max_posts"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin feed",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_get_profile",
@@ -629,7 +1002,13 @@
       "account_id",
       "identifier"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin get profile",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_get_relationship_status",
@@ -638,7 +1017,13 @@
       "account_id",
       "profile_url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin get relationship status",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_list_connections",
@@ -649,7 +1034,13 @@
       "query",
       "scan_limit"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin list connections",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_list_inbox",
@@ -660,7 +1051,13 @@
       "since_days",
       "unread_only"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin list inbox",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_list_pending",
@@ -670,7 +1067,13 @@
       "limit",
       "older_than_days"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin list pending",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_list_posts",
@@ -680,7 +1083,13 @@
       "identifier",
       "limit"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin list posts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_react_post",
@@ -690,9 +1099,16 @@
       "actor_user_id",
       "confirm",
       "post",
+      "preview_id",
       "reaction"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin react post",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_read_messages",
@@ -703,7 +1119,13 @@
       "limit",
       "profile_url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin read messages",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_reply",
@@ -714,9 +1136,16 @@
       "attachments",
       "chat_id",
       "confirm",
+      "preview_id",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin reply",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_search",
@@ -728,7 +1157,13 @@
       "limit",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_search_messages",
@@ -740,7 +1175,13 @@
       "query",
       "since_days"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Linkedin search messages",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_send_connection",
@@ -750,9 +1191,16 @@
       "actor_user_id",
       "crm_log",
       "note",
+      "preview_id",
       "profile_url"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin send connection",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_send_inmail",
@@ -763,11 +1211,18 @@
       "allow_inmail",
       "crm_log",
       "max_inmail_credits",
+      "preview_id",
       "profile_url",
       "subject",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin send inmail",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "linkedin_send_message",
@@ -777,10 +1232,17 @@
       "actor_user_id",
       "attachments",
       "crm_log",
+      "preview_id",
       "profile_url",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Linkedin send message",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "mcp_cache_evict",
@@ -788,7 +1250,13 @@
     "schemaKeys": [
       "scope"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Mcp cache evict",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "mcp_logs",
@@ -797,13 +1265,25 @@
       "count",
       "filter"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Mcp logs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "my_context",
     "pack": "context",
     "schemaKeys": [],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "My context",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "my_context_update",
@@ -812,7 +1292,13 @@
       "content",
       "mode"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "My context update",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "notion_create",
@@ -827,7 +1313,13 @@
       "parent_type",
       "title"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Notion create",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "notion_get_db_schema",
@@ -836,7 +1328,13 @@
       "account",
       "database_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Notion get db schema",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "notion_query",
@@ -848,7 +1346,13 @@
       "limit",
       "sort"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Notion query",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "notion_read",
@@ -857,7 +1361,13 @@
       "account",
       "page_id"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Notion read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "notion_search",
@@ -867,7 +1377,13 @@
       "limit",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Notion search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "notion_update",
@@ -883,7 +1399,13 @@
       "properties",
       "replace_content"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Notion update",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "read_paywalled",
@@ -891,7 +1413,13 @@
     "schemaKeys": [
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Read paywalled",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "save_article",
@@ -902,7 +1430,13 @@
       "title",
       "url"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Save article",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "skill_load",
@@ -911,7 +1445,13 @@
       "arguments",
       "name"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Skill load",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "skill_read_file",
@@ -920,7 +1460,39 @@
       "name",
       "path"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Skill read file",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "skill_template_install",
+    "pack": "context",
+    "schemaKeys": [
+      "name"
+    ],
+    "destructive": true,
+    "annotations": {
+      "title": "Install a ritual template",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "skill_templates_list",
+    "pack": "context",
+    "schemaKeys": [],
+    "destructive": false,
+    "annotations": {
+      "title": "List ritual templates",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "skills_list",
@@ -929,7 +1501,13 @@
       "query",
       "tag"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Skills list",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "slack_channels",
@@ -938,7 +1516,13 @@
       "account",
       "limit"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Slack channels",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_profile",
@@ -947,7 +1531,13 @@
       "account",
       "user"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Slack profile",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_read",
@@ -959,7 +1549,13 @@
       "limit",
       "oldest"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Slack read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_search",
@@ -969,7 +1565,13 @@
       "count",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Slack search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_send",
@@ -980,7 +1582,13 @@
       "text",
       "thread_ts"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Slack send",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_send_dm",
@@ -990,7 +1598,13 @@
       "text",
       "to"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Slack send dm",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "slack_thread",
@@ -1001,7 +1615,13 @@
       "limit",
       "thread_ts"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Slack thread",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "vault_append",
@@ -1011,7 +1631,13 @@
       "path",
       "separator"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Vault append",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_backlinks",
@@ -1019,7 +1645,13 @@
     "schemaKeys": [
       "path"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault backlinks",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_batch_read",
@@ -1027,7 +1659,13 @@
     "schemaKeys": [
       "paths"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault batch read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_delete",
@@ -1036,7 +1674,13 @@
       "message",
       "path"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Vault delete",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_due",
@@ -1045,7 +1689,13 @@
       "before",
       "folder"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault due",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_list",
@@ -1053,7 +1703,13 @@
     "schemaKeys": [
       "folder"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault list",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_move",
@@ -1063,7 +1719,13 @@
       "message",
       "to"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Vault move",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_read",
@@ -1071,7 +1733,13 @@
     "schemaKeys": [
       "path"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_recent",
@@ -1081,7 +1749,13 @@
       "n",
       "since"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault recent",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_search",
@@ -1092,7 +1766,13 @@
       "page",
       "query"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault search",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_stats",
@@ -1100,7 +1780,13 @@
     "schemaKeys": [
       "folder"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Vault stats",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
   },
   {
     "name": "vault_write",
@@ -1112,7 +1798,13 @@
       "path",
       "sha"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Vault write",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
   },
   {
     "name": "web_act",
@@ -1123,7 +1815,13 @@
       "nav_timeout_ms",
       "url"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Web act",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "web_agent",
@@ -1135,7 +1833,13 @@
       "nav_timeout_ms",
       "url"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Web agent",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   },
   {
     "name": "web_browse",
@@ -1146,7 +1850,13 @@
       "scroll_count",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Web browse",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "web_extract",
@@ -1159,7 +1869,13 @@
       "scroll_count",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Web extract",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "web_observe",
@@ -1171,7 +1887,13 @@
       "scroll_count",
       "url"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Web observe",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "webhook_history",
@@ -1180,7 +1902,13 @@
       "limit",
       "name"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Webhook history",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "webhook_last",
@@ -1188,13 +1916,25 @@
     "schemaKeys": [
       "name"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Webhook last",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "webhook_list",
     "pack": "webhook",
     "schemaKeys": [],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Webhook list",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "whatsapp_find_chat",
@@ -1206,7 +1946,13 @@
       "query",
       "scan_limit"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Whatsapp find chat",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "whatsapp_list_inbox",
@@ -1217,7 +1963,13 @@
       "since_days",
       "unread_only"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Whatsapp list inbox",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "whatsapp_read_messages",
@@ -1227,7 +1979,13 @@
       "chat_id",
       "limit"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Whatsapp read messages",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "whatsapp_search_messages",
@@ -1239,7 +1997,13 @@
       "query",
       "since_days"
     ],
-    "destructive": false
+    "destructive": false,
+    "annotations": {
+      "title": "Whatsapp search messages",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
   },
   {
     "name": "whatsapp_send_message",
@@ -1251,8 +2015,15 @@
       "chat_id",
       "confirm",
       "phone",
+      "preview_id",
       "text"
     ],
-    "destructive": true
+    "destructive": true,
+    "annotations": {
+      "title": "Whatsapp send message",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": true
+    }
   }
 ]

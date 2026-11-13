@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { getCurrentTenantId } from "@/core/request-context";
 import { z } from "zod";
 import { withLogging } from "@/core/logging";
@@ -31,6 +32,8 @@ import {
 } from "@/core/pipeline";
 import { toMsg } from "@/core/error-utils";
 import { registerResources, type ResourceProvider } from "@/core/resources";
+import { toolAnnotations } from "@/core/tool-annotations";
+import { frameUntrustedResult } from "@/core/untrusted-content";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -185,6 +188,9 @@ async function buildHandler(
   // env.changed which already invalidates the cache below.
   await primeDynamicCaches(enabledPacks);
 
+  // TRU-05: read-only OAuth clients (resolved once per request).
+  const writeAllowed = getCallerMeta()?.writeAllowed ?? true;
+
   return createMcpHandler(
     (server) => {
       for (const pack of enabledPacks) {
@@ -194,6 +200,9 @@ async function buildHandler(
         if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
 
         for (const tool of pack.manifest.tools) {
+          // TRU-05: an OAuth client without write access never sees
+          // destructive tools (and is refused below if it calls one).
+          if (tool.destructive && !writeAllowed) continue;
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
             : tool.description;
@@ -238,6 +247,19 @@ async function buildHandler(
                   isError: true,
                 };
               }
+              if (tool.destructive && !writeAllowed) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: JSON.stringify({
+                        error: `Tool "${tool.name}" changes things and this client is read-only. Allow writes for it in Kebab House → Settings → Devices.`,
+                      }),
+                    },
+                  ],
+                  isError: true,
+                };
+              }
               // v0.11 Phase 41: the pipeline wraps the whole request in
               // `runWithCredentials` (hydrateCredentialsStep) and the
               // outer / authStep's nested `requestContext.run` already
@@ -251,8 +273,11 @@ async function buildHandler(
               void tenantId; // silence unused (kept for signature compatibility)
               // SEC-05: expose the caller's connector scope to code that
               // invokes other tools on its behalf (Custom Tools runner).
-              const result = await runWithToolAccess({ connectorScope }, () =>
-                tool.handler(params)
+              // TRU-02: third-party content is framed as untrusted data.
+              const result = frameUntrustedResult(
+                tool.name,
+                await runWithToolAccess({ connectorScope }, () => tool.handler(params)),
+                { externalContent: tool.externalContent }
               );
               // Kebab House phase 0 (USE-01): weekly usage counters —
               // names only, recorded after the response is sent.
@@ -271,32 +296,30 @@ async function buildHandler(
             requestId
           );
 
-          if (tool.outputSchema) {
-            // MCP SDK v1.x: use registerTool() with outputSchema so the client
-            // receives structuredContent alongside content[]. The outputSchema is
-            // stored as a plain JSON Schema; we pass z.record(z.unknown()) as the
-            // Zod-compatible outputSchema to satisfy the SDK type contract while
-            // accepting any valid JSON object. Zero impact on the 86 other tools
-            // — this branch is only entered when tool.outputSchema is truthy.
-            //
-            // Cast required: loggedHandler takes 1 arg; registerTool's ToolCallback
-            // signature includes a 2nd `extra` arg. The SDK tolerates 1-arity
-            // callbacks at runtime (extra is unused here), but TypeScript requires
-            // the cast to reconcile arity. The underlying behavior is identical.
-            server.registerTool(
-              tool.name,
-              {
-                description: desc,
-                inputSchema: tool.schema,
-                outputSchema: z.record(z.string(), z.unknown()),
-              },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              loggedHandler as any
-            );
-          } else {
-            // Legacy path — bit-for-bit identical to previous behavior.
-            server.tool(tool.name, desc, tool.schema, loggedHandler);
-          }
+          // TRU-01: every tool goes through registerTool() with a readable
+          // title and annotations derived from the manifest. The input schema
+          // is the same Zod shape wrapped in z.object() (the SDK v2 Standard
+          // Schema form — the raw-shape overload is deprecated); the JSON
+          // Schema published in tools/list is unchanged.
+          //
+          // outputSchema: stored as a plain JSON Schema on the manifest; we
+          // pass z.record(z.string(), z.unknown()) as the Standard-Schema
+          // outputSchema so the client receives structuredContent alongside
+          // content[] while any JSON object validates. Only tools that
+          // declare one (custom API tools) get it.
+          const annotations = toolAnnotations(tool, pack.manifest);
+          server.registerTool(
+            tool.name,
+            {
+              title: annotations.title,
+              description: desc,
+              inputSchema: z.object(tool.schema),
+              ...(tool.outputSchema ? { outputSchema: z.record(z.string(), z.unknown()) } : {}),
+              annotations,
+            },
+            // The SDK passes (args, ctx); loggedHandler only needs args.
+            (args) => loggedHandler(args as Record<string, unknown>) as Promise<CallToolResult>
+          );
         }
 
         // Non-tool primitives (MCP prompts, resources) — optional per
@@ -361,12 +384,28 @@ async function buildHandler(
         }
         return parts.length ? { instructions: parts.join("\n\n") } : {};
       })(),
-    },
-    {
-      basePath: "/api",
-      maxDuration: 90,
     }
   );
+}
+
+/** The only `[transport]` value served: `/api/mcp`. */
+const MCP_TRANSPORT_SEGMENT = "mcp";
+
+/**
+ * The `[transport]` route segment of this request. Read from Next's route
+ * params when present, else from the URL (`/api/<segment>`) — callers that
+ * invoke the exported handler without a route context (tests, scripts)
+ * still get the right answer.
+ */
+async function resolveTransportSegment(ctx: PipelineContext): Promise<string | null> {
+  const params = (ctx.routeParams as { params?: Promise<{ transport?: unknown }> } | undefined)
+    ?.params;
+  if (params) {
+    const transport = (await params)?.transport;
+    return typeof transport === "string" ? transport : null;
+  }
+  const segments = new URL(ctx.request.url).pathname.split("/").filter(Boolean);
+  return segments.length === 2 && segments[0] === "api" ? (segments[1] ?? null) : null;
 }
 
 /**
@@ -383,6 +422,17 @@ async function buildHandler(
  * credential-store.ts SEC-02 for the resolution order.
  */
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
+  // PRO-02: mcp-handler 2.x serves every request it receives — it no longer
+  // inspects the pathname (1.x answered only `<basePath>/mcp` and 404'd the
+  // rest). Only `/api/mcp` is the MCP endpoint, so every other value of the
+  // dynamic `[transport]` segment keeps the 1.x answer: 404 "Not found"
+  // (text/plain), after the same auth / rate-limit steps as before. This
+  // includes the retired HTTP+SSE paths `/api/sse` and `/api/message`.
+  if ((await resolveTransportSegment(ctx)) !== MCP_TRANSPORT_SEGMENT) {
+    const res = new Response("Not found", { status: 404 });
+    res.headers.set("x-request-id", ctx.requestId);
+    return res;
+  }
   // SEC-04 / SEC-06: resolve the caller token's access once per request.
   // A rotated/revoked token is refused outright — on Vercel it can still
   // be present in the env until the next deploy.

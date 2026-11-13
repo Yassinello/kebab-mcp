@@ -1,6 +1,12 @@
 "use client";
 
 import { PRODUCT } from "@/core/constants/brand";
+import {
+  claudeAddConnectorUrl,
+  claudeCodeAddCommand,
+  cursorInstallUrl,
+  SETUP_PHRASE,
+} from "@/core/client-links";
 import { useState } from "react";
 
 /**
@@ -28,7 +34,7 @@ type Client =
   | "other";
 
 const CLIENT_LABELS: Record<Client, string> = {
-  "claude-desktop-connector": "Claude Desktop · Connector",
+  "claude-desktop-connector": "Claude (web, desktop)",
   "claude-desktop-config": "Claude Desktop · Config file",
   "claude-code": "Claude Code",
   cursor: "Cursor",
@@ -72,7 +78,8 @@ export function McpClientSnippets({
     2
   );
 
-  const claudeCodeSnippet = `claude mcp add --transport http kebab-mcp ${url} \\\n  --header "Authorization: Bearer ${tokenForSnippet}"`;
+  // Kebab House phase 1: Claude Code negotiates OAuth on first use (no token in config).
+  const claudeCodeSnippet = claudeCodeAddCommand(url);
 
   const cursorSnippet = JSON.stringify(
     {
@@ -93,7 +100,7 @@ export function McpClientSnippets({
 
   const snippet =
     client === "claude-desktop-connector"
-      ? urlWithToken
+      ? url
       : client === "claude-desktop-config"
         ? desktopConfigSnippet
         : client === "claude-code"
@@ -179,6 +186,25 @@ export function McpClientSnippets({
 
       <HelpText tab={client} theme={theme} desktopPath={desktopPath} baseUrl={url} />
 
+      {client === "claude-desktop-connector" && (
+        <a
+          href={claudeAddConnectorUrl(url)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block mb-3 bg-accent text-white text-xs font-medium px-3 py-1.5 rounded-md hover:bg-accent/90"
+        >
+          Add to Claude
+        </a>
+      )}
+      {client === "cursor" && (
+        <a
+          href={cursorInstallUrl(url)}
+          className="inline-block mb-3 bg-accent text-white text-xs font-medium px-3 py-1.5 rounded-md hover:bg-accent/90"
+        >
+          Add to Cursor
+        </a>
+      )}
+
       <div className="relative">
         <pre
           className={`text-[11px] font-mono ${t.preBg} border ${t.preBorder} px-3 py-2.5 rounded-md ${t.preText} overflow-x-auto whitespace-pre-wrap break-all`}
@@ -222,11 +248,11 @@ function HelpText({
   if (tab === "claude-desktop-connector") {
     return (
       <p className={klass}>
-        In Claude Desktop: <strong>Settings → Connectors → Add custom connector</strong>. Set
-        <code className={codeKlass}> Name</code> to{" "}
-        <code className={codeKlass}>{PRODUCT.name}</code> and paste this URL into{" "}
-        <code className={codeKlass}>Remote MCP server URL</code>. Leave the OAuth fields empty — the
-        token travels in the query string.
+        Click <strong>Add to Claude</strong> (or in Claude:{" "}
+        <strong>Customize → Connectors → Add custom connector</strong>, name{" "}
+        <code className={codeKlass}>{PRODUCT.name}</code>, this URL). Claude then opens your Kebab
+        House to ask for your approval — no token to paste. Once connected, say{" "}
+        <em>&ldquo;{SETUP_PHRASE}&rdquo;</em> to start the guided setup.
       </p>
     );
   }
@@ -243,8 +269,8 @@ function HelpText({
   if (tab === "claude-code") {
     return (
       <p className={klass}>
-        Run this command in any terminal. It registers {PRODUCT.name} as an HTTP MCP server in your
-        Claude Code config.
+        Run this command in any terminal. Claude Code opens your browser once to approve the
+        connection (OAuth); no token is stored in its config.
       </p>
     );
   }

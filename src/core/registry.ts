@@ -139,7 +139,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Profile",
     description: "Your personal profile (who you are, current projects, preferences), one per hat.",
     requiredEnvVars: [],
-    toolCount: 2,
+    toolCount: 5,
     core: true,
     loader: () => import("@/connectors/context/manifest").then((m) => m.contextConnector),
   },

@@ -9,7 +9,17 @@ export const confirmField = z
   .default(false)
   .describe(
     "Safety gate. false (default) = PREVIEW ONLY: returns exactly what would be sent, sends nothing. " +
-      "Set true ONLY after the user explicitly approved that exact preview."
+      "In the default approval mode the send is unlocked by the user's approval link + preview_id, not by this flag; " +
+      "in confirm mode set true ONLY after the user explicitly approved that exact preview."
+  );
+
+/** TRU-04: id of an approved preview (see lib/approval-gate.ts). */
+export const previewIdField = z
+  .string()
+  .max(64)
+  .optional()
+  .describe(
+    "Approval id returned by the preview call (default approval mode). Call again with it once the user has approved the action at approval_url: the approved payload stored server-side is executed, other arguments are ignored."
   );
 
 export const actorUserIdField = z

@@ -44,12 +44,22 @@ import {
   setDeviceConnectors,
   setDeviceSkillTags,
   setDeviceProfile,
+  isOAuthDevice,
+  revokeOAuthDevice,
+  setDeviceWriteAllowed,
 } from "@/core/devices";
 import { mintDeviceInvite } from "@/core/device-invite";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
 import { parseTokens, tokenId } from "@/core/auth";
 import { getConfig } from "@/core/config-facade";
 import { toMsg } from "@/core/error-utils";
+
+/** A device id is known when it is a static token in MCP_AUTH_TOKEN or an active OAuth client. */
+async function isKnownDevice(id: string): Promise<boolean> {
+  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
+  if (tokens.some((t) => tokenId(t) === id)) return true;
+  return isOAuthDevice(id);
+}
 
 function rootOnlyGuard(): Response | null {
   if (getCurrentTenantId() !== null) {
@@ -76,6 +86,22 @@ interface PostBody {
   connectors?: string[] | null;
   skillTags?: string[] | null;
   profile?: string | null;
+  writeAllowed?: boolean;
+}
+
+async function handleSetWriteAllowed(body: PostBody): Promise<Response> {
+  const targetId = body.tokenId;
+  if (!targetId || typeof targetId !== "string") {
+    return NextResponse.json({ error: "missing_tokenId" }, { status: 400 });
+  }
+  if (typeof body.writeAllowed !== "boolean") {
+    return NextResponse.json({ error: "invalid_writeAllowed" }, { status: 400 });
+  }
+  if (!(await isOAuthDevice(targetId))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  await setDeviceWriteAllowed(targetId, body.writeAllowed);
+  return NextResponse.json({ ok: true });
 }
 
 async function handleSetProfile(body: PostBody): Promise<Response> {
@@ -87,8 +113,7 @@ async function handleSetProfile(body: PostBody): Promise<Response> {
   if (profile !== null && profile !== undefined && typeof profile !== "string") {
     return NextResponse.json({ error: "invalid_profile" }, { status: 400 });
   }
-  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
-  if (!tokens.some((t) => tokenId(t) === targetId)) {
+  if (!(await isKnownDevice(targetId))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   try {
@@ -114,8 +139,7 @@ async function handleSetSkillTags(body: PostBody): Promise<Response> {
   if (tags !== null && !Array.isArray(tags)) {
     return NextResponse.json({ error: "invalid_skill_tags" }, { status: 400 });
   }
-  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
-  if (!tokens.some((t) => tokenId(t) === targetId)) {
+  if (!(await isKnownDevice(targetId))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   try {
@@ -182,11 +206,9 @@ async function handleSetConnectors(body: PostBody): Promise<Response> {
   if (connectors !== null && !Array.isArray(connectors)) {
     return NextResponse.json({ error: "invalid_connectors" }, { status: 400 });
   }
-  // Pre-validate token presence so we return a clean 404 rather than
-  // silently pinning a scope to a tokenId that isn't in MCP_AUTH_TOKEN.
-  const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
-  const present = tokens.some((t) => tokenId(t) === targetId);
-  if (!present) {
+  // Pre-validate presence so we return a clean 404 rather than silently
+  // pinning a scope to an id that is neither a static token nor an OAuth client.
+  if (!(await isKnownDevice(targetId))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   try {
@@ -251,6 +273,8 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
       return handleSetSkillTags(body);
     case "set-profile":
       return handleSetProfile(body);
+    case "set-write-allowed":
+      return handleSetWriteAllowed(body);
     case "invite":
       return handleInvite(body);
     default:
@@ -272,6 +296,11 @@ async function deleteHandler(ctx: PipelineContext): Promise<Response> {
   const tokens = parseTokens(getConfig("MCP_AUTH_TOKEN"));
   const match = tokens.find((t) => tokenId(t) === targetId);
   if (!match) {
+    // Kebab House phase 1: OAuth clients have no env token — revoke the device.
+    if (await isOAuthDevice(targetId)) {
+      await revokeOAuthDevice(targetId);
+      return NextResponse.json({ revoked: true, oauth: true });
+    }
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const result = await deleteDevice(targetId, match);

@@ -118,6 +118,10 @@ const ALLOWLIST = new Set<string>([
   // to the tenant one, so a global token's device scope (stored at root)
   // still applies when the caller sends an arbitrary tenant header.
   "src/core/token-scope.ts",
+  // Kebab House phase 1 (OAU): the OAuth authorization server is root-only
+  // by design (one owner per instance); its clients, codes and tokens live in
+  // the root namespace whatever the request's tenant header.
+  "src/core/oauth.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",
 ]);

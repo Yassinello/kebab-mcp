@@ -52,6 +52,7 @@
  */
 
 import { z } from "zod";
+import { previewIdField } from "../lib/common-schema";
 import type { ToolResult } from "@/core/types";
 import { getUnipileClient } from "../lib/client";
 import { withRetry } from "../lib/retry";
@@ -122,6 +123,7 @@ export const linkedinEngageSchema = {
       "If true, RESOLVE the degree and return the PROPOSED action — DO NOT call any provider write API. " +
         "Use for bill-of-actions previews on batches of prospects (D-32)."
     ),
+  preview_id: previewIdField,
   account_id: z
     .string()
     .optional()

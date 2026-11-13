@@ -21,7 +21,12 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import { getDeviceAccess, getDeviceMetaFrom, getDeviceSkillTagsFrom } from "./devices";
+import {
+  getDeviceAccess,
+  getDeviceMetaFrom,
+  getDeviceSkillTagsFrom,
+  getDeviceWriteAllowedFrom,
+} from "./devices";
 import { getKVStore, getTenantKVStore } from "./kv-store";
 import { getCurrentTenantId } from "./request-context";
 import { CORE_CONNECTOR_IDS } from "./registry";
@@ -193,6 +198,12 @@ export interface CallerMeta {
   label: string | null;
   /** Profile bound to the token. `null` = default profile. */
   profile: string | null;
+  /**
+   * Kebab House phase 1 (TRU-05): false for OAuth clients that were not
+   * granted write access — destructive tools are then hidden and refused.
+   * Static tokens are always true.
+   */
+  writeAllowed: boolean;
 }
 
 /**
@@ -204,22 +215,32 @@ export interface CallerMeta {
 export async function resolveCallerMeta(
   callerTokenId: string | null | undefined
 ): Promise<CallerMeta> {
-  const empty: CallerMeta = { tokenId: callerTokenId ?? null, label: null, profile: null };
+  const empty: CallerMeta = {
+    tokenId: callerTokenId ?? null,
+    label: null,
+    profile: null,
+    writeAllowed: true,
+  };
   if (!callerTokenId) return empty;
   try {
     const tenantId = getCurrentTenantId();
     const namespaces = [getKVStore()];
     if (tenantId) namespaces.push(getTenantKVStore(tenantId));
     const metas = await Promise.all(namespaces.map((kv) => getDeviceMetaFrom(callerTokenId, kv)));
+    const writes = await Promise.all(
+      namespaces.map((kv) => getDeviceWriteAllowedFrom(callerTokenId, kv))
+    );
     let label: string | null = null;
     let profile: string | null = null;
     for (const m of metas) {
       if (m.label) label = m.label;
       if (m.profile) profile = m.profile;
     }
-    return { tokenId: callerTokenId, label, profile };
+    // Most restrictive answer wins (a tenant header can't grant writes).
+    return { tokenId: callerTokenId, label, profile, writeAllowed: writes.every(Boolean) };
   } catch {
-    return empty;
+    // Fail closed on writes: a KV error never grants write access.
+    return { ...empty, writeAllowed: false };
   }
 }
 
