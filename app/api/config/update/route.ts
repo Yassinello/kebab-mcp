@@ -13,26 +13,44 @@ import { getKVStore } from "@/core/kv-store";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
 import {
-  computeUpdateStatus,
   ghFetch,
+  isUpstreamFork,
   resolveUpdateToken,
   UPDATE_CHECK_KV_KEY,
   UPDATE_CHECK_TTL_SECONDS,
   UPDATE_CHECK_STALE_MS,
+  type RepoMetadata,
   type UpdateStatusPayload,
 } from "@/core/update-check";
+import {
+  applyReleaseSync,
+  computeDeploymentUpdateStatus,
+  type DeployedRepo,
+  type ReleaseSyncFailure,
+  type ReleaseSyncStatusPayload,
+} from "@/core/release-sync";
 import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 const updateCheckLogger = getLogger("config.update.cache");
+
+// A release sync copies up to 500 files one GitHub call at a time — give it
+// room (Vercel caps this at the plan's maximum).
+export const maxDuration = 300;
 
 /**
  * GET  /api/config/update → check if updates are available
  * POST /api/config/update → apply updates
  *
- * Three modes:
- *   "git"        — local dev / Docker: uses git CLI (existing path, unchanged)
- *   "github-api" — Vercel fork with VERCEL_GIT_REPO_OWNER + VERCEL_GIT_REPO_SLUG: uses GitHub REST API
- *   "disabled"   — Vercel without owner/slug, or KEBAB_DISABLE_UPDATE_API=1
+ * Modes:
+ *   "git"          — local dev / Docker: uses git CLI (existing path, unchanged)
+ *   "github-api"   — Vercel deploy of a real fork of upstream: GitHub merge-upstream
+ *   "release-sync" — Vercel deploy of any other repo (Deploy Button clone):
+ *                    copies the files of the latest upstream release into the
+ *                    repo via the Git Data API (src/core/release-sync.ts)
+ *   "disabled"     — Vercel without owner/slug, or KEBAB_DISABLE_UPDATE_API=1
+ *
+ * "github-api" vs "release-sync" is decided per request from the repo's
+ * GitHub metadata (fork + parent), so both share the VERCEL_GIT_* gate below.
  */
 
 /**
@@ -103,12 +121,12 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
  * Validate that a parsed cache value has the minimum shape we expect.
  * Anything missing checkedAt or mode is treated as corrupt → cache-miss.
  */
-function isValidCachedPayload(p: unknown): p is UpdateStatusPayload {
+function isValidCachedPayload(p: unknown): p is UpdateStatusPayload | ReleaseSyncStatusPayload {
   if (!p || typeof p !== "object") return false;
   const obj = p as Record<string, unknown>;
   return (
     typeof obj.checkedAt === "string" &&
-    obj.mode === "github-api" &&
+    (obj.mode === "github-api" || obj.mode === "release-sync") &&
     typeof obj.status === "string" &&
     typeof obj.behind_by === "number" &&
     typeof obj.ahead_by === "number"
@@ -168,9 +186,10 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
     }
   }
 
-  // Delegate to the shared compute helper. The helper does NOT touch KV,
+  // Delegate to the shared compute helper (fork → merge-upstream status,
+  // anything else → release-sync status). The helper does NOT touch KV,
   // auth, or credential hydration — that's the caller's job above.
-  const result = await computeUpdateStatus(token, owner, slug);
+  const result = await computeDeploymentUpdateStatus(token, owner, slug);
 
   if (!result.ok) {
     // Invalidate the cache on auth/fetch error so the user isn't served
@@ -181,28 +200,23 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
     } catch {
       /* non-fatal */
     }
+    const mode = result.mode ?? "github-api";
     if (result.kind === "auth") {
       return NextResponse.json({
-        mode: "github-api",
+        mode,
         available: false,
         reason: "auth",
         tokenConfigured: true,
       });
     }
-    if (result.kind === "not-a-fork") {
-      // Deploy was created from a one-click flow (e.g. legacy /new/clone)
-      // and the resulting repo is a standalone snapshot, not a real fork
-      // of upstream. The merge-upstream API will reject — surface a clear,
-      // actionable message pointing the user at the /deploy hub for the
-      // recommended fork-then-import flow.
+    if (result.kind === "unknown-version") {
       return NextResponse.json({
-        mode: "github-api",
+        mode,
         available: false,
-        reason: "not-a-fork",
+        reason: "unknown-version",
         tokenConfigured: true,
-        deployedRepo: result.deployedRepo,
-        upstreamRepo: `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`,
-        redeployUrl: "/deploy",
+        installedVersion: result.installedVersion,
+        message: result.message,
       });
     }
     return errorResponse(new Error(`GitHub API failed: ${result.status}`), {
@@ -223,8 +237,8 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
     });
   }
 
-  // payload already carries `mode: "github-api"` and `checkedAt` (additive,
-  // non-breaking — pre-Phase-63 callers ignore unknown fields).
+  // payload already carries `mode` ("github-api" | "release-sync") and
+  // `checkedAt` (additive, non-breaking — older callers ignore unknown fields).
   return NextResponse.json(result.payload);
 }
 
@@ -238,6 +252,29 @@ async function githubApiPostHandler(): Promise<Response> {
 
   if (!token) {
     return NextResponse.json({ ok: false, reason: "no-token" }, { status: 400 });
+  }
+
+  // Mode selection (UPD-04): forks of upstream keep merge-upstream below,
+  // unchanged; any other repo (Deploy Button clone) goes through release-sync.
+  const repoRes = await ghFetch(`/repos/${owner}/${slug}`, token);
+  if (!repoRes.ok) {
+    if (repoRes.status === 401 || repoRes.status === 403) {
+      const ghMsg = (repoRes.data as { message?: string })?.message ?? "Auth error";
+      return NextResponse.json({ ok: false, reason: "auth", message: ghMsg }, { status: 403 });
+    }
+    return errorResponse(new Error(`Repo lookup failed: ${repoRes.status}`), {
+      status: 502,
+      route: "config/update",
+    });
+  }
+  const repoData = repoRes.data as RepoMetadata;
+  if (!isUpstreamFork(repoData)) {
+    return releaseSyncPostHandler(token, {
+      owner,
+      slug,
+      defaultBranch: repoData.default_branch || "main",
+      private: repoData.private ?? false,
+    });
   }
 
   // Server-side guard: re-check ahead_by before merge (D-04)
@@ -312,6 +349,56 @@ async function githubApiPostHandler(): Promise<Response> {
     pulled: cmp.behind_by,
     merge_type: mergeData.merge_type ?? "fast-forward",
     deployUrl,
+  });
+}
+
+// ── Release-sync POST handler (UPD-01..05) ─────────────────────────────
+
+const RELEASE_SYNC_HTTP_STATUS: Record<ReleaseSyncFailure["reason"], number> = {
+  conflict: 409,
+  "head-moved": 409,
+  "too-large": 413,
+  "unknown-version": 422,
+  "no-release": 404,
+  auth: 403,
+  "github-error": 502,
+  integrity: 502,
+};
+
+async function releaseSyncPostHandler(token: string, repo: DeployedRepo): Promise<Response> {
+  const result = await applyReleaseSync(token, repo);
+  if (!result.ok) {
+    return NextResponse.json(
+      { ...result, mode: "release-sync" },
+      { status: RELEASE_SYNC_HTTP_STATUS[result.reason] }
+    );
+  }
+  if (result.upToDate) {
+    return NextResponse.json({
+      ok: true,
+      mode: "release-sync",
+      pulled: 0,
+      reason: "Already up to date.",
+    });
+  }
+  // The status cache still says "update available" — drop it so the banner
+  // doesn't offer the same release again while Vercel redeploys.
+  try {
+    await getKVStore().delete(UPDATE_CHECK_KV_KEY);
+  } catch {
+    /* non-fatal: the cache expires on its own */
+  }
+  return NextResponse.json({
+    ok: true,
+    mode: "release-sync",
+    pulled: result.pulled,
+    fromVersion: result.fromVersion,
+    version: result.toVersion,
+    commitSha: result.commitSha,
+    commitUrl: result.commitUrl,
+    files: { added: result.added, modified: result.modified, removed: result.removed },
+    skipped: result.skipped,
+    deployUrl: `https://vercel.com/${repo.owner}/${repo.slug}/deployments`,
   });
 }
 

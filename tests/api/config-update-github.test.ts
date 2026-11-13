@@ -308,6 +308,15 @@ describe("github-api mode", () => {
     setupVercelEnv("testowner", "testslug");
     setupPat("ghp_test");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     // compare re-fetch before merge
     fetchMock.mockResolvedValueOnce(
       mockJsonResponse({
@@ -344,6 +353,15 @@ describe("github-api mode", () => {
     setupVercelEnv("testowner", "testslug");
     setupPat("ghp_test");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      mockJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     // compare re-fetch
     fetchMock.mockResolvedValueOnce(
       mockJsonResponse({
@@ -375,67 +393,85 @@ describe("github-api mode", () => {
 
   // ── Case 7: GET — deployed repo is not a fork of upstream ──────────────
   //
-  // Reproduces the kebab-mcp-yass bug (2026-04-28). Vercel's /new/clone
-  // creates a standalone snapshot, NOT a real GitHub fork. The repo lookup
-  // returns `fork: false, parent: null`. The route must short-circuit with
-  // `reason: "not-a-fork"` instead of running the Compare API (which would
-  // misleadingly return "identical" for a snapshot, telling the user
-  // "everything is up to date" when in reality they will never receive
-  // any update.
+  // Vercel's /new/clone (the Deploy Button) creates a standalone copy, NOT a
+  // GitHub fork (`fork: false, parent: null`). Until phase 2 the route
+  // answered `reason: "not-a-fork"` (kebab-mcp-yass bug, 2026-04-28). It now
+  // switches to release-sync: installed version (package.json) vs. the
+  // latest upstream release. The fork Compare API must still NOT be called
+  // (it would misleadingly return "identical" for a snapshot).
 
-  it("Case 7: GET returns reason=not-a-fork when deployed repo lacks an upstream parent", async () => {
-    setupVercelEnv("someone", "kebab-mcp-clone");
+  it("Case 7: GET uses release-sync when the deployed repo lacks an upstream parent", async () => {
+    setupVercelEnv("someone", "kebab-house");
     setupPat("ghp_test");
-
-    // /repos/<owner>/<slug> — the snapshot is a standalone repo.
-    fetchMock.mockResolvedValueOnce(
-      mockJsonResponse({ private: false, fork: false, parent: null })
-    );
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith("/repos/someone/kebab-house")) {
+        return mockJsonResponse({
+          private: false,
+          fork: false,
+          parent: null,
+          default_branch: "main",
+        });
+      }
+      if (url.includes("/repos/someone/kebab-house/contents/package.json")) {
+        return mockJsonResponse({
+          encoding: "base64",
+          content: Buffer.from(JSON.stringify({ version: "0.1.16" })).toString("base64"),
+        });
+      }
+      if (url.endsWith("/repos/Yassinello/kebab-mcp/releases/latest")) {
+        return mockJsonResponse({ tag_name: "v0.1.16", html_url: "https://rel" });
+      }
+      return mockJsonResponse({ message: "Not Found" }, 404);
+    });
 
     const mod = await import("../../app/api/config/update/route");
     const fakeCtx = { request: new Request("http://localhost/api/config/update") };
     const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
-    expect(body.mode).toBe("github-api");
+    expect(body.mode).toBe("release-sync");
     expect(body.available).toBe(false);
-    expect(body.reason).toBe("not-a-fork");
-    expect(body.deployedRepo).toBe("someone/kebab-mcp-clone");
-    expect(body.upstreamRepo).toBe("Yassinello/kebab-mcp");
-    // Updated 2026-04-28: redeployUrl now points at the in-app /deploy
-    // hub (df87c6d) instead of the legacy vercel.com/new/deploy link.
-    expect(body.redeployUrl).toBe("/deploy");
+    expect(body.status).toBe("identical");
+    expect(body.installedVersion).toBe("0.1.16");
+    expect(body.deployedRepo).toBe("someone/kebab-house");
 
-    // Verify the Compare API was NEVER called — the short-circuit happens
-    // before the second fetch.
-    const compareCalls = fetchMock.mock.calls.filter(
-      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/")
+    // The fork-only cross-repo Compare is never called.
+    const forkCompare = fetchMock.mock.calls.filter(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("/compare/Yassinello:")
     );
-    expect(compareCalls).toHaveLength(0);
+    expect(forkCompare).toHaveLength(0);
   });
 
   // ── Case 8: GET — fork's parent points elsewhere ───────────────────────
 
-  it("Case 8: GET returns reason=not-a-fork when fork.parent != upstream", async () => {
+  it("Case 8: GET uses release-sync when fork.parent != upstream", async () => {
     setupVercelEnv("someone", "their-fork");
     setupPat("ghp_test");
 
     // Real GitHub fork, but of a DIFFERENT upstream — merge-upstream would
-    // pull from the wrong place. Treat as not-a-fork from our POV.
-    fetchMock.mockResolvedValueOnce(
-      mockJsonResponse({
-        private: false,
-        fork: true,
-        parent: { full_name: "OtherOrg/other-project" },
-      })
-    );
+    // pull from the wrong place, so release-sync takes over.
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith("/repos/someone/their-fork")) {
+        return mockJsonResponse({
+          private: true,
+          fork: true,
+          parent: { full_name: "OtherOrg/other-project" },
+          default_branch: "main",
+        });
+      }
+      if (url.endsWith("/repos/Yassinello/kebab-mcp/releases/latest")) {
+        return mockJsonResponse({ tag_name: "v0.0.1" });
+      }
+      return mockJsonResponse({ message: "Not Found" }, 404);
+    });
 
     const mod = await import("../../app/api/config/update/route");
     const fakeCtx = { request: new Request("http://localhost/api/config/update") };
     const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
-    expect(body.reason).toBe("not-a-fork");
+    expect(body.mode).toBe("release-sync");
     expect(body.deployedRepo).toBe("someone/their-fork");
+    expect(body.forkPrivate).toBe(true);
   });
 });
