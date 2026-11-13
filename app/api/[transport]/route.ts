@@ -5,6 +5,7 @@ import { withLogging } from "@/core/logging";
 import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
+import { PRODUCT } from "@/core/constants/brand";
 import { getDisabledTools } from "@/core/tool-toggles";
 import { getConfigRevision } from "@/core/config-revision";
 import {
@@ -307,7 +308,7 @@ async function buildHandler(
     },
     {
       serverInfo: {
-        name: "Kebab MCP",
+        name: PRODUCT.name,
         version: VERSION,
       },
       // Skills v2 (spec §5): connectors may contribute to the MCP server

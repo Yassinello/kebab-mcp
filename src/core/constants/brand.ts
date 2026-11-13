@@ -27,8 +27,28 @@ export const BRAND = {
   cookieName: "kebab_admin_token",
   /** OpenTelemetry span attribute namespace prefix (e.g. kebab.tool.name). */
   otelAttrPrefix: "kebab",
-  /** Human-readable product name. Used in boot logs, README, CHANGELOG. */
+  /**
+   * Technical product name. Kept as "Kebab MCP" for continuity with the
+   * repository name and the `[Kebab MCP]` log prefixes. User-facing UI
+   * uses `PRODUCT.name` instead.
+   */
   displayName: "Kebab MCP",
+} as const;
+
+/**
+ * Kebab House (ADR 0004, spec phase 0 BRD-01..04) — user-facing product
+ * identity. Use for anything a person reads: dashboard and welcome
+ * chrome, landing copy, page metadata, MCP `serverInfo.name`.
+ *
+ * NOT for technical identifiers. The repository (`kebab-mcp`), env vars
+ * (`KEBAB_*` / `MYMCP_*`), KV keys, cookie and header names and log
+ * prefixes (`[Kebab MCP]`) keep their names — see `BRAND` above.
+ */
+export const PRODUCT = {
+  /** Display name shown in the UI and announced to MCP clients. */
+  name: "Kebab House",
+  /** One-line promise, used in the README, landing and metadata. */
+  tagline: "Create your personal AI brain with all the ingredients, and eat it everywhere.",
 } as const;
 
 /**
