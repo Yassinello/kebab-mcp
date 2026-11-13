@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { useWelcomeDispatch, useWelcomeState } from "../WelcomeStateContext";
 import { useMintToken } from "../hooks/useMintToken";
@@ -193,7 +194,7 @@ export function MintStep({
   const downloadToken = useCallback(() => {
     if (!state.token) return;
     const content = [
-      "# Kebab MCP auth token — save this in a password manager",
+      `# ${PRODUCT.name} auth token — save this in a password manager`,
       "# and paste it into your MCP client's Authorization header.",
       `MCP_AUTH_TOKEN=${state.token}`,
       "",

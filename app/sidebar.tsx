@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import pkg from "../package.json";
@@ -117,7 +118,7 @@ function getInitials(name: string): string {
 
 export function Sidebar({
   displayName = "User",
-  serverName = "Kebab MCP",
+  serverName = PRODUCT.name,
   setupMode = false,
 }: {
   displayName?: string | undefined;

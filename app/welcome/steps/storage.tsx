@@ -1,5 +1,6 @@
 "use client";
 
+import { PRODUCT } from "@/core/constants/brand";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { useWelcomeDispatch, useWelcomeState } from "../WelcomeStateContext";
 
@@ -329,7 +330,7 @@ export function StorageStep({ onContinue }: { onContinue?: () => void }): JSX.El
     <section>
       <StepHeader
         title="Where your data lives"
-        subtitle="Pick where Kebab MCP saves your credentials, skills, and context. You can change this later from the dashboard."
+        subtitle={`Pick where ${PRODUCT.name} saves your credentials, skills, and context. You can change this later from the dashboard.`}
       />
 
       {/* Mode-change celebration — shows briefly after Upstash setup completes */}
