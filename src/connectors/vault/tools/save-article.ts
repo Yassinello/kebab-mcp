@@ -141,6 +141,8 @@ export async function handleSaveArticle(params: {
   const frontmatterObj: Record<string, unknown> = {
     title,
     source: params.url,
+    // TRU-03: fetched web content is external — never trusted as instructions.
+    provenance: "external",
     date,
     saved_via: "Kebab MCP",
   };
@@ -165,6 +167,7 @@ export async function handleSaveArticle(params: {
             title,
             path: result.path,
             source: params.url,
+            provenance: "external",
             contentLength: markdown.length,
             message: "Article saved. Use vault_read to analyze, summarize, or extract takeaways.",
           },

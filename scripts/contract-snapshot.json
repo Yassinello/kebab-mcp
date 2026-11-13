@@ -894,7 +894,8 @@
       "account_id",
       "actor_user_id",
       "confirm",
-      "invitation_id"
+      "invitation_id",
+      "preview_id"
     ],
     "destructive": true,
     "annotations": {
@@ -912,6 +913,7 @@
       "actor_user_id",
       "confirm",
       "post",
+      "preview_id",
       "text"
     ],
     "destructive": true,
@@ -929,6 +931,7 @@
       "account_id",
       "actor_user_id",
       "confirm",
+      "preview_id",
       "text"
     ],
     "destructive": true,
@@ -952,6 +955,7 @@
       "inmail_subject",
       "message",
       "note",
+      "preview_id",
       "profile_url"
     ],
     "destructive": true,
@@ -1080,6 +1084,7 @@
       "actor_user_id",
       "confirm",
       "post",
+      "preview_id",
       "reaction"
     ],
     "destructive": true,
@@ -1116,6 +1121,7 @@
       "attachments",
       "chat_id",
       "confirm",
+      "preview_id",
       "text"
     ],
     "destructive": true,
@@ -1170,6 +1176,7 @@
       "actor_user_id",
       "crm_log",
       "note",
+      "preview_id",
       "profile_url"
     ],
     "destructive": true,
@@ -1189,6 +1196,7 @@
       "allow_inmail",
       "crm_log",
       "max_inmail_credits",
+      "preview_id",
       "profile_url",
       "subject",
       "text"
@@ -1209,6 +1217,7 @@
       "actor_user_id",
       "attachments",
       "crm_log",
+      "preview_id",
       "profile_url",
       "text"
     ],
@@ -1965,6 +1974,7 @@
       "chat_id",
       "confirm",
       "phone",
+      "preview_id",
       "text"
     ],
     "destructive": true,

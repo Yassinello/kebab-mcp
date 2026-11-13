@@ -242,6 +242,28 @@ function renderSignInPage(returnPath: string): string {
 }
 
 /**
+ * TRU-04: tiny same-origin hop for approval links opened from another site.
+ * A meta refresh (no script, so no CSP nonce needed) re-navigates from our
+ * own origin, which makes the browser attach the SameSite=Strict admin
+ * cookie. The visible link is a fallback for browsers that ignore it.
+ */
+function renderSameSiteBounce(returnPath: string): string {
+  const safe = escHtml(returnPath);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=${safe}">
+<title>Continuing — Kebab House</title>
+</head>
+<body style="font:15px system-ui,sans-serif;padding:24px">
+<p><a href="${safe}">Continue</a></p>
+</body>
+</html>`;
+}
+
+/**
  * Split a comma-separated token env value into individual tokens.
  * Mirrors `parseTokens()` in src/core/auth.ts — duplicated here because
  * the Edge runtime cannot import the Node auth module's dependency graph.
@@ -433,22 +455,6 @@ export async function proxy(request: NextRequest) {
       // API consumers (curl, fetch, MCP clients hitting /api/config/*)
       // still get a machine-friendly text response so they fail loudly.
       const isApiPath = pathname.startsWith("/api/");
-      // The admin cookie is SameSite=Strict, so it is not sent when an MCP
-      // client (claude.ai, ChatGPT…) navigates here from its own site. A
-      // same-origin reload does send it: an already signed-in owner goes
-      // straight to the consent page instead of a sign-in form.
-      if (
-        !isApiPath &&
-        request.method === "GET" &&
-        request.headers.get("sec-fetch-site") === "cross-site"
-      ) {
-        return finalize(
-          new NextResponse(
-            `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0"><title>Kebab House</title><p>Continuing…</p>`,
-            { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
-          )
-        );
-      }
       if (isApiPath) {
         return finalize(
           new NextResponse(
@@ -462,6 +468,28 @@ export async function proxy(request: NextRequest) {
       const returnUrl = new URL(request.url);
       returnUrl.searchParams.delete("token");
       const returnPath = returnUrl.pathname + returnUrl.search;
+      // TRU-04: approval links are opened from the AI client (claude.ai,
+      // ChatGPT…), a cross-site navigation on which browsers withhold the
+      // SameSite=Strict admin cookie. Re-request the same URL once from our
+      // own origin (a same-site navigation carries the cookie); a second
+      // miss falls through to the sign-in page below.
+      // Same for the OAuth consent page, reached from the MCP client's site.
+      if (
+        (pathname.startsWith("/approve/") || pathname === "/oauth/authorize") &&
+        request.method === "GET" &&
+        request.headers.get("sec-fetch-site") === "cross-site"
+      ) {
+        return finalize(
+          new NextResponse(renderSameSiteBounce(returnPath), {
+            status: 200,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-store",
+              "Referrer-Policy": "no-referrer",
+            },
+          })
+        );
+      }
       return finalize(
         new NextResponse(renderSignInPage(returnPath), {
           status: 401,

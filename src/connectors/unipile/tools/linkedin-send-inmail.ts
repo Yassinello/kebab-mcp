@@ -107,6 +107,7 @@
  */
 
 import { z } from "zod";
+import { previewIdField } from "../lib/common-schema";
 import type { ToolResult } from "@/core/types";
 import { getUnipileClient } from "../lib/client";
 import { withRetry } from "../lib/retry";
@@ -155,6 +156,7 @@ export const linkedinSendInmailSchema = {
     .describe(
       "Optional cap (D-27): refuses with error_inmail_cap_exceeded if the account has fewer credits than this number."
     ),
+  preview_id: previewIdField,
   account_id: z
     .string()
     .optional()

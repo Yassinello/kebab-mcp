@@ -101,8 +101,45 @@ These behaviours are on by default; each has an explicit opt-out documented in `
 | Dashboard | In production `MCP_AUTH_TOKEN` is not an admin credential | `KEBAB_ADMIN_TOKEN_FALLBACK=1` |
 | Browser | `web_act` / `web_agent` refuse the logged-in `linkedin` context | `KEBAB_BROWSER_LINKEDIN_WRITE=1` |
 | Vault | No writes under `.github/` or `.git*`; GitHub search qualifiers stripped | — |
+| Outgoing messages (Unipile) | Sends, posts, comments, reactions, invitations and withdrawals need the user's approval on a signed `/approve/<id>` page; the model's `confirm: true` alone is refused | `KEBAB_APPROVAL_MODE=confirm` |
 
-Known accepted risks: DNS rebinding between the SSRF check and the socket connect (no IP pinning); tool output from external sources is returned to the LLM without an untrusted-content envelope. See `docs/audits/2026-11-cdc-remediation.md`.
+Known accepted risks: DNS rebinding between the SSRF check and the socket connect (no IP pinning). What the model may and may not be trusted with is described in [Trust model](#trust-model). See `docs/audits/2026-11-cdc-remediation.md`.
+
+## Trust model
+
+Kebab gives a language model tools that **read content written by strangers** (web pages, e-mails, Slack, LinkedIn and WhatsApp messages, webhook payloads, Apify datasets), **remember** it (vault) and **act in your name** (send messages, publish, write notes). A model can be steered by instructions hidden in what it reads (prompt injection). Kebab cannot make the model immune; it limits what a steered model can do without you. Background: `docs/audits/2026-11-audit-technique.md` §2.8 and `docs/specs/kebab-house-phase-1.md` §3.
+
+### 1. Untrusted content is labelled (TRU-02 — landing in phase 1)
+
+Tool results that carry third-party content (web reads, paywall readers, Gmail and Slack reads, Unipile and WhatsApp reads, Apify results, Notion reads, vault notes of `external` provenance) are being wrapped in an `<untrusted_content source="…">…</untrusted_content>` block preceded by a line telling the model not to follow instructions inside it. The closing tag is escaped if it appears in the content; `structuredContent` is untouched. Opt-out: `KEBAB_UNTRUSTED_FRAMING=off`. This is a **hint to the model**, not a security boundary: a model can still be fooled by framed content. Check the release notes for the exact version that ships it.
+
+### 2. Outgoing actions need your approval outside the conversation (TRU-04)
+
+`confirm: true` used to be the only gate before a message left your account, and the model can set it by itself. With `KEBAB_APPROVAL_MODE=link` (the default):
+
+1. The first call of a write tool returns a preview, a `preview_id` and an `approval_url`. Nothing is sent. The **exact payload** (tool, account, recipient, text, every argument that matters) is stored server-side, scoped to the tenant, for 15 minutes. Attachments are not stored; they are pinned by SHA-256 and must be resent byte-identical.
+2. You open the link. `/approve/<id>` is behind the same admin auth as `/config` (same sign-in and cookie; a link opened from your AI client gets one same-origin hop so the `SameSite=Strict` cookie is sent). The link is HMAC-signed over the preview id and tenant with the instance signing secret, domain-separated (`kebab-approval-link:v1`). You see the tool, account, recipient and exact text and choose **Approve** or **Reject** (`POST /api/approvals/<id>`, admin auth + Origin check + signature).
+3. The model calls the tool again with `preview_id`. Kebab executes **the stored payload**, not the arguments of that call (differences are reported back as ignored), and only once. Pending, rejected, expired, already used or cross-tool ids are refused; `confirm: true` without an approved `preview_id` is refused.
+
+Kill switches, halt flags, the 10-minute duplicate guard, rate limits, hash-only audit and verify-after-send still run at execution time. The pending payload is the one place where message text sits in KV: until it is executed (then only a tombstone without text remains), rejected (deleted) or expired (15 minutes).
+
+Covered: every Unipile tool that runs through `runGuardedWrite` (`whatsapp_send_message`, `linkedin_reply`, `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post`, `linkedin_cancel_invitation`) and the historical LinkedIn writes (`linkedin_send_connection`, `linkedin_send_message`, `linkedin_send_inmail`, `linkedin_engage` — `dry_run: true` stays a preview without approval).
+
+`KEBAB_APPROVAL_MODE=confirm` restores the previous behaviour: spec-v2 tools act on `confirm: true` and the historical LinkedIn tools send directly. Approval links need durable KV (Upstash) and the signing secret; set `KEBAB_PUBLIC_URL` when the instance is not on Vercel so the link points to the right host.
+
+### 3. Vault notes carry a provenance (TRU-03)
+
+`save_article` writes `provenance: external` and `source: <url>` in the note's frontmatter. `vault_write` and `vault_append` add `provenance: assistant` when the note declares none. Notes without the field count as `user`. An existing value is never overwritten, so an article you annotate stays `external`. `vault_search` reports each result's provenance; `vault_list` does not (it would cost one read per file), `vault_read` returns the frontmatter.
+
+Provenance is a **label**, not a signature: anyone who can write the note — you in Obsidian, or the model through `vault_write` — can write the field.
+
+### 4. What is NOT protected
+
+- **Other write tools** act on the model's call alone: Gmail send/draft, Slack post, Notion, Linear, GitHub issues, Airtable, Calendar, vault writes and deletes, Custom Tools, browser actions, API connections. Their `destructive` flag drives the dashboard and tool annotations only. Restrict them with token scopes or tool toggles if a client should not have them.
+- **Reads leak into the conversation.** Anything a tool returns is visible to the model and to the AI provider, and a steered model can try to smuggle it into a later write. For Unipile sends you see that text on the approval page; for the other write tools you do not.
+- **The approval page shows what will be sent, not whether it is wise.** You are the check. A message approved by mistake is sent.
+- **Framing and provenance are advisory.** They inform the model; they do not stop it.
+- **Anyone holding the admin token** (or the admin cookie) can approve. Protect it like a password.
 
 ### OAuth Credentials
 

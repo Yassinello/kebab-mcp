@@ -1,6 +1,7 @@
 import { VaultNotFoundError, VaultAuthError } from "@/core/connector-errors";
 import { fetchWithTimeout } from "@/core/fetch-utils";
 import { getConfig as readConfig } from "@/core/config-facade";
+import { noteProvenance, type Provenance } from "./provenance";
 
 const GITHUB_API = "https://api.github.com";
 // Phase 44 SCM-05b: 10s default preserved from prior local helper.
@@ -78,6 +79,8 @@ export interface SearchResult {
   name: string;
   path: string;
   textMatches: string[];
+  /** TRU-03: set when the note content was already read during the search. */
+  provenance?: Provenance;
 }
 
 // --- Path validation ---
@@ -435,6 +438,7 @@ async function treeGrep(
           name: file.path.split("/").pop() || file.path,
           path: file.path,
           textMatches: [fragment],
+          provenance: noteProvenance(content),
         } as SearchResult;
       }
       return null;

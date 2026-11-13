@@ -28,7 +28,7 @@ If `get_relationship_status` returns `{degree: 1, connection_status: "FIRST_DEGR
 
 ## Tools (23)
 
-Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**. Read tools have no quota or kill-switch gate. Spec-v2 write tools (marked ✋) additionally return a **preview** and do nothing unless called with `confirm: true`.
+Write tools enforce: **kill-switch check → halt-flag check → dedup → rate-limit → SDK call → audit log**. Read tools have no quota or kill-switch gate. Every write tool first returns a **preview** and does nothing until the user approves it: with `KEBAB_APPROVAL_MODE=link` (default) through a signed approval link (`/approve/<id>`, admin auth, 15 min, single use) and a second call with `preview_id`, which executes the stored, approved payload; with `KEBAB_APPROVAL_MODE=confirm` the spec-v2 tools (✋) act on `confirm: true` and the four historical LinkedIn writes send directly, as before. See `docs/SECURITY.md` → Trust model.
 
 | Tool | Type | Description |
 |---|---|---|
@@ -67,7 +67,9 @@ Spec-v2 write envelope:
   "next_step": "Show this preview to the user…" }
 ```
 
-After `confirm: true`: `{executed: true, provider_ok, verified, audit_id, chat_id, message_id, …}`. Identical `(tool, target, text)` within 10 minutes returns `dedup_hit: true` without re-sending. Spec-v2 error codes: `error_chat_not_found`, `error_wrong_channel`, `error_chat_account_mismatch`, `error_read_only_chat`, `error_invalid_phone`, `error_no_account`, plus the shared ones below.
+In `link` mode the preview has no `confirm_required`; it adds `approval_required: true`, `preview_id`, `approval_url` and `expires_at`. Approval errors: `error_approval_required` (confirm:true alone), `error_approval_pending` (with the link again), `error_approval_not_found` (unknown, rejected or expired), `error_approval_already_used`, `error_approval_tool_mismatch`, `error_attachments_mismatch`, `error_approval_unavailable` (no durable KV / signing secret). An executed approval adds `approval: {preview_id, executed_payload, ignored_arguments?}`.
+
+After execution (`preview_id` approved, or `confirm: true` in `confirm` mode): `{executed: true, provider_ok, verified, audit_id, chat_id, message_id, …}`. Identical `(tool, target, text)` within 10 minutes returns `dedup_hit: true` without re-sending. Spec-v2 error codes: `error_chat_not_found`, `error_wrong_channel`, `error_chat_account_mismatch`, `error_read_only_chat`, `error_invalid_phone`, `error_no_account`, plus the shared ones below.
 
 Tool envelope (write tools):
 
