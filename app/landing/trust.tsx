@@ -1,7 +1,11 @@
+import { REPO_URL } from "./deploy-url";
+
+/** LND-01 — "at home": your data, your infra, your code. */
 const BADGES = [
   {
-    label: "AGPL-3.0 licensed",
-    description: "Full source on GitHub. Fork it, audit it, make it yours.",
+    label: "Open source",
+    description: "AGPL-3.0, full source on GitHub. Audit it, fork it, make it yours.",
+    href: REPO_URL,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -15,7 +19,8 @@ const BADGES = [
   },
   {
     label: "Self-hosted",
-    description: "Runs on your own Vercel account. Your keys never leave your infra.",
+    description:
+      "Runs on your own Vercel account (or Docker). Your keys never leave your infra, and updates are one click from the dashboard.",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -28,9 +33,9 @@ const BADGES = [
     ),
   },
   {
-    label: "Durable bootstrap",
-    description: "State survives cold starts via Upstash KV. No silent resets on wake-up.",
-    href: "/docs/TROUBLESHOOTING.md",
+    label: "Your data, portable",
+    description:
+      "One zip with your profiles, skills, notes and settings — secrets left out. Import it into another instance and carry on.",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -46,14 +51,15 @@ const BADGES = [
 
 export default function Trust() {
   return (
-    <section className="py-20 px-6 border-t border-slate-800">
+    <section id="at-home" className="py-20 px-6 border-t border-slate-800">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
+          <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">At home</p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            No mystery meat.
+            Your kitchen, your rules.
           </h2>
           <p className="text-slate-400 text-base mt-3 max-w-xl mx-auto leading-relaxed">
-            Open, verifiable, and built to last — even on serverless cold starts.
+            No SaaS in the middle: your hub, your database, your code.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

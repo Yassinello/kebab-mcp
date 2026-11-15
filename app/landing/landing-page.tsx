@@ -6,6 +6,7 @@ import HowItWorks from "./how-it-works";
 import Connectors from "./connectors";
 import Compatibility from "./compatibility";
 import Trust from "./trust";
+import Guardrails from "./guardrails";
 import CtaSection from "./cta-section";
 import LandingFooter from "./footer";
 
@@ -20,6 +21,7 @@ export default function LandingPage() {
         <HowItWorks />
         <Connectors />
         <Compatibility />
+        <Guardrails />
         <Trust />
         <CtaSection />
       </main>

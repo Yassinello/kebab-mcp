@@ -1,46 +1,104 @@
 import { PRODUCT } from "@/core/constants/brand";
 import FeatureCard from "./feature-card";
 
+/**
+ * LND-01 (spec phase 3) — "the ingredients": what goes into the hub. The
+ * tool count is deliberately not the pitch; what matters is that the same
+ * five things follow the user into every client.
+ */
 const CARDS = [
   {
-    title: "Same skills everywhere.",
+    title: "Skills",
     description:
-      "One Agent Skills library (SKILL.md), served to Claude, Claude Code, Cursor, Codex and ChatGPT. Write or import a skill once, scope it per client token — one hat for work, one for home.",
+      "One Agent Skills library (SKILL.md) loaded on demand by every client. Start from ritual templates — morning brief, meeting prep, weekly review — or write your own.",
     icon: <ThreeSkewersIcon />,
   },
   {
-    title: "Same you everywhere.",
+    title: "Profile",
     description:
-      "Your profile and your memory vault travel with you. Every client knows who you are and what you're working on, and can read and write the notes in your vault.",
+      "Who you are, what you work on, how you like answers. One profile per hat (work, home, side project), bound to the client that wears it.",
     icon: <RecipeCardIcon />,
   },
   {
-    title: "Your kitchen, your rules.",
+    title: "Memory",
     description:
-      "Runs on your own Vercel account. Your API keys never leave your infra. No SaaS middlemen, no data sharing, no vendor lock-in. Fork and own it.",
+      "A notes vault every client can read and write: built in, or your Obsidian repo on GitHub. “Remember this” works from anywhere.",
+    icon: <NotebookIcon />,
+  },
+  {
+    title: "Tools",
+    description:
+      "What native connectors lack: LinkedIn and WhatsApp, a real browser, paywalled articles, scrapers, any HTTP API as a tool. Gmail or Slack? Use your client's own.",
     icon: <ChefHatIcon />,
+  },
+  {
+    title: "Guardrails",
+    description:
+      "Outside content is labelled as data, messages are sent only after you approve them, and new clients start read-only.",
+    icon: <ShieldIcon />,
   },
 ];
 
 export default function WhyKebab() {
   return (
-    <section className="py-20 px-6 border-t border-slate-800">
+    <section id="ingredients" className="py-20 px-6 border-t border-slate-800">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
           <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">
-            Why {PRODUCT.name}
+            The ingredients
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Your AI clients are hungry. Feed them once.
+            Five ingredients, cooked once in {PRODUCT.name}.
           </h2>
+          <p className="text-slate-400 text-base mt-3 max-w-2xl mx-auto leading-relaxed">
+            Say “Set up my Kebab House” in your AI client: a short interview writes your profile,
+            then suggests the rituals that fit your week.
+          </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
           {CARDS.map((card) => (
             <FeatureCard key={card.title} {...card} />
           ))}
         </div>
       </div>
     </section>
+  );
+}
+
+/** Notebook with a bookmark — the memory vault. */
+function NotebookIcon() {
+  return (
+    <svg
+      className="w-7 h-7"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M13 8h3M13 12h3" />
+    </svg>
+  );
+}
+
+/** Shield with a check — guardrails. */
+function ShieldIcon() {
+  return (
+    <svg
+      className="w-7 h-7"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3 5 6v5c0 4.5 3 8.2 7 10 4-1.8 7-5.5 7-10V6l-7-3z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
   );
 }
 
