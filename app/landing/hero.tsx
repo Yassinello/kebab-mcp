@@ -1,5 +1,6 @@
 import SkewerIllustration from "./skewer-illustration";
 import SocialProof from "./social-proof";
+import { VERCEL_DEPLOY_BUTTON_URL } from "./deploy-url";
 
 /** Clients that get the full experience (see README "Which AI clients?"). */
 const CLIENTS = ["Claude", "Claude Code", "Cursor", "Codex", "ChatGPT"];
@@ -42,9 +43,11 @@ export default function Hero() {
               A hub, not an agent: your AI clients do the thinking. Self-hosted on your Vercel, with
               your keys. Open source, AGPL-3.0.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start items-center mb-8">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start items-center mb-3">
               <a
-                href="/deploy"
+                href={VERCEL_DEPLOY_BUTTON_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-6 py-3 rounded-lg font-semibold text-sm shadow-lg shadow-amber-500/20"
               >
                 Deploy your Kebab
@@ -56,6 +59,12 @@ export default function Hero() {
                 See the dashboard
               </a>
             </div>
+            <p className="text-xs text-slate-500 mb-8">
+              One click on Vercel: your GitHub copy, your project and a free Upstash database.{" "}
+              <a href="/deploy" className="text-slate-300 hover:text-white underline">
+                Other ways to deploy
+              </a>
+            </p>
             <div className="flex justify-center lg:justify-start">
               <SocialProof />
             </div>

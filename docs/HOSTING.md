@@ -24,6 +24,23 @@ For working boot examples, see [`docs/examples/`](./examples/).
 
 ---
 
+## Vercel: Deploy Button vs. fork
+
+The recommended Vercel path is the **Deploy Button** (`VERCEL_DEPLOY_BUTTON_URL`
+in `app/landing/deploy-url.ts`): it creates a copy of the repo in the user's
+GitHub account, the Vercel project, and a free Upstash KV store (`stores`
+parameter) in one pass. The copy is not a GitHub fork, so dashboard updates use
+**release sync** (`src/core/release-sync.ts`) instead of `merge-upstream`.
+Fork + Import remains supported and keeps `merge-upstream`.
+
+Possible improvement, not done: a `redirect-url` parameter on the button would
+bring the user straight back to their instance's `/welcome` after the deploy.
+It was left out because it needs a registered Vercel integration, which the
+account owner has to create by hand (phase 2 spec, DEP-05). Until then, users click *Continue to Dashboard* →
+*Visit* (the `/deploy` page says so).
+
+---
+
 ## Persistence modes
 
 Kebab MCP detects the state backend at boot from env vars alone. See
