@@ -33,7 +33,7 @@ export function UsageCard() {
   useEffect(() => {
     let cancelled = false;
     // fire-and-forget OK: card stays in its loading state on failure
-    void fetch("/api/config/usage?weeks=2", { credentials: "include" })
+    void fetch("/api/config/usage?weeks=8", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { enabled: boolean; weeks: WeekUsage[] } | null) => {
         if (cancelled || !d) return;
@@ -100,6 +100,28 @@ export function UsageCard() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+        )}
+        {weeks && weeks.length > 2 && (
+          <div className="mt-4 pt-3 border-t border-border">
+            <p className="text-text-muted uppercase tracking-wide text-[10px] mb-2">Last 8 weeks</p>
+            <div className="flex items-end gap-1.5 h-12" aria-label="Tool calls per week">
+              {[...weeks].reverse().map((w) => {
+                const max = Math.max(1, ...weeks.map((x) => x.total));
+                return (
+                  <div
+                    key={w.week}
+                    className="flex-1 bg-accent/70 rounded-sm min-h-[2px]"
+                    style={{ height: `${Math.round((w.total / max) * 100)}%` }}
+                    title={`${w.week}: ${w.total} calls, ${w.notes} notes`}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-[10px] text-text-muted mt-1">
+              <span>{weeks[weeks.length - 1]?.week}</span>
+              <span>{weeks[0]?.week}</span>
             </div>
           </div>
         )}

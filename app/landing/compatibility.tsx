@@ -1,3 +1,5 @@
+import { REPO_URL } from "./deploy-url";
+
 /**
  * Honest client matrix (spec phase 0, BRD-01/02 — mirrors the README
  * "Which AI clients?" table). Keep the ChatGPT caveat in sync with it.
@@ -7,10 +9,10 @@ const COMPATIBLE = ["Windsurf", "VS Code", "n8n", "Any MCP client"];
 
 export default function Compatibility() {
   return (
-    <section className="py-20 px-6 border-t border-slate-800">
+    <section id="clients" className="py-20 px-6 border-t border-slate-800">
       <div className="max-w-4xl mx-auto text-center">
         <p className="text-xs font-mono text-blue-400 mb-3 tracking-widest uppercase">
-          Compatibility
+          Eat it everywhere
         </p>
         <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
           One kitchen. Many AI clients.
@@ -79,6 +81,18 @@ export default function Compatibility() {
             https://your-instance.vercel.app/api/mcp
           </code>
         </div>
+        <p className="text-xs text-slate-500 mt-6 max-w-xl mx-auto leading-relaxed">
+          Interactive cards (hub status, skills gallery, send approval) render in Claude, ChatGPT,
+          Cursor and VS Code; other clients get the same content as text.{" "}
+          <a
+            href={`${REPO_URL}/blob/main/docs/CLIENTS.md`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-300 hover:text-white underline"
+          >
+            Connect your clients
+          </a>
+        </p>
       </div>
     </section>
   );

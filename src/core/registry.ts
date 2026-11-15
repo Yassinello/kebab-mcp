@@ -148,6 +148,15 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     loader: () => import("@/connectors/context/manifest").then((m) => m.contextConnector),
   },
   {
+    id: "house",
+    label: "Kebab House views",
+    description: "Interactive views (MCP Apps) and the weekly recap.",
+    requiredEnvVars: [],
+    toolCount: 3,
+    core: true,
+    loader: () => import("@/connectors/house/manifest").then((m) => m.houseConnector),
+  },
+  {
     id: "skills",
     label: "Skills",
     description: "User-defined dynamic tools authored in the /config dashboard.",

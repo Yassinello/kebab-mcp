@@ -1,4 +1,5 @@
 import { UnipileClient } from "unipile-node-sdk";
+import { uiToolMeta } from "@/connectors/house/views/bridge";
 import { defineTool, type ConnectorManifest, type ToolDefinition } from "@/core/types";
 import { getConfig } from "@/core/config-facade";
 import { getLogger } from "@/core/logging";
@@ -76,6 +77,9 @@ import {
 } from "./tools/linkedin-network";
 
 const log = getLogger("CONNECTOR:unipile");
+
+/** Kebab House phase 3 (APP-11): previews of outgoing actions render in the review view. */
+const APPROVE_VIEW_META = uiToolMeta("approve");
 
 /**
  * Phase 68/69 — manifest with all 6 LinkedIn tools wired (UNI-07..10 closes
@@ -258,6 +262,7 @@ function buildTools(): ToolDefinition[] {
   return [
     defineTool({
       name: "linkedin_send_connection",
+      meta: APPROVE_VIEW_META,
       description:
         "Send a LinkedIn connection request via Unipile. Verified-after-write (3 polls @ 2s/5s/10s). " +
         "DEDUP: same (profile_url, note) combination is blocked for 90 days — change the note to retry. " +
@@ -285,6 +290,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_send_message",
+      meta: APPROVE_VIEW_META,
       description:
         "Send a LinkedIn DM to a 1st-degree connection. " +
         "Attachments supported (PDF / PNG / JPEG / GIF, ≤15MB per file, ≤5 files). " +
@@ -299,6 +305,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_send_inmail",
+      meta: APPROVE_VIEW_META,
       description:
         "Send a LinkedIn InMail (paid). REQUIRES allow_inmail: true to confirm credit usage. " +
         "Tracks credits_used / credits_remaining via inmail_balance bracketing. " +
@@ -313,6 +320,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_engage",
+      meta: APPROVE_VIEW_META,
       description:
         "Super-tool: routes to send_message (1st-degree), send_connection (2nd/3rd), " +
         "send_inmail (out-of-network with allow_inmail: true + inmail_subject), or skip. " +
@@ -407,6 +415,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "whatsapp_send_message",
+      meta: APPROVE_VIEW_META,
       description:
         "Send a WhatsApp message to an existing chat (chat_id — person or group) OR to a phone number (international format). " +
         approvalHint() +
@@ -432,6 +441,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_reply",
+      meta: APPROVE_VIEW_META,
       description:
         "Reply in an existing LinkedIn conversation by chat_id (from linkedin_list_inbox) — works for any thread (DM, InMail reply, group). " +
         approvalHint() +
@@ -485,6 +495,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_react_post",
+      meta: APPROVE_VIEW_META,
       description:
         "React to a LinkedIn post (like, celebrate, support, love, insightful, funny). Post = URL, urn or post_id. " +
         approvalHint() +
@@ -498,6 +509,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_comment_post",
+      meta: APPROVE_VIEW_META,
       description:
         "Comment on a LinkedIn post (≤1250 chars). Post = URL, urn or post_id. " +
         approvalHint() +
@@ -511,6 +523,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_create_post",
+      meta: APPROVE_VIEW_META,
       description:
         "Publish a public text post (≤3000 chars) from the LinkedIn account. " +
         approvalHint() +
@@ -524,6 +537,7 @@ function buildTools(): ToolDefinition[] {
     }),
     defineTool({
       name: "linkedin_cancel_invitation",
+      meta: APPROVE_VIEW_META,
       description:
         "Withdraw a pending LinkedIn invitation (invitation_id from linkedin_list_pending) — cleans up stale invites to protect your acceptance rate. " +
         approvalHint() +

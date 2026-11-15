@@ -800,6 +800,32 @@
     }
   },
   {
+    "name": "kebab_status",
+    "pack": "house",
+    "schemaKeys": [],
+    "destructive": false,
+    "annotations": {
+      "title": "Kebab House status",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "kebab_weekly_recap",
+    "pack": "house",
+    "schemaKeys": [
+      "week"
+    ],
+    "destructive": false,
+    "annotations": {
+      "title": "Weekly recap",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "linear_create_issue",
     "pack": "linear",
     "schemaKeys": [
@@ -1489,6 +1515,18 @@
     "destructive": false,
     "annotations": {
       "title": "List ritual templates",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "skills_gallery",
+    "pack": "house",
+    "schemaKeys": [],
+    "destructive": false,
+    "annotations": {
+      "title": "Skills gallery",
       "readOnlyHint": true,
       "destructiveHint": false,
       "openWorldHint": false

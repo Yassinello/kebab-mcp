@@ -94,7 +94,7 @@ async function guidance(step: SetupStep): Promise<string> {
         "STEP 3/4 — Rituals.",
         "These ritual templates are available. Using the profile, recommend the 2-4 that match the user's recurring tasks, explain each in one line, and install the ones they accept with skill_template_install:",
         ...lines,
-        "Tip: in clients that ignore server instructions (claude.ai, ChatGPT), the user can download the master relay skill from the dashboard (Skills → Use everywhere) so these skills trigger on their own.",
+        "Tip: in clients that ignore server instructions (claude.ai, ChatGPT), the user can download the master relay skill from the dashboard (Skills → Use your skills in every AI client → Master relay) so these skills trigger on their own.",
         'Then call kebab_setup with action "complete" and step "rituals".',
       ].join("\n");
     }

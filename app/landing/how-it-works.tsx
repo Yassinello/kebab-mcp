@@ -7,7 +7,7 @@ const STEPS: {
   {
     n: 1,
     title: "Deploy",
-    body: "Fork the repo, import it into Vercel and attach a free Upstash Redis for durable storage. The welcome page mints your token. No CLI, no env-var wrangling.",
+    body: "One click on Vercel creates your copy, your project and a free Upstash database. The welcome page mints your token. No CLI, no env-var wrangling.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -26,7 +26,7 @@ const STEPS: {
   {
     n: 2,
     title: "Connect",
-    body: "Add the endpoint to Claude, Claude Code, Cursor, Codex or ChatGPT — one token per client, so each one can wear its own hat.",
+    body: "Add the endpoint to Claude, Claude Code, Cursor, Codex or ChatGPT — sign in with OAuth or a token per client, so each one can wear its own hat.",
     icon: (
       <svg
         className="w-5 h-5"
@@ -45,7 +45,7 @@ const STEPS: {
   {
     n: 3,
     title: "Stock",
-    body: "Write or import your skills, fill in your profile, plug your vault. Every connected client loads them on demand — no copy-pasting between apps.",
+    body: "Say “Set up my Kebab House”: a short interview writes your profile and installs the rituals you pick. Every connected client loads them on demand.",
     icon: (
       <svg
         className="w-5 h-5"

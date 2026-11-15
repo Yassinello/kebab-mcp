@@ -9,13 +9,17 @@ const COLUMNS = [
     links: [
       { label: "Deploy", href: "/deploy" },
       { label: "Dashboard", href: "#product" },
-      { label: "Compatibility", href: "#whats-inside" },
+      { label: "Ingredients", href: "#ingredients" },
+      { label: "Compatibility", href: "#clients" },
+      { label: "Guardrails", href: "#guardrails" },
     ],
   },
   {
     heading: "Resources",
     links: [
       { label: "Documentation", href: `${REPO_URL}#readme` },
+      { label: "Connect your clients", href: `${REPO_URL}/blob/main/docs/CLIENTS.md` },
+      { label: "Rituals", href: `${REPO_URL}/blob/main/docs/rituals/README.md` },
       { label: "Adding a connector", href: `${REPO_URL}#adding-a-connector` },
       { label: "Troubleshooting", href: `${REPO_URL}/blob/main/docs/TROUBLESHOOTING.md` },
       { label: "Changelog", href: `${REPO_URL}/releases` },
