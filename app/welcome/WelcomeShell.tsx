@@ -1,7 +1,7 @@
 "use client";
 
 import { PRODUCT } from "@/core/constants/brand";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   WelcomeStateProvider,
   useWelcomeDispatch,
@@ -21,6 +21,7 @@ import {
   WizardStepper,
   type WizardStep,
 } from "./chrome";
+import { shouldSkipStorageStep } from "./wizard-steps";
 
 /**
  * WelcomeShell — Phase 47 orchestrator (WIRE-03 + WIRE-04). Reducer-
@@ -141,6 +142,17 @@ function WelcomeShellBody({
       dispatch({ type: "ERROR_SET", error: "Could not reach this instance. Try refreshing." });
     }
   }, [claimHook.error, dispatch]);
+
+  // DEP-03: Upstash already attached (Deploy Button instance) → nothing to
+  // decide on the storage step; jump to the token step once. The ref keeps
+  // "← Storage" usable: going back never re-triggers the skip.
+  const storageAutoSkipped = useRef(false);
+  useEffect(() => {
+    if (storageAutoSkipped.current) return;
+    if (!shouldSkipStorageStep(state)) return;
+    storageAutoSkipped.current = true;
+    dispatch({ type: "STEP_SET", step: "mint" });
+  }, [state, dispatch]);
 
   // Derived flags (reducer is truth).
   const storageReady = state.storage.healthy;

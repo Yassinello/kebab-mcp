@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/github/license/Yassinello/kebab-mcp" alt="License: AGPL-3.0" />
   <img src="https://img.shields.io/github/v/release/Yassinello/kebab-mcp?label=version" alt="Version" />
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp"><img src="https://img.shields.io/badge/deploy-vercel-%23000?logo=vercel" alt="Deploy on Vercel" /></a>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D"><img src="https://img.shields.io/badge/deploy-vercel-%23000?logo=vercel" alt="Deploy on Vercel" /></a>
   <img src="https://img.shields.io/github/stars/Yassinello/kebab-mcp?style=social" alt="GitHub stars" />
 </p>
 
@@ -173,18 +173,15 @@ A few prompts to give you the shape of it:
 
 ## Quick Start
 
-Two paths cover ~95% of users — Fork + Vercel for the recommended path, Docker for full control. The CLI installer is tucked under the "more" toggle.
+Two paths cover ~95% of users — the Vercel Deploy Button for the recommended path, Docker for full control. The CLI installer is tucked under the "more" toggle.
 
-### Option A — Fork + Deploy on Vercel (recommended)
+### Option A — Deploy on Vercel (recommended)
 
-The deploy hub at **[/deploy](https://kebab-mcp.vercel.app/deploy)** walks through this visually. The flow:
+**[Deploy with Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D)** — one click creates a copy of the repo in your GitHub account, a Vercel project and a free Upstash Redis database, then deploys. Open the deployed URL → `/welcome` mints your `MCP_AUTH_TOKEN` and connects your AI client. The deploy hub at **[/deploy](https://kebab-mcp.vercel.app/deploy)** shows what gets created.
 
-1. **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** — keeps your deployment linked to upstream so updates land in one click.
-2. **[Import to Vercel](https://vercel.com/new)** — pick your fork from the list, click *Import*, keep all defaults, click *Deploy*.
-3. **Attach Upstash KV** — after the first deploy completes, open your project → *Storage* tab → *Connect Database* → *Upstash for Redis* (Free plan). Vercel injects the env vars and auto-redeploys. Without this, your auth token and credentials don't survive serverless cold starts.
-4. **Open the deployed URL** → land on `/welcome`, mint your `MCP_AUTH_TOKEN`, paste it into your AI client.
+Updates: add a GitHub token with *Contents: read & write* on your new repo as `KEBAB_UPDATE_PAT` (Settings → Advanced), then click *Update now* in the dashboard. The copy is not a GitHub fork, so the dashboard uses **release sync**: it copies the latest release's files into your repo as one commit, and stops without writing if you edited one of them.
 
-> **Why not the one-click Deploy Button?** Vercel's `/new/clone` creates a standalone snapshot — not a real GitHub fork — so the dashboard's *Update now* flow can never sync upstream changes. We tried it and reverted (case study: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)). The fork-first flow takes one extra click and stays maintainable forever.
+**Alternative — Fork + Import** (a real GitHub fork, *Sync fork* works): **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** → **[Import to Vercel](https://vercel.com/new)** → in the project, *Storage* → *Connect Database* → *Upstash for Redis* (Free) → open `/welcome`. Without Upstash, your auth token and credentials don't survive serverless cold starts.
 
 <details>
 <summary><strong>Vercel deploy — troubleshooting FAQ</strong></summary>

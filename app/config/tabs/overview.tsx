@@ -8,18 +8,20 @@ import { ConnectorHealthWidget } from "./connector-health";
 import { toMsg } from "@/core/error-utils";
 import { formatRelativeTime } from "@/core/relative-time";
 
+type RemoteUpdateMode = "github-api" | "release-sync";
+
 type UpdateStatus =
   | { state: "loading" }
   | {
       state: "ready";
-      mode: "git" | "github-api";
+      mode: "git" | RemoteUpdateMode;
       available: boolean;
       // git mode fields
       behind?: number;
       ahead?: number;
       remote?: string;
       latest?: string | null;
-      // github-api mode fields
+      // github-api + release-sync fields
       behind_by?: number;
       ahead_by?: number;
       status?: "identical" | "behind" | "ahead" | "diverged";
@@ -31,15 +33,15 @@ type UpdateStatus =
       tokenConfigured?: boolean;
       forkPrivate?: boolean;
       checkedAt?: string; // CRON-03: ISO timestamp from KV cache or fresh fetch
-      reason?: string; // optional: "auth" when PAT is invalid/insufficient scope
+      reason?: string; // "auth" (token invalid/insufficient) | "unknown-version" (release-sync)
+      message?: string;
+      // release-sync fields (Kebab House phase 2, UPD-04)
+      installedVersion?: string;
+      latestVersion?: string;
+      releaseUrl?: string;
+      deployedRepo?: string;
     }
   | { state: "no-token"; configureUrl: string }
-  | {
-      state: "not-a-fork";
-      deployedRepo: string;
-      upstreamRepo: string;
-      redeployUrl: string;
-    }
   | { state: "disabled"; reason: string }
   | { state: "error"; error: string };
 
@@ -47,8 +49,78 @@ type UpdateResult =
   | { state: "idle" }
   | { state: "pulling" }
   | { state: "done"; pulled: number; note?: string; deployUrl?: string }
-  | { state: "deploying"; deployUrl: string; pulled: number }
-  | { state: "error"; reason: string; resolveUrl?: string };
+  | { state: "deploying"; deployUrl: string; pulled: number; version?: string }
+  | {
+      state: "error";
+      reason: string;
+      message?: string;
+      resolveUrl?: string;
+      conflicts?: string[];
+    };
+
+const CONFIGURE_TOKEN_URL = "/config?tab=settings&sub=advanced";
+
+/** Map a GET /api/config/update body to the banner state. */
+function parseUpdateStatus(d: Record<string, unknown>): UpdateStatus {
+  if (d.disabled) return { state: "disabled", reason: d.disabled as string };
+  const remote = d.mode === "github-api" || d.mode === "release-sync";
+  if (remote && d.reason === "no-token") {
+    return { state: "no-token", configureUrl: (d.configureUrl as string) || CONFIGURE_TOKEN_URL };
+  }
+  if (remote) {
+    const str = (k: string) => (typeof d[k] === "string" ? { [k]: d[k] as string } : {});
+    return {
+      state: "ready",
+      mode: d.mode as RemoteUpdateMode,
+      available: !!d.available,
+      behind_by: (d.behind_by as number) || 0,
+      ahead_by: (d.ahead_by as number) || 0,
+      status: (d.status as "identical" | "behind" | "ahead" | "diverged") || "identical",
+      breaking: !!d.breaking,
+      breakingReasons: (d.breakingReasons as string[]) || [],
+      commits: (d.commits as Array<{ sha: string; message: string; url: string }>) || [],
+      totalCommits: (d.totalCommits as number) || 0,
+      tokenConfigured: !!d.tokenConfigured,
+      forkPrivate: !!d.forkPrivate,
+      ...str("diffUrl"),
+      ...str("checkedAt"),
+      ...str("reason"),
+      ...str("message"),
+      ...str("installedVersion"),
+      ...str("latestVersion"),
+      ...str("releaseUrl"),
+      ...str("deployedRepo"),
+    };
+  }
+  const latest = d.latest as string | null | undefined;
+  return {
+    state: "ready",
+    mode: "git",
+    available: !!d.available,
+    behind: (d.behind as number) || 0,
+    ahead: (d.ahead as number) || 0,
+    remote: (d.remote as string) || "",
+    ...(latest !== undefined ? { latest } : {}),
+  };
+}
+
+/** UPD-04: which update mechanism this deployment uses, in plain words. */
+function updateModeLabel(update: UpdateStatus): string {
+  switch (update.state) {
+    case "loading":
+      return "Checking…";
+    case "no-token":
+      return "Not set up — needs an update token";
+    case "disabled":
+      return "Disabled";
+    case "error":
+      return "Unknown (check failed)";
+    case "ready":
+      if (update.mode === "github-api") return "Fork sync (GitHub merge-upstream)";
+      if (update.mode === "release-sync") return "Release sync (copies each upstream release)";
+      return "Local git (fast-forward merge)";
+  }
+}
 
 export function OverviewTab({
   baseUrl,
@@ -93,64 +165,7 @@ export function OverviewTab({
   useEffect(() => {
     fetch("/api/config/update", { credentials: "include" })
       .then((r) => r.json())
-      .then((d: Record<string, unknown>) => {
-        if (d.disabled) {
-          setUpdate({ state: "disabled", reason: d.disabled as string });
-          return;
-        }
-        // github-api mode no-token
-        if (d.mode === "github-api" && d.reason === "no-token") {
-          setUpdate({
-            state: "no-token",
-            configureUrl: (d.configureUrl as string) || "/config?tab=settings&sub=advanced",
-          });
-          return;
-        }
-        // github-api mode standalone-clone (not a real fork of upstream)
-        if (d.mode === "github-api" && d.reason === "not-a-fork") {
-          setUpdate({
-            state: "not-a-fork",
-            deployedRepo: (d.deployedRepo as string) || "",
-            upstreamRepo: (d.upstreamRepo as string) || "",
-            redeployUrl: (d.redeployUrl as string) || "https://vercel.com/new",
-          });
-          return;
-        }
-        // github-api mode
-        if (d.mode === "github-api") {
-          const diffUrl = d.diffUrl as string | undefined;
-          const reason = typeof d.reason === "string" ? d.reason : undefined;
-          setUpdate({
-            state: "ready",
-            mode: "github-api",
-            available: !!d.available,
-            behind_by: (d.behind_by as number) || 0,
-            ahead_by: (d.ahead_by as number) || 0,
-            status: (d.status as "identical" | "behind" | "ahead" | "diverged") || "identical",
-            breaking: !!d.breaking,
-            breakingReasons: (d.breakingReasons as string[]) || [],
-            commits: (d.commits as Array<{ sha: string; message: string; url: string }>) || [],
-            totalCommits: (d.totalCommits as number) || 0,
-            ...(diffUrl !== undefined ? { diffUrl } : {}),
-            tokenConfigured: !!d.tokenConfigured,
-            forkPrivate: !!d.forkPrivate,
-            ...(typeof d.checkedAt === "string" ? { checkedAt: d.checkedAt } : {}),
-            ...(reason !== undefined ? { reason } : {}),
-          });
-          return;
-        }
-        // git mode (existing shape)
-        const latest = d.latest as string | null | undefined;
-        setUpdate({
-          state: "ready",
-          mode: "git",
-          available: !!d.available,
-          behind: (d.behind as number) || 0,
-          ahead: (d.ahead as number) || 0,
-          remote: (d.remote as string) || "",
-          ...(latest !== undefined ? { latest } : {}),
-        });
-      })
+      .then((d: Record<string, unknown>) => setUpdate(parseUpdateStatus(d)))
       .catch((err) => setUpdate({ state: "error", error: toMsg(err) }));
   }, []);
 
@@ -165,42 +180,7 @@ export function OverviewTab({
     try {
       const res = await fetch("/api/config/update?force=1", { credentials: "include" });
       const d = (await res.json()) as Record<string, unknown>;
-      if (d.disabled) {
-        setUpdate({ state: "disabled", reason: d.disabled as string });
-      } else if (d.mode === "github-api" && d.reason === "no-token") {
-        setUpdate({
-          state: "no-token",
-          configureUrl: (d.configureUrl as string) || "/config?tab=settings&sub=advanced",
-        });
-      } else if (d.mode === "github-api" && d.reason === "not-a-fork") {
-        setUpdate({
-          state: "not-a-fork",
-          deployedRepo: (d.deployedRepo as string) || "",
-          upstreamRepo: (d.upstreamRepo as string) || "",
-          redeployUrl: (d.redeployUrl as string) || "https://vercel.com/new",
-        });
-      } else if (d.mode === "github-api") {
-        const diffUrl = d.diffUrl as string | undefined;
-        const checkedAt = d.checkedAt as string | undefined;
-        const reason = typeof d.reason === "string" ? d.reason : undefined;
-        setUpdate({
-          state: "ready",
-          mode: "github-api",
-          available: !!d.available,
-          behind_by: (d.behind_by as number) || 0,
-          ahead_by: (d.ahead_by as number) || 0,
-          status: (d.status as "identical" | "behind" | "ahead" | "diverged") || "identical",
-          breaking: !!d.breaking,
-          breakingReasons: (d.breakingReasons as string[]) || [],
-          commits: (d.commits as Array<{ sha: string; message: string; url: string }>) || [],
-          totalCommits: (d.totalCommits as number) || 0,
-          ...(diffUrl !== undefined ? { diffUrl } : {}),
-          tokenConfigured: !!d.tokenConfigured,
-          forkPrivate: !!d.forkPrivate,
-          ...(checkedAt !== undefined ? { checkedAt } : {}),
-          ...(reason !== undefined ? { reason } : {}),
-        });
-      }
+      setUpdate(parseUpdateStatus(d));
       // Brief "just refreshed" flash so the user knows the click did something
       // even when nothing changed (D-13 follow-up — previously only animate-spin).
       setJustRefreshed(true);
@@ -227,6 +207,7 @@ export function OverviewTab({
             state: "deploying",
             deployUrl: data.deployUrl as string,
             pulled: (data.pulled as number) || 0,
+            ...(typeof data.version === "string" ? { version: data.version } : {}),
           });
         } else {
           const note = data.note as string | undefined;
@@ -241,8 +222,15 @@ export function OverviewTab({
         );
       } else {
         const reason = (data.reason as string) || "Update failed";
-        const resolveUrl = data.resolveUrl as string | undefined;
-        setResult({ state: "error", reason, ...(resolveUrl !== undefined ? { resolveUrl } : {}) });
+        // release-sync answers with `manualUrl`; the fork path with `resolveUrl`.
+        const resolveUrl = (data.resolveUrl ?? data.manualUrl) as string | undefined;
+        setResult({
+          state: "error",
+          reason,
+          ...(typeof data.message === "string" ? { message: data.message } : {}),
+          ...(resolveUrl !== undefined ? { resolveUrl } : {}),
+          ...(Array.isArray(data.conflicts) ? { conflicts: data.conflicts as string[] } : {}),
+        });
       }
     } catch (err) {
       setResult({ state: "error", reason: toMsg(err) });
@@ -271,38 +259,17 @@ export function OverviewTab({
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
 
-      {/* Update banner — standalone clone (not a fork of upstream) */}
-      {update.state === "not-a-fork" && (
-        <div className="border border-red/40 bg-red/5 rounded-lg p-4 flex items-start gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-red">
-              This deployment can&apos;t receive updates
+      {/* Update banner — release-sync can't place the installed version */}
+      {update.state === "ready" &&
+        update.mode === "release-sync" &&
+        update.reason === "unknown-version" && (
+          <div className="border border-yellow-500/30 bg-yellow-500/5 rounded-lg p-4">
+            <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+              Can&apos;t match this deployment to an upstream release
             </p>
-            <p className="text-xs text-text-dim mt-1">
-              Your deployment is connected to{" "}
-              <code className="font-mono bg-bg-muted px-1 rounded">{update.deployedRepo}</code>,
-              which is a standalone snapshot of{" "}
-              <code className="font-mono bg-bg-muted px-1 rounded">{update.upstreamRepo}</code> —
-              not a real GitHub fork. The dashboard&apos;s update flow uses GitHub&apos;s
-              merge-upstream API, which only works on forks. As-is, you will never receive upstream
-              fixes.
-            </p>
-            <p className="text-xs text-text-dim mt-2">
-              <strong>Fix:</strong> redeploy from the upstream Deploy button (links direct to
-              upstream, no copy). Your existing data in Upstash KV survives if you reattach the same
-              integration.
-            </p>
+            <p className="text-xs text-text-dim mt-0.5">{update.message}</p>
           </div>
-          <a
-            href={update.redeployUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0 text-xs font-medium px-3 py-2 rounded-md bg-red/10 text-red border border-red/40 hover:bg-red/20 transition-colors"
-          >
-            Redeploy →
-          </a>
-        </div>
-      )}
+        )}
 
       {/* Update banner — diverged or ahead (block update) */}
       {update.state === "ready" &&
@@ -331,13 +298,16 @@ export function OverviewTab({
 
       {/* Update banner — up to date (with freshness indicator + refresh) — CRON-03 */}
       {update.state === "ready" &&
-        update.mode === "github-api" &&
+        update.mode !== "git" &&
+        !update.reason &&
         update.status === "identical" && (
           <div className="border border-border bg-bg-muted/30 rounded-lg p-3 flex items-center gap-3">
             <span
               className={`text-xs flex-1 transition-colors ${justRefreshed ? "text-green" : "text-text-dim"}`}
             >
-              Up to date with upstream
+              {update.mode === "release-sync" && update.installedVersion
+                ? `Up to date with Kebab House v${update.installedVersion}`
+                : "Up to date with upstream"}
               {update.checkedAt && ` — checked ${formatRelativeTime(update.checkedAt)}`}
               {justRefreshed && " ✓"}
             </span>
@@ -350,14 +320,16 @@ export function OverviewTab({
         )}
 
       {/* Update banner — auth error (PAT invalid or insufficient scope) */}
-      {update.state === "ready" && update.mode === "github-api" && update.reason === "auth" && (
+      {update.state === "ready" && update.mode !== "git" && update.reason === "auth" && (
         <div className="border border-red/30 bg-red/5 rounded-lg p-4">
           <p className="text-sm font-semibold text-red">GitHub authentication failed</p>
           <p className="text-xs text-text-dim mt-0.5">
             Your token may be invalid, revoked, or missing the required scope.
-            {update.forkPrivate
-              ? " Your fork is private — the PAT needs the `repo` scope (not just `public_repo`)."
-              : " The PAT needs at least the `public_repo` scope."}
+            {update.mode === "release-sync"
+              ? ` Release sync writes commits to ${update.deployedRepo ?? "your repo"}: a fine-grained token needs Contents: read & write on it (classic: \`repo\`).`
+              : update.forkPrivate
+                ? " Your fork is private — the PAT needs the `repo` scope (not just `public_repo`)."
+                : " The PAT needs at least the `public_repo` scope."}
           </p>
           <a
             href="/config?tab=settings&sub=advanced"
@@ -378,9 +350,11 @@ export function OverviewTab({
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-orange-dark">
-                    {update.mode === "github-api"
-                      ? `${update.behind_by} ${(update.behind_by ?? 0) === 1 ? "update" : "updates"} available`
-                      : `${update.behind} ${(update.behind ?? 0) === 1 ? "update" : "updates"} available`}
+                    {update.mode === "release-sync"
+                      ? `Kebab House v${update.latestVersion} available`
+                      : update.mode === "github-api"
+                        ? `${update.behind_by} ${(update.behind_by ?? 0) === 1 ? "update" : "updates"} available`
+                        : `${update.behind} ${(update.behind ?? 0) === 1 ? "update" : "updates"} available`}
                   </p>
                   {update.breaking && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red/15 text-red uppercase tracking-wide">
@@ -389,9 +363,11 @@ export function OverviewTab({
                   )}
                 </div>
                 <p className="text-xs text-text-dim mt-0.5">
-                  {update.mode === "github-api"
-                    ? `New commits on upstream/main`
-                    : `New commits on ${update.remote}/main${update.latest ? ` (latest: ${update.latest})` : ""}`}
+                  {update.mode === "release-sync"
+                    ? `You run v${update.installedVersion} · ${update.behind_by} upstream ${(update.behind_by ?? 0) === 1 ? "commit" : "commits"} · Update now copies the release into ${update.deployedRepo ?? "your repo"}`
+                    : update.mode === "github-api"
+                      ? `New commits on upstream/main`
+                      : `New commits on ${update.remote}/main${update.latest ? ` (latest: ${update.latest})` : ""}`}
                 </p>
                 {update.checkedAt && (
                   <div className="flex items-center gap-1.5 mt-1">
@@ -408,9 +384,7 @@ export function OverviewTab({
                     />
                   </div>
                 )}
-                {result.state === "error" && (
-                  <p className="text-xs text-red mt-1.5 font-mono">{result.reason}</p>
-                )}
+                {result.state === "error" && <UpdateError result={result} />}
               </div>
               <div className="flex items-center gap-2">
                 {update.diffUrl && (
@@ -489,7 +463,9 @@ export function OverviewTab({
       {result.state === "deploying" && (
         <div className="border border-accent/30 bg-accent/5 rounded-lg p-4">
           <p className="text-sm font-semibold text-accent">
-            Synced {result.pulled} commit{result.pulled === 1 ? "" : "s"} — deploying...
+            {result.version
+              ? `Synced Kebab House v${result.version} — deploying...`
+              : `Synced ${result.pulled} commit${result.pulled === 1 ? "" : "s"} — deploying...`}
           </p>
           <p className="text-xs text-text-dim mt-0.5">
             Vercel is building the updated deployment. This takes ~2 minutes.
@@ -549,14 +525,16 @@ export function OverviewTab({
           }
         />
         {commitSha && <Row label="Commit" value={commitSha} />}
+        <Row label="Update mode" value={updateModeLabel(update)} />
         {update.state === "no-token" && (
-          <p className="text-[11px] text-text-muted px-3 pt-2">
-            Updates land via GitHub&apos;s <em>Sync fork</em> button. For one-click sync from this
-            dashboard,{" "}
+          <p className="text-[11px] text-text-muted px-5 py-3">
+            One-click updates need a GitHub token with <em>Contents: read &amp; write</em> on the
+            repo this instance deploys from (<code className="font-mono">KEBAB_UPDATE_PAT</code>, or{" "}
+            <code className="font-mono">GITHUB_TOKEN</code>).{" "}
             <a href={update.configureUrl} className="text-accent hover:underline">
-              configure a GitHub PAT
+              Add an update token
             </a>{" "}
-            (optional).
+            (optional). Forks can also use GitHub&apos;s <em>Sync fork</em> button.
           </p>
         )}
       </Section>
@@ -615,6 +593,32 @@ export function OverviewTab({
           </div>
         )}
       </Section>
+    </div>
+  );
+}
+
+function UpdateError({ result }: { result: Extract<UpdateResult, { state: "error" }> }) {
+  return (
+    <div className="mt-1.5 space-y-1">
+      <p className="text-xs text-red">{result.message ?? result.reason}</p>
+      {result.conflicts && result.conflicts.length > 0 && (
+        <ul className="text-[11px] font-mono text-text-dim list-disc pl-4">
+          {result.conflicts.slice(0, 10).map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+          {result.conflicts.length > 10 && <li>…{result.conflicts.length - 10} more</li>}
+        </ul>
+      )}
+      {result.resolveUrl && (
+        <a
+          href={result.resolveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-accent hover:underline inline-block"
+        >
+          See the changes on GitHub →
+        </a>
+      )}
     </div>
   );
 }

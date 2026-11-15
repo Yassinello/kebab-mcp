@@ -91,7 +91,7 @@ export async function ghFetch(
  * Returns the matched first-line of each offending commit (truncated to
  * 80 chars) so the dashboard can surface human-readable reasons.
  */
-function detectBreaking(commits: Array<{ commit: { message: string } }>): {
+export function detectBreaking(commits: Array<{ commit: { message: string } }>): {
   breaking: boolean;
   breakingReasons: string[];
 } {
@@ -129,7 +129,32 @@ export type UpdateStatusResult =
   | { ok: true; payload: UpdateStatusPayload }
   | { ok: false; kind: "auth" }
   | { ok: false; kind: "fetch"; status: number }
-  | { ok: false; kind: "not-a-fork"; deployedRepo: string };
+  | {
+      ok: false;
+      kind: "not-a-fork";
+      deployedRepo: string;
+      /** Default branch of the deployed repo (release-sync writes there). */
+      defaultBranch: string;
+      forkPrivate: boolean;
+    };
+
+/** Subset of `GET /repos/{owner}/{repo}` the update flows read. */
+export interface RepoMetadata {
+  private: boolean;
+  fork: boolean;
+  parent: { full_name: string } | null;
+  default_branch?: string;
+}
+
+/**
+ * True when the deployed repo is a real GitHub fork of upstream — the only
+ * case where `merge-upstream` works. Anything else (a Deploy Button clone,
+ * a fork of a fork, a hand-made copy) goes through release-sync instead
+ * (see src/core/release-sync.ts).
+ */
+export function isUpstreamFork(repo: RepoMetadata): boolean {
+  return repo.fork === true && repo.parent?.full_name === `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`;
+}
 
 /**
  * Compute the upstream-vs-fork status using GitHub Compare API.
@@ -156,12 +181,11 @@ export async function computeUpdateStatus(
   const upstream = `${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`;
 
   // Fetch repo metadata. We need: visibility (public/private), fork status,
-  // and the parent repo if any. A deploy that came from `/new/clone` will
-  // have `fork: false` and `parent: null` even though the files match
-  // upstream — those repos have no shared git history with upstream and
-  // CANNOT receive merge-upstream pulls. We detect this and short-circuit
-  // with a clear error so the user sees an actionable message instead of
-  // a stale "up to date" banner.
+  // and the parent repo if any. A deploy that came from `/new/clone` (the
+  // Vercel Deploy Button) has `fork: false` and `parent: null` — no shared
+  // git history with upstream, so merge-upstream can't work. We detect this
+  // and short-circuit with `not-a-fork` so the caller switches to
+  // release-sync instead of showing a misleading "up to date" banner.
   const repoRes = await ghFetch(`/repos/${owner}/${slug}`, token);
   if (!repoRes.ok) {
     if (repoRes.status === 401 || repoRes.status === 403) {
@@ -169,25 +193,20 @@ export async function computeUpdateStatus(
     }
     return { ok: false, kind: "fetch", status: repoRes.status };
   }
-  const repoData = repoRes.data as {
-    private: boolean;
-    fork: boolean;
-    parent: { full_name: string } | null;
-  };
+  const repoData = repoRes.data as RepoMetadata;
   const forkPrivate = repoData.private ?? false;
 
-  // Detect the "standalone clone" failure mode: deployed repo isn't a fork,
-  // OR is a fork but its parent points somewhere other than our upstream.
-  // Either way, the merge-upstream API will not work and the Compare API
-  // results are misleading (it compares file trees, not history, and
-  // returns "identical" for snapshots even when the user is a year behind).
-  const upstreamFullName = `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`;
-  const isUpstreamFork = repoData.fork === true && repoData.parent?.full_name === upstreamFullName;
-  if (!isUpstreamFork) {
+  // A repo that isn't a direct fork of upstream (Deploy Button clone, fork
+  // of a fork, …) cannot use merge-upstream, and the cross-repo Compare
+  // would be misleading (it compares trees, not history). Short-circuit:
+  // the caller routes these to release-sync (computeDeploymentUpdateStatus).
+  if (!isUpstreamFork(repoData)) {
     return {
       ok: false,
       kind: "not-a-fork",
       deployedRepo: `${owner}/${slug}`,
+      defaultBranch: repoData.default_branch || "main",
+      forkPrivate,
     };
   }
 
