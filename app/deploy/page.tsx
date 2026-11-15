@@ -171,7 +171,7 @@ function ForkAlternativeCard() {
       aria-labelledby="fork-heading"
       className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 sm:p-8 mb-12 sm:mb-14"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-8 items-start">
+      <div className="max-w-3xl">
         <div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
@@ -213,7 +213,7 @@ function ForkAlternativeCard() {
           </div>
         </div>
 
-        <details className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 group">
+        <details className="mt-6 rounded-xl border border-slate-800 bg-slate-950/60 px-5 py-4">
           <summary className="cursor-pointer text-xs font-mono uppercase tracking-widest text-slate-500 hover:text-slate-300">
             Step by step
           </summary>
