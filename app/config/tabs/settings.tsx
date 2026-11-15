@@ -232,6 +232,21 @@ export function SettingsTab({
               </div>
               <ProfilesField />
             </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1.5">Your data</label>
+              <a
+                href="/api/config/export"
+                download
+                className="inline-block bg-bg border border-border hover:bg-bg-muted text-text text-xs font-medium px-3 py-1.5 rounded-md"
+              >
+                Export everything (.zip)
+              </a>
+              <p className="text-xs text-text-muted mt-2">
+                Profiles, skills (Agent Skills folders), memory vault (Markdown, opens in Obsidian)
+                and settings. Secrets, tokens and devices are never included.
+              </p>
+            </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
