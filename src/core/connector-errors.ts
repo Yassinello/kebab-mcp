@@ -84,6 +84,38 @@ export class VaultAuthError extends McpToolError {
   }
 }
 
+/** VLT-03: a KV-vault limit (note size, note count) would be exceeded. */
+export class VaultLimitError extends McpToolError {
+  constructor(message: string) {
+    super({
+      code: ErrorCode.INVALID_INPUT,
+      toolName: "vault",
+      message,
+      userMessage: message,
+      retryable: false,
+      recovery:
+        "Split the note, or delete notes you no longer need. Large vaults are better served " +
+        "by the GitHub backend (see the Vault connector guide).",
+    });
+    this.name = "VaultLimitError";
+  }
+}
+
+/** VLT-01: optimistic concurrency — the note changed since the caller read it. */
+export class VaultConflictError extends McpToolError {
+  constructor(path: string) {
+    super({
+      code: ErrorCode.INVALID_INPUT,
+      toolName: "vault",
+      message: `Note changed since it was read: ${path}`,
+      userMessage: `The note "${path}" changed since it was read (version mismatch).`,
+      retryable: true,
+      recovery: "Read the note again with vault_read, then retry the write with the new sha.",
+    });
+    this.name = "VaultConflictError";
+  }
+}
+
 // ── Slack ────────────────────────────────────────────────────────────
 
 export class SlackRateLimitError extends McpToolError {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { vaultRecentCommits } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultRecentSchema = {
   n: z
@@ -27,7 +27,10 @@ export async function handleVaultRecent(params: {
   since?: string | undefined;
 }) {
   const limit = params.n ?? 10;
-  const results = await vaultRecentCommits(limit, params.folder, params.since);
+  const results = await getVaultBackend().recent(limit, {
+    folder: params.folder,
+    since: params.since,
+  });
 
   return {
     content: [

@@ -35,10 +35,16 @@ describe("Phase 50 / MCP-02 — vault resources round-trip", () => {
     vaultTreeMock.mockReset();
     vaultReadMock.mockReset();
     vi.resetModules();
+    // Phase 2 (VLT-04): the GitHub backend is selected when its credentials
+    // are present; without them the vault would use the KV backend.
+    process.env.GITHUB_PAT = "test-pat";
+    process.env.GITHUB_REPO = "owner/repo";
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    delete process.env.GITHUB_PAT;
+    delete process.env.GITHUB_REPO;
   });
 
   describe("list()", () => {

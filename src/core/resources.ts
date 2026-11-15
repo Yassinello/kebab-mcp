@@ -4,7 +4,7 @@
  * Provides the connector-author-facing interface for exposing readable
  * artifacts (files, notes, records) via the MCP `resources/list` and
  * `resources/read` methods. Pilot in `src/connectors/vault/resources.ts`
- * exposes Obsidian vault markdown files under `vault://<path>` URIs.
+ * exposes the vault's markdown notes under `vault://<path>` URIs.
  *
  * Resolution: each enabled connector optionally implements
  * `manifest.resources: ResourceProvider`. The transport (app/api/[transport]/
