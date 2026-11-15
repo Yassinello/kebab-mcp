@@ -11,8 +11,8 @@ import { getConfig } from "@/core/config-facade";
 import { getKVStore } from "@/core/kv-store";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
+import { computeDeploymentUpdateStatus } from "@/core/release-sync";
 import {
-  computeUpdateStatus,
   resolveUpdateToken,
   UPDATE_CHECK_KV_KEY,
   UPDATE_CHECK_LOCK_KEY,
@@ -23,7 +23,7 @@ import {
 /**
  * Daily cron at 8h UTC (vercel.json).
  *
- * Calls computeUpdateStatus() against the upstream repo and writes the
+ * Calls computeDeploymentUpdateStatus() (fork or release-sync) against upstream and writes the
  * result to KV `global:update-check` with a 48h TTL. The Overview banner
  * reads this cache first (Plan 063-01) so warm pageviews don't pay the
  * 200-500ms GitHub round-trip.
@@ -72,10 +72,10 @@ async function cronUpdateCheckHandler(_ctx: PipelineContext): Promise<Response> 
     }
   }
 
-  // ── Run the shared computeUpdateStatus helper ──────────────────────────
-  const result = await computeUpdateStatus(token, owner, slug);
+  // ── Shared status helper: fork → merge-upstream, else release-sync ─────
+  const result = await computeDeploymentUpdateStatus(token, owner, slug);
   if (!result.ok) {
-    logger.warn("computeUpdateStatus failed", { kind: result.kind });
+    logger.warn("update status check failed", { kind: result.kind });
     // Invalidate stale cache so the next dashboard hit retries live.
     await kv.delete(UPDATE_CHECK_KV_KEY).catch(() => {});
     return NextResponse.json({ ok: false, reason: result.kind });

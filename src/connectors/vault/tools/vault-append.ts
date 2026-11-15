@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { vaultRead, vaultWrite } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 import { ensureProvenance, noteProvenance } from "../lib/provenance";
 
 export const vaultAppendSchema = {
@@ -19,7 +19,8 @@ export async function handleVaultAppend(params: {
   const separator = params.separator ?? "\n\n";
 
   // Read existing file (get content + SHA in one call)
-  const file = await vaultRead(params.path);
+  const vault = getVaultBackend();
+  const file = await vault.read(params.path);
 
   // Append content. TRU-03: the note now holds model-written text, so it is
   // tagged `provenance: assistant` unless it already declares a provenance
@@ -27,12 +28,10 @@ export async function handleVaultAppend(params: {
   const newContent = ensureProvenance(file.content + separator + params.content, "assistant");
 
   // Write back with known SHA (skips extra GET)
-  const result = await vaultWrite(
-    params.path,
-    newContent,
-    `Append to ${params.path} via Kebab MCP`,
-    file.sha
-  );
+  const result = await vault.write(params.path, newContent, {
+    message: `Append to ${params.path} via Kebab MCP`,
+    expectedVersion: file.sha,
+  });
 
   return {
     content: [

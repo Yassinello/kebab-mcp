@@ -6,7 +6,7 @@ Reading this if you want to: add a connector, add a tool, change auth/registry, 
 
 ## Project Overview
 
-Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Composio, Skills, API Connections, Custom Tools, Paywall, Apify, Unipile (LinkedIn + WhatsApp), GitHub, Linear, Airtable, Webhook, Admin) — plus dynamic, user-defined tools via the Skills, API Connections, and Custom Tools connectors. Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
+Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 connectors (Google Workspace, Memory Vault, Browser Automation, Slack, Notion, Composio, Skills, API Connections, Custom Tools, Paywall, Apify, Unipile (LinkedIn + WhatsApp), GitHub, Linear, Airtable, Webhook, Admin) — plus dynamic, user-defined tools via the Skills, API Connections, and Custom Tools connectors. Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 
 ```
 src/core/                        — Framework: types, registry, config, auth, logging, events, tracing
 src/connectors/google/manifest.ts        — Google Workspace connector (21 tools)
-src/connectors/vault/manifest.ts          — Obsidian Vault connector (14 tools)
+src/connectors/vault/manifest.ts          — Memory Vault connector (13 tools; `VaultBackend` = KV or GitHub, see lib/select.ts)
 src/connectors/browser/manifest.ts        — Browser Automation connector (7 tools)
 src/connectors/slack/manifest.ts          — Slack connector (6 tools)
 src/connectors/notion/manifest.ts         — Notion connector (6 tools)
@@ -260,8 +260,9 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 | `GOOGLE_CLIENT_ID` | Google connector | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google connector | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | Google connector | OAuth refresh token |
-| `GITHUB_PAT` | Vault connector | GitHub PAT with `repo` scope |
-| `GITHUB_REPO` | Vault connector | `owner/repo` format |
+| `GITHUB_PAT` | Vault connector (optional) | GitHub PAT with `repo` scope — GitHub backend |
+| `GITHUB_REPO` | Vault connector (optional) | `owner/repo` format — GitHub backend |
+| `KEBAB_VAULT_BACKEND` | Vault connector (optional) | Force `kv` or `github` (default: github when both GitHub vars are set) |
 | `GITHUB_BRANCH` | No | Default branch (default: `main`) |
 | `BROWSERBASE_API_KEY` | Browser connector | Browserbase API key |
 | `BROWSERBASE_PROJECT_ID` | Browser connector | Browserbase project ID |

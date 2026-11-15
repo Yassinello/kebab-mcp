@@ -8,6 +8,7 @@ import { renderMarkdown } from "@/core/markdown-lite";
 import { EnvStubBlock } from "./env-stub-block";
 import { ApiConnectionsSection } from "./api-connections-section";
 import { LinkedinConnectButton } from "./linkedin-connect-button";
+import { VaultBackendPanel } from "./vault-backend-panel";
 import { UnipileAccountSelector } from "./unipile-account-selector";
 import { MultiAccountSelector } from "./multi-account-selector";
 
@@ -634,6 +635,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         </div>
                       </>
                     )}
+                    {pack.id === "vault" && pack.enabled && isOpen && <VaultBackendPanel />}
                     {pack.id === "browser" && pack.enabled && (
                       <LinkedinConnectButton
                         currentContextId={getValue("BROWSERBASE_CONTEXT_LINKEDIN")}

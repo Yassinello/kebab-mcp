@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { vaultTree } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultStatsSchema = {
   folder: z
@@ -9,21 +9,10 @@ export const vaultStatsSchema = {
 };
 
 export async function handleVaultStats(params: { folder?: string | undefined }) {
-  const tree = await vaultTree(params.folder);
-
-  // Count notes per folder
-  const folderCounts: Record<string, number> = {};
-  let totalNotes = 0;
-  let totalSize = 0;
-
-  for (const file of tree) {
-    if (!file.path.endsWith(".md")) continue;
-    totalNotes++;
-    totalSize += file.size || 0;
-
-    const folder = file.path.includes("/") ? file.path.split("/").slice(0, -1).join("/") : "(root)";
-    folderCounts[folder] = (folderCounts[folder] || 0) + 1;
-  }
+  // Notes per folder and total size (`.md` only) — see computeStats().
+  const { totalNotes, totalSize, folderCounts, warning } = await getVaultBackend().stats(
+    params.folder
+  );
 
   // Sort folders by count descending
   const byFolder = Object.entries(folderCounts)
@@ -44,6 +33,8 @@ export async function handleVaultStats(params: { folder?: string | undefined }) 
             inboxCount,
             folderCount: Object.keys(folderCounts).length,
             byFolder,
+            // KV backend only: soft-limit warning (vault above 50 MB).
+            ...(warning ? { warning } : {}),
           },
           null,
           2

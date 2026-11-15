@@ -117,6 +117,14 @@ export function AdvancedSection() {
       const data = (await res.json()) as Record<string, unknown>;
       if (data.reason === "no-token") {
         setTestResult("No token configured.");
+      } else if (data.mode === "release-sync" && data.reason === "unknown-version") {
+        setTestResult((data.message as string) || "Installed version not found upstream.");
+      } else if (data.mode === "release-sync" && data.available) {
+        setTestResult(
+          `Release sync: v${data.latestVersion as string} available (you run v${data.installedVersion as string}).`
+        );
+      } else if (data.mode === "release-sync" && data.status === "identical") {
+        setTestResult(`Release sync: up to date with v${data.installedVersion as string}.`);
       } else if (data.available) {
         const behind =
           (data.behind_by as number | undefined) ?? (data.behind as number | undefined) ?? 0;
@@ -455,10 +463,11 @@ export function AdvancedSection() {
           Updates
         </h3>
         <p className="text-xs text-text-dim mb-3">
-          Configure a GitHub PAT to enable one-click upstream sync from the Overview tab. Requires{" "}
-          <code className="font-mono bg-bg-muted px-1 rounded">public_repo</code> scope for public
-          forks, <code className="font-mono bg-bg-muted px-1 rounded">repo</code> scope for private
-          forks. Fine-grained PATs: ensure <em>Contents: read/write</em> permission on your fork.
+          Configure a GitHub PAT to enable one-click upstream sync from the Overview tab.
+          Fine-grained PATs: <em>Contents: read &amp; write</em> on the repo this instance deploys
+          from (your fork or your Deploy Button copy). Classic PATs:{" "}
+          <code className="font-mono bg-bg-muted px-1 rounded">public_repo</code> for a public repo,{" "}
+          <code className="font-mono bg-bg-muted px-1 rounded">repo</code> for a private one.
         </p>
         <details className="mb-4 text-xs text-text-dim">
           <summary className="cursor-pointer text-text-muted hover:text-text">
@@ -470,10 +479,16 @@ export function AdvancedSection() {
               banner loads instantly without a GitHub round-trip.
             </li>
             <li>
-              Clicking <strong>Update now</strong> in the banner calls GitHub&apos;s{" "}
+              <strong>Forks</strong>: <strong>Update now</strong> calls GitHub&apos;s{" "}
               <code className="font-mono bg-bg-muted px-1 rounded">merge-upstream</code> API. Your
               fork&apos;s <code>main</code> fast-forwards, Vercel detects the push, and redeploys
               automatically (~2 minutes).
+            </li>
+            <li>
+              <strong>Deploy Button copies</strong> (not a fork): <strong>Update now</strong> runs a{" "}
+              <em>release sync</em> — the files changed by the latest upstream release are copied
+              into your repo as one commit (&quot;chore: sync Kebab House vX.Y.Z&quot;). If you
+              edited one of those files, nothing is written and the files are listed.
             </li>
             <li>
               If your fork has diverged (local commits on <code>main</code>), the button is disabled

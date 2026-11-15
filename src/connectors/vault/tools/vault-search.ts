@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { vaultRead, vaultSearch, type SearchResult } from "../lib/github";
+import type { SearchResult, VaultBackend } from "../lib/backend";
+import { getVaultBackend } from "../lib/select";
 import { noteProvenance, type Provenance } from "../lib/provenance";
 
 export const vaultSearchSchema = {
@@ -18,7 +19,10 @@ export const vaultSearchSchema = {
  */
 const PROVENANCE_LOOKUP_CAP = 20;
 
-async function resolveProvenance(results: SearchResult[]): Promise<Array<Provenance | "unknown">> {
+async function resolveProvenance(
+  vault: VaultBackend,
+  results: SearchResult[]
+): Promise<Array<Provenance | "unknown">> {
   let budget = PROVENANCE_LOOKUP_CAP;
   return Promise.all(
     results.map(async (r): Promise<Provenance | "unknown"> => {
@@ -26,7 +30,7 @@ async function resolveProvenance(results: SearchResult[]): Promise<Array<Provena
       if (budget <= 0) return "unknown";
       budget--;
       try {
-        const file = await vaultRead(r.path);
+        const file = await vault.read(r.path);
         return noteProvenance(file.content);
       } catch {
         return "unknown";
@@ -41,13 +45,13 @@ export async function handleVaultSearch(params: {
   limit?: number | undefined;
   page?: number | undefined;
 }) {
-  const { results, totalCount, method } = await vaultSearch(
-    params.query,
-    params.folder,
-    params.limit || 10,
-    params.page || 1
-  );
-  const provenance = await resolveProvenance(results);
+  const vault = getVaultBackend();
+  const { results, totalCount, method, truncated } = await vault.search(params.query, {
+    folder: params.folder,
+    limit: params.limit || 10,
+    page: params.page || 1,
+  });
+  const provenance = await resolveProvenance(vault, results);
 
   return {
     content: [
@@ -59,6 +63,8 @@ export async function handleVaultSearch(params: {
             page: params.page || 1,
             count: results.length,
             method,
+            // KV backend only: the content scan hit its cap.
+            ...(truncated ? { truncated } : {}),
             results: results.map((r, i) => ({
               name: r.name,
               path: r.path,

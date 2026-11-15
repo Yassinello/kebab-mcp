@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/github/license/Yassinello/kebab-mcp" alt="License: AGPL-3.0" />
   <img src="https://img.shields.io/github/v/release/Yassinello/kebab-mcp?label=version" alt="Version" />
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp"><img src="https://img.shields.io/badge/deploy-vercel-%23000?logo=vercel" alt="Deploy on Vercel" /></a>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D"><img src="https://img.shields.io/badge/deploy-vercel-%23000?logo=vercel" alt="Deploy on Vercel" /></a>
   <img src="https://img.shields.io/github/stars/Yassinello/kebab-mcp?style=social" alt="GitHub stars" />
 </p>
 
@@ -120,7 +120,7 @@ Details: [content/docs/skills.md](content/docs/skills.md).
 
 ### 🗄️ Memory vault
 
-Your Obsidian vault on GitHub becomes long-term memory that every client can read and write: search, read, write, append, move, backlinks, and `save_article` to clip a web page into your notes. Plain Markdown in a Git repo you own.
+Long-term memory that every client can read and write: search, read, write, append, move, backlinks, and `save_article` to clip a web page into your notes. It works from the first deploy, with nothing to set up: notes are stored in your instance's KV (Upstash, or the local file in Docker). Prefer Obsidian? Point it at a GitHub repo (`GITHUB_PAT` + `GITHUB_REPO`) and every note is plain Markdown in a Git repo you own; a dashboard button imports a GitHub vault into the KV.
 
 ### 🧰 Long-tail tools
 
@@ -142,7 +142,7 @@ Self-hosted by design: your credentials live in your own Upstash KV, with no tel
 | Connector                         | Tools             | Auth                                | Setup |
 | --------------------------------- | ----------------- | ----------------------------------- | ----- |
 | **Skills**                        | 3 (+ dyn.)        | —                                   | 0 min |
-| **Obsidian Vault**                | 14                | GitHub PAT                          | 2 min |
+| **Memory Vault**                  | 13                | — (GitHub PAT optional)             | 0 min |
 | **Unipile (LinkedIn + WhatsApp)** | 23                | DSN + token                         | 3 min |
 | **Apify (LinkedIn)**              | 10                | API token                           | 1 min |
 | **Browser Automation**            | 7                 | Browserbase + OpenRouter            | 3 min |
@@ -173,18 +173,15 @@ A few prompts to give you the shape of it:
 
 ## Quick Start
 
-Two paths cover ~95% of users — Fork + Vercel for the recommended path, Docker for full control. The CLI installer is tucked under the "more" toggle.
+Two paths cover ~95% of users — the Vercel Deploy Button for the recommended path, Docker for full control. The CLI installer is tucked under the "more" toggle.
 
-### Option A — Fork + Deploy on Vercel (recommended)
+### Option A — Deploy on Vercel (recommended)
 
-The deploy hub at **[/deploy](https://kebab-mcp.vercel.app/deploy)** walks through this visually. The flow:
+**[Deploy with Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D)** — one click creates a copy of the repo in your GitHub account, a Vercel project and a free Upstash Redis database, then deploys. Open the deployed URL → `/welcome` mints your `MCP_AUTH_TOKEN` and connects your AI client. The deploy hub at **[/deploy](https://kebab-mcp.vercel.app/deploy)** shows what gets created.
 
-1. **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** — keeps your deployment linked to upstream so updates land in one click.
-2. **[Import to Vercel](https://vercel.com/new)** — pick your fork from the list, click *Import*, keep all defaults, click *Deploy*.
-3. **Attach Upstash KV** — after the first deploy completes, open your project → *Storage* tab → *Connect Database* → *Upstash for Redis* (Free plan). Vercel injects the env vars and auto-redeploys. Without this, your auth token and credentials don't survive serverless cold starts.
-4. **Open the deployed URL** → land on `/welcome`, mint your `MCP_AUTH_TOKEN`, paste it into your AI client.
+Updates: add a GitHub token with *Contents: read & write* on your new repo as `KEBAB_UPDATE_PAT` (Settings → Advanced), then click *Update now* in the dashboard. The copy is not a GitHub fork, so the dashboard uses **release sync**: it copies the latest release's files into your repo as one commit, and stops without writing if you edited one of them.
 
-> **Why not the one-click Deploy Button?** Vercel's `/new/clone` creates a standalone snapshot — not a real GitHub fork — so the dashboard's *Update now* flow can never sync upstream changes. We tried it and reverted (case study: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)). The fork-first flow takes one extra click and stays maintainable forever.
+**Alternative — Fork + Import** (a real GitHub fork, *Sync fork* works): **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** → **[Import to Vercel](https://vercel.com/new)** → in the project, *Storage* → *Connect Database* → *Upstash for Redis* (Free) → open `/welcome`. Without Upstash, your auth token and credentials don't survive serverless cold starts.
 
 <details>
 <summary><strong>Vercel deploy — troubleshooting FAQ</strong></summary>
@@ -307,6 +304,7 @@ v0.12 renamed the env-var prefix from `MYMCP_*` to `KEBAB_*`. Both are accepted 
 | `KEBAB_LOCALE`            | `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting |
 | `KEBAB_DISPLAY_NAME`      | `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard         |
 | `KEBAB_CONTEXT_PATH`      | `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault     |
+| `KEBAB_VAULT_BACKEND`     | `MYMCP_VAULT_BACKEND`     | auto                | Vault storage: `kv` or `github`   |
 | `KEBAB_TOOL_TIMEOUT`      | `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                |
 | `KEBAB_ERROR_WEBHOOK_URL` | `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts          |
 
@@ -329,7 +327,7 @@ src/
       manifest.ts      ← Connector definition (single source of truth)
       lib/             ← Gmail, Calendar, Contacts, Drive, Chat wrappers
       tools/           ← Individual tool handlers
-    vault/             ← Obsidian Vault (13 tools)
+    vault/             ← Memory Vault (13 tools; KV or GitHub backend)
     skills/            ← Skills library (skills_list, skill_load, skill_read_file)
     browser/ slack/ notion/ apify/ unipile/ paywall/ composio/
     github/ linear/ airtable/ webhook/ admin/

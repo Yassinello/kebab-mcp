@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ToolResult } from "@/core/types";
-import { getConfig } from "@/core/config-facade";
 import { getInstanceConfigAsync } from "@/core/config";
 import { getCallerMeta } from "@/core/token-scope";
 import { toMsg } from "@/core/error-utils";
@@ -21,7 +20,8 @@ import {
  *   1. the profile bound to the calling token (device entry `profile`);
  *   2. the default profile — inline Markdown in KV when its mode is inline;
  *   3. the vault file at the configured `contextPath` when the default
- *      profile is in vault mode and the vault connector is configured;
+ *      profile is in vault mode — read through the vault backend interface
+ *      (VLT-07), so it works on the GitHub and the KV backend alike;
  *   4. a short help message pointing at /config → Settings.
  */
 
@@ -41,18 +41,17 @@ async function resolveProfileName(): Promise<string> {
   return DEFAULT_PROFILE;
 }
 
-function vaultConfigured(): boolean {
-  return Boolean(getConfig("GITHUB_PAT") && getConfig("GITHUB_REPO"));
+/** Lazy import: the vault backends are only loaded for vault-mode profiles. */
+async function vaultBackend() {
+  const { getVaultBackend } = await import("@/connectors/vault/lib/select");
+  return getVaultBackend();
 }
 
 async function readDefaultFromVault(): Promise<string | null> {
-  if (!vaultConfigured()) return null;
   const cfg = await getInstanceConfigAsync();
   const path = cfg.contextPath || "System/context.md";
   try {
-    // Lazy import: the vault library is only loaded for vault-mode profiles.
-    const { vaultRead } = await import("@/connectors/vault/lib/github");
-    const file = await vaultRead(path);
+    const file = await (await vaultBackend()).read(path);
     return file.content;
   } catch (err) {
     const msg = toMsg(err);
@@ -107,18 +106,14 @@ export async function handleMyContextUpdate(args: {
 
   // The default profile may live in the vault: update the file there instead
   // of silently switching the profile back to inline mode.
-  if (
-    name === DEFAULT_PROFILE &&
-    (await getDefaultProfileMode()) === "vault" &&
-    vaultConfigured()
-  ) {
+  if (name === DEFAULT_PROFILE && (await getDefaultProfileMode()) === "vault") {
     const cfg = await getInstanceConfigAsync();
     const path = cfg.contextPath || "System/context.md";
-    const { vaultRead, vaultWrite } = await import("@/connectors/vault/lib/github");
+    const vault = await vaultBackend();
     let current = "";
     let sha: string | undefined;
     try {
-      const file = await vaultRead(path);
+      const file = await vault.read(path);
       current = file.content;
       sha = file.sha;
     } catch (err) {
@@ -128,7 +123,10 @@ export async function handleMyContextUpdate(args: {
     if (new TextEncoder().encode(next).length > MAX_PROFILE_BYTES) {
       return profileError(new ProfileError("Profile too large.", "too_large"));
     }
-    await vaultWrite(path, next, "Update profile (my_context_update)", sha);
+    await vault.write(path, next, {
+      message: "Update profile (my_context_update)",
+      expectedVersion: sha,
+    });
     return text(`Updated the profile file "${path}" in the vault (${mode}).`);
   }
 

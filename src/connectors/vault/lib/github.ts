@@ -1,7 +1,9 @@
 import { VaultNotFoundError, VaultAuthError } from "@/core/connector-errors";
 import { fetchWithTimeout } from "@/core/fetch-utils";
 import { getConfig as readConfig } from "@/core/config-facade";
-import { noteProvenance, type Provenance } from "./provenance";
+import { noteProvenance } from "./provenance";
+import { validateVaultPath, validateVaultWritePath } from "./paths";
+import type { RecentNote, SearchResult, TreeFile, VaultFile, VaultListEntry } from "./backend";
 
 const GITHUB_API = "https://api.github.com";
 // Phase 44 SCM-05b: 10s default preserved from prior local helper.
@@ -60,59 +62,9 @@ interface _GitHubRepoResponse {
   private: boolean;
 }
 
-export interface VaultFile {
-  path: string;
-  name: string;
-  sha: string;
-  content: string;
-  size: number;
-}
+// --- Path validation (VLT-05: shared with the KV backend) ---
 
-export interface VaultListEntry {
-  name: string;
-  path: string;
-  type: "file" | "dir";
-  size: number;
-}
-
-export interface SearchResult {
-  name: string;
-  path: string;
-  textMatches: string[];
-  /** TRU-03: set when the note content was already read during the search. */
-  provenance?: Provenance;
-}
-
-// --- Path validation ---
-
-export function validateVaultPath(path: string): void {
-  if (!path || path.trim().length === 0) {
-    throw new Error("Path cannot be empty");
-  }
-  if (path.includes("..")) {
-    throw new Error("Path cannot contain '..' (directory traversal)");
-  }
-  if (path.startsWith("/")) {
-    throw new Error("Path must be relative (no leading /)");
-  }
-  if (/\0/.test(path)) {
-    throw new Error("Path cannot contain null bytes");
-  }
-}
-
-/**
- * SEC-14 (2026-11 audit): writes and deletes may not touch repository
- * plumbing. A prompt-injected `vault_write` to `.github/workflows/x.yml`
- * would otherwise run arbitrary code in GitHub Actions when the PAT has the
- * `workflow` scope.
- */
-export function validateVaultWritePath(path: string): void {
-  validateVaultPath(path);
-  const first = (path.split("/")[0] ?? "").toLowerCase();
-  if (first === ".github" || first.startsWith(".git")) {
-    throw new Error(`Writing under '${first}/' is not allowed (repository configuration)`);
-  }
-}
+export { validateVaultPath, validateVaultWritePath };
 
 /**
  * SEC-14: strip GitHub search qualifiers (`repo:`, `org:`, `user:`, …) from
@@ -463,13 +415,6 @@ async function treeGrep(
 
 // --- Recent commits (files modified recently) ---
 
-export interface RecentNote {
-  path: string;
-  message: string;
-  date: string;
-  author: string;
-}
-
 export async function vaultRecentCommits(
   limit: number,
   folder?: string,
@@ -541,11 +486,6 @@ export async function vaultRecentCommits(
 
 // --- Tree listing (for stats) ---
 
-export interface TreeFile {
-  path: string;
-  size: number;
-}
-
 export async function vaultTree(folder?: string): Promise<TreeFile[]> {
   if (folder) validateVaultPath(folder);
   const { pat, repo } = getConfig();
@@ -562,7 +502,7 @@ export async function vaultTree(folder?: string): Promise<TreeFile[]> {
 
   let files = tree.tree
     .filter((t) => t.type === "blob")
-    .map((t) => ({ path: t.path, size: t.size || 0 }));
+    .map((t) => ({ path: t.path, size: t.size || 0, sha: t.sha }));
 
   if (folder) {
     const prefix = folder.replace(/\/$/, "") + "/";

@@ -70,3 +70,15 @@ Hors périmètre : installeur sans Git via « Sign in with Vercel » (option pro
 - **Écriture dans le dépôt de l'utilisateur** : la synchro crée des commits ; elle n'agit qu'à la demande depuis le dashboard, jamais automatiquement.
 - **Vault dans Redis** : bon pour un usage personnel (quelques milliers de notes) ; pas un moteur de recherche. GitHub reste disponible pour qui veut Obsidian.
 - **Deploy Button non testable de bout en bout ici** : il exige un compte Vercel tiers. La génération de l'URL est testée ; le parcours réel est à vérifier par le propriétaire au premier usage.
+
+## 9. Bilan de réalisation
+
+| Exigence        | Statut      | Note                                                                                                                                                                                                                                        |
+| --------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UPD-01 à UPD-05 | ✅          | Mode `release-sync` (`src/core/release-sync.ts`) : conflits et limites vérifiés avant toute écriture, référence avancée en fast-forward seulement, à la toute fin.                                                                          |
+| DEP-01 à DEP-04 | ✅          | Deploy Button avec Upstash ; `/deploy` le recommande, Fork + Import en alternative ; `/welcome` saute l'étape de stockage quand Upstash répond. Les boutons « Deploy » de la landing ouvrent directement Vercel, `/deploy` est lié dessous. |
+| DEP-05          | ⏸ documenté | `redirect-url` exige une intégration Vercel enregistrée (`docs/HOSTING.md`).                                                                                                                                                                |
+| VLT-01 à VLT-07 | ✅          | `VaultBackend` (GitHub, KV) ; le connecteur devient « Memory Vault », actif par défaut ; import GitHub → KV et reconstruction d'index depuis `/config`.                                                                                     |
+| EXP-01 à EXP-03 | ✅          | `GET /api/config/export` (zip : profils, skills, vault, réglages filtrés), `POST` du même zip pour le réimporter (additif) ; bouton dans Settings.                                                                                          |
+
+Correctif annexe : l'encadrement des notes `provenance: external` (TRU-02) ne reconnaissait pas la sortie JSON de `vault_read` ; corrigé avec test.

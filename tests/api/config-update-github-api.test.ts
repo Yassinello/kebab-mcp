@@ -359,6 +359,15 @@ describe("POST github-api — diverged guard", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     // compare re-fetch
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({
@@ -386,6 +395,15 @@ describe("POST github-api — successful merge", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     // compare re-fetch
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({ ahead_by: 0, behind_by: 2, html_url: "https://github.com/compare" })
@@ -412,6 +430,15 @@ describe("POST github-api — conflict", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({ ahead_by: 0, behind_by: 1, html_url: "https://github.com/compare" })
     );
@@ -435,6 +462,15 @@ describe("POST github-api — auth error", () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
 
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
+
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({ ahead_by: 0, behind_by: 1, html_url: "https://github.com/compare" })
     );
@@ -456,6 +492,15 @@ describe("POST github-api — not a fork", () => {
   it("returns reason=not-a-fork on 422 from GitHub merge-upstream", async () => {
     configForGithubApi();
     mockGetCredential.mockReturnValue("ghp_testtoken");
+
+    // repo metadata — a real fork of upstream keeps the merge-upstream path
+    fetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        private: false,
+        fork: true,
+        parent: { full_name: "Yassinello/kebab-mcp" },
+      })
+    );
 
     fetchMock.mockResolvedValueOnce(
       makeJsonResponse({ ahead_by: 0, behind_by: 1, html_url: "https://github.com/compare" })

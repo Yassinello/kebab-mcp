@@ -212,13 +212,13 @@ export function SettingsTab({
                 <label className="text-sm font-medium">Profile (default)</label>
                 <InfoTooltip
                   title="What is the personal context file?"
-                  body="A short markdown document that describes you (role, current projects, preferences). MCP clients can fetch it via the my_context tool to ground responses without you re-explaining everything every conversation. Two storage modes: store the markdown inline here (persists in the KV store), or point at a file inside your Obsidian vault if the Vault connector is active."
+                  body="A short markdown document that describes you (role, current projects, preferences). MCP clients can fetch it via the my_context tool to ground responses without you re-explaining everything every conversation. Two storage modes: store the markdown inline here (persists in the KV store), or point at a note in your memory vault (stored in the KV, or in a GitHub/Obsidian repo)."
                 />
               </div>
               <ContextFileField vaultEnabled={vaultEnabled} initialPath={config.contextPath} />
               <p className="text-xs text-text-muted mt-2">
                 This is the default profile. Pick where it lives. Inline = stored in the KV store.
-                Vault = a file inside your Obsidian vault, fetched on demand.
+                Vault = a note in your memory vault, fetched on demand.
               </p>
             </div>
 
@@ -231,6 +231,21 @@ export function SettingsTab({
                 />
               </div>
               <ProfilesField />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1.5">Your data</label>
+              <a
+                href="/api/config/export"
+                download
+                className="inline-block bg-bg border border-border hover:bg-bg-muted text-text text-xs font-medium px-3 py-1.5 rounded-md"
+              >
+                Export everything (.zip)
+              </a>
+              <p className="text-xs text-text-muted mt-2">
+                Profiles, skills (Agent Skills folders), memory vault (Markdown, opens in Obsidian)
+                and settings. Secrets, tokens and devices are never included.
+              </p>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">

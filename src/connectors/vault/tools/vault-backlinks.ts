@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { vaultRead, vaultTree } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultBacklinksSchema = {
   path: z.string().describe("Path of the note to find backlinks for, e.g. 'Projects/cadens.md'"),
@@ -21,9 +21,15 @@ export async function handleVaultBacklinks(params: { path: string }) {
     `[[${params.path.replace(/\.md$/, "")}|`,
   ];
 
-  // Get all markdown files in the vault
-  const tree = await vaultTree();
-  const mdFiles = tree.filter((f) => f.path.endsWith(".md") && f.path !== params.path);
+  // Markdown files that may link here: the KV backend answers from its link
+  // index; otherwise (GitHub) every note in the vault is a candidate.
+  const vault = getVaultBackend();
+  const candidates = vault.linkCandidates
+    ? await vault.linkCandidates(params.path)
+    : (await vault.tree()).map((f) => f.path);
+  const mdFiles = candidates
+    .filter((p) => p.endsWith(".md") && p !== params.path)
+    .map((path) => ({ path }));
 
   // Read files in parallel (batch of 10 to avoid rate limiting)
   const BATCH_SIZE = 10;
@@ -36,7 +42,7 @@ export async function handleVaultBacklinks(params: { path: string }) {
     const batch = mdFiles.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map(async (file) => {
-        const content = await vaultRead(file.path);
+        const content = await vault.read(file.path);
         return { path: file.path, content: content.content };
       })
     );
@@ -67,7 +73,7 @@ export async function handleVaultBacklinks(params: { path: string }) {
   }
 
   // Also extract forward links from the target note itself
-  const targetFile = await vaultRead(params.path);
+  const targetFile = await vault.read(params.path);
   const forwardLinks: string[] = [];
   const linkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
   let match;

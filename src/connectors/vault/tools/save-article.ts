@@ -1,6 +1,6 @@
 import { z } from "zod";
 import yaml from "js-yaml";
-import { vaultWrite } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 import { getConfig } from "@/core/config-facade";
 
 const MAX_ARTICLE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -155,7 +155,9 @@ export async function handleSaveArticle(params: {
     .trimEnd();
   const fullContent = `---\n${yamlStr}\n---\n\n${markdown}`;
 
-  const result = await vaultWrite(path, fullContent, `Save article: ${slug} via Kebab MCP`);
+  const result = await getVaultBackend().write(path, fullContent, {
+    message: `Save article: ${slug} via Kebab MCP`,
+  });
 
   return {
     content: [

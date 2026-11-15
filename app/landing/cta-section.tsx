@@ -1,4 +1,4 @@
-import { REPO_URL } from "./deploy-url";
+import { REPO_URL, VERCEL_DEPLOY_BUTTON_URL } from "./deploy-url";
 
 export default function CtaSection() {
   return (
@@ -13,7 +13,9 @@ export default function CtaSection() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a
-            href="/deploy"
+            href={VERCEL_DEPLOY_BUTTON_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-8 py-3.5 rounded-lg font-semibold text-sm"
           >
             Deploy your Kebab
@@ -27,6 +29,12 @@ export default function CtaSection() {
             View on GitHub
           </a>
         </div>
+        <p className="text-xs text-slate-500 mt-6">
+          Prefer a fork, Docker or the CLI?{" "}
+          <a href="/deploy" className="text-slate-300 hover:text-white underline">
+            Other ways to deploy
+          </a>
+        </p>
       </div>
     </section>
   );

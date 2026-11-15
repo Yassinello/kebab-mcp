@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { loadVaultYaml } from "../lib/yaml-safe";
-import { vaultRead } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultBatchReadSchema = {
   paths: z
@@ -49,9 +49,10 @@ function parseFrontmatter(content: string): {
 }
 
 export async function handleVaultBatchRead(params: { paths: string[] }) {
+  const vault = getVaultBackend();
   const results = await Promise.allSettled(
     params.paths.map(async (path): Promise<BatchReadResult> => {
-      const file = await vaultRead(path);
+      const file = await vault.read(path);
       const { frontmatter, body } = parseFrontmatter(file.content);
       return {
         path: file.path,

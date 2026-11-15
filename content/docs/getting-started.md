@@ -10,17 +10,16 @@ A single Vercel deploy that exposes 97+ tools across 18 connectors (Gmail, Calen
 
 ## Five-minute deploy
 
-The recommended path is **fork-first** — that way your instance can pull upstream updates from `Yassinello/kebab-mcp` on demand without recreating the deploy.
+The recommended path is the **Deploy with Vercel** button on [/deploy](https://kebab-mcp.vercel.app/deploy).
 
-1. **Fork on GitHub.** Open [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) and click **Fork**. Use your own account — this becomes your permanent home for the instance.
-2. **Import to Vercel.** Go to [vercel.com/new](https://vercel.com/new), pick your fork, and click **Deploy**. No env vars required at this stage.
-3. After the first deploy, open the new Vercel URL. You'll land on `/welcome`.
-4. Click **Initialize this instance.** Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to Upstash KV (provisioned automatically via Vercel Marketplace if you don't have one), and the dashboard becomes live.
-5. Copy the install snippet for your client — the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other — and paste it into your client config.
+1. **Deploy with Vercel.** One click creates a copy of the repo in your GitHub account, a Vercel project and a free Upstash Redis database, then deploys. No env vars required.
+2. When the build is done, open the new Vercel URL. You'll land on `/welcome` (Upstash is already attached, so the storage step is skipped).
+3. Click **Initialize this instance.** Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to Upstash KV, and the dashboard becomes live.
+4. Copy the install snippet for your client — the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other — and paste it into your client config.
 
 That's it. Your AI assistant now has tools.
 
-> **Why fork-first?** The previous one-click "Deploy with Vercel" button created standalone snapshots that couldn't pull upstream updates without re-deploying from scratch. The fork path is one extra step but means you keep getting fixes and new connectors over time. If you skip the fork, the dashboard surfaces a red "not-a-fork" banner with a one-click "switch to a fork" flow.
+> **Prefer a real fork?** Fork [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) on GitHub, import the fork at [vercel.com/new](https://vercel.com/new), then attach *Upstash for Redis* from the project's *Storage* tab. Both paths get one-click updates (below).
 
 ## Adding connectors
 
@@ -30,11 +29,11 @@ If you set up storage credentials directly in Vercel env vars instead, they take
 
 ## Configuring updates (Vercel)
 
-If you deployed on Vercel, you can sync your fork with upstream Kebab MCP (`Yassinello/kebab-mcp`) directly from the dashboard — no terminal required.
+If you deployed on Vercel, you can pull upstream Kebab MCP (`Yassinello/kebab-mcp`) releases directly from the dashboard — no terminal required.
 
 **One-time setup:**
 
-1. Generate a GitHub Personal Access Token. Scope: `public_repo` for public forks, `repo` for private forks. Fine-grained PATs need *Contents: read/write* permission on your fork.
+1. Generate a GitHub Personal Access Token. Fine-grained PATs need *Contents: read/write* on the repo your instance deploys from. Classic PATs: `public_repo` for a public repo, `repo` for a private one.
 2. Open `/config → Settings → Advanced → Updates`.
 3. Paste the PAT, click **Save token**, then **Test connection**.
 
@@ -42,7 +41,7 @@ If you deployed on Vercel, you can sync your fork with upstream Kebab MCP (`Yass
 
 - A daily cron at 8h UTC pre-fetches upstream status into your Upstash KV.
 - The Overview tab banner shows the result instantly (no GitHub round-trip on each page load).
-- When new commits land, click **Update now** in the banner — Kebab MCP calls GitHub's `merge-upstream` API and Vercel redeploys automatically (~2 min).
+- When an update is out, click **Update now** in the banner; Vercel redeploys automatically (~2 min). A fork is synced with GitHub's `merge-upstream` API. A Deploy Button copy (not a fork) uses **release sync**: the files changed by the latest release are copied into your repo as one commit, and the sync stops without writing anything if you edited one of those files (they are listed).
 - Possible breaking changes (commits flagged `feat!:` or `BREAKING CHANGE:`) get a heuristic warning + link to the upstream release notes.
 - If your fork has diverged (you committed locally on `main`), the button is disabled and a manual-resolution link is shown.
 

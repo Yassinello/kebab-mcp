@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { vaultRead, vaultWrite, vaultDelete } from "../lib/github";
-import { toMsg } from "@/core/error-utils";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultMoveSchema = {
   from: z.string().describe("Current path, e.g. Inbox/note.md"),
   to: z.string().describe("New path, e.g. Veille/note.md"),
-  message: z.string().optional().describe("Git commit message"),
+  message: z.string().optional().describe("Change message (the Git commit message on GitHub)"),
 };
 
 export async function handleVaultMove(params: {
@@ -15,17 +14,10 @@ export async function handleVaultMove(params: {
 }) {
   const commitMsg = params.message || `Move ${params.from} → ${params.to} via Kebab MCP`;
 
-  // Step 1: Read source (gets content + SHA in one call)
-  const source = await vaultRead(params.from);
+  const result = await getVaultBackend().move(params.from, params.to, { message: commitMsg });
 
-  // Step 2: Write to new location
-  await vaultWrite(params.to, source.content, commitMsg);
-
-  // Step 3: Delete source using known SHA (saves one GET call)
-  try {
-    await vaultDelete(params.from, commitMsg, source.sha);
-  } catch (error) {
-    const msg = toMsg(error);
+  if (result.deleteError !== undefined) {
+    const msg = result.deleteError;
     // Write succeeded but delete failed — note is duplicated
     return {
       content: [

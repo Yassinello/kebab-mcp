@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { loadVaultYaml } from "../lib/yaml-safe";
-import { vaultRead, vaultTree } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 
 export const vaultDueSchema = {
   before: z
@@ -25,9 +25,13 @@ export async function handleVaultDue(params: {
 }) {
   const cutoff = params.before || new Date().toISOString().split("T")[0];
 
-  // Get all markdown files
-  const tree = await vaultTree(params.folder);
-  const mdFiles = tree.filter((f) => f.path.endsWith(".md"));
+  // Markdown files that may carry `resurface`: the KV backend answers from
+  // its index; otherwise (GitHub) every note in the folder is a candidate.
+  const vault = getVaultBackend();
+  const candidates = vault.dueCandidates
+    ? await vault.dueCandidates(params.folder)
+    : (await vault.tree(params.folder)).map((f) => f.path);
+  const mdFiles = candidates.filter((p) => p.endsWith(".md")).map((path) => ({ path }));
 
   // Read files in batches to find those with resurface frontmatter
   const BATCH_SIZE = 10;
@@ -37,7 +41,7 @@ export async function handleVaultDue(params: {
     const batch = mdFiles.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
       batch.map(async (file) => {
-        const content = await vaultRead(file.path);
+        const content = await vault.read(file.path);
         return { path: file.path, content: content.content };
       })
     );

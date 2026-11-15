@@ -12,7 +12,7 @@ import type { PipelineContext } from "@/core/pipeline";
  * Read or write the personal-context file in either of two modes:
  * - inline: markdown stored under KV key `mymcp:context:inline`
  * - vault:  path stored as MYMCP_CONTEXT_PATH env var (the file itself
- *           lives in the user's Obsidian vault and is fetched via the
+ *           lives in the memory vault (KV or GitHub) and is fetched via the
  *           vault connector at runtime)
  *
  * The `mode` flag itself is stored under `mymcp:context:mode`.

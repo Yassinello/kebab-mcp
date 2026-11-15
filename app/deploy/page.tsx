@@ -1,16 +1,21 @@
 import type { Metadata } from "next";
 import LandingHeader from "../landing/header";
 import LandingFooter from "../landing/footer";
-import { REPO_URL, GITHUB_FORK_URL, VERCEL_IMPORT_URL } from "../landing/deploy-url";
+import {
+  REPO_URL,
+  GITHUB_FORK_URL,
+  VERCEL_IMPORT_URL,
+  VERCEL_DEPLOY_BUTTON_URL,
+} from "../landing/deploy-url";
 
 export const metadata: Metadata = {
-  title: "Deploy Kebab MCP — Choose your path",
+  title: "Deploy Kebab House — Choose your path",
   description:
-    "Pick how you want to run Kebab MCP. Fork + Vercel is the recommended path. CLI, Docker, and self-hosted options are available if you want more control.",
+    "Deploy Kebab House on Vercel in one click: your own GitHub copy, a Vercel project and a free Upstash database. Fork + Import, Docker and CLI options are available too.",
   openGraph: {
-    title: "Deploy Kebab MCP",
+    title: "Deploy Kebab House",
     description:
-      "Fork on GitHub, import to Vercel, mint your token. ~5 minutes. Or roll your own with Docker or the CLI installer.",
+      "One click on Vercel creates your repo, your project and a free Upstash database. Or roll your own with a fork, Docker or the CLI installer.",
   },
 };
 
@@ -18,10 +23,11 @@ export default function DeployPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <LandingHeader />
-      <main className="px-6 py-16">
+      <main className="px-4 sm:px-6 py-12 sm:py-16">
         <div className="max-w-5xl mx-auto">
           <PageIntro />
           <RecommendedCard />
+          <ForkAlternativeCard />
           <SecondaryGrid />
           <AfterDeployment />
         </div>
@@ -33,76 +39,164 @@ export default function DeployPage() {
 
 function PageIntro() {
   return (
-    <header className="text-center mb-14">
+    <header className="text-center mb-12 sm:mb-14">
       <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">
-        Deploy Kebab MCP
+        Deploy Kebab House
       </p>
-      <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight tracking-tight mb-4">
+      <h1 className="text-3xl sm:text-5xl font-bold text-white leading-tight tracking-tight mb-4">
         Choose how to run your AI backend.
       </h1>
-      <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-        Fork + Vercel is the recommended path — your deployment stays linked to upstream and updates
-        land in one click. CLI and self-hosted options are available if you want more control.
+      <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+        The Vercel button is the recommended path — one click, free tier, updates from the
+        dashboard. A GitHub fork, Docker and the CLI are there if you want more control.
       </p>
     </header>
   );
 }
 
-// ── Recommended: Fork + Vercel Import ──────────────────────────────────
+// ── Recommended: Vercel Deploy Button ──────────────────────────────────
 
 function RecommendedCard() {
   return (
     <section
       aria-labelledby="recommended-heading"
-      className="relative rounded-2xl border border-amber-500/40 bg-slate-900/60 p-8 sm:p-10 mb-10 overflow-hidden"
+      className="relative rounded-2xl border border-amber-500/40 bg-slate-900/60 p-6 sm:p-10 mb-8 overflow-hidden"
     >
       <div className="pointer-events-none absolute -top-20 -right-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
 
-      <div className="relative grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-8 items-start">
+      <div className="relative grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-8 items-start">
         <div>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               Recommended
             </span>
-            <span className="text-xs font-mono text-slate-500">~ 5 min</span>
+            <span className="text-xs font-mono text-slate-500">~ 3 min</span>
             <span className="text-xs font-mono text-slate-500">·</span>
-            <span className="text-xs text-slate-500">Stays updateable</span>
+            <span className="text-xs text-slate-500">Free tier</span>
+            <span className="text-xs font-mono text-slate-500">·</span>
+            <span className="text-xs text-slate-500">Updates in one click</span>
           </div>
           <h2
             id="recommended-heading"
             className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3"
           >
-            Fork on GitHub, deploy on Vercel
+            Deploy on Vercel in one click
           </h2>
-          <p className="text-slate-400 leading-relaxed mb-4">
-            You fork{" "}
+          <p className="text-slate-400 leading-relaxed mb-6">
+            Sign in to Vercel with GitHub, pick a name (or keep{" "}
             <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1.5 py-0.5">
-              Yassinello/kebab-mcp
-            </code>{" "}
-            into your own GitHub account, then import the fork into Vercel. That extra click buys
-            you a real GitHub fork (with{" "}
-            <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1.5 py-0.5">
-              parent
-            </code>{" "}
-            set), so the dashboard&apos;s one-click <em>Update now</em> flow and GitHub&apos;s{" "}
-            <em>Sync fork</em> button both work.
+              kebab-house
+            </code>
+            ), accept the free Upstash database, and click <strong>Deploy</strong>. When the build
+            is done, open your instance: the welcome page mints your token and connects your first
+            AI client.
           </p>
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-4 py-3 mb-6">
-            <p className="text-xs text-amber-200/90 leading-relaxed">
-              <strong className="text-amber-200">Why not the one-click Deploy Button?</strong>{" "}
-              Vercel&apos;s <code className="font-mono">/new/clone</code> creates a standalone
-              snapshot in your account — not a real fork. Such deployments cannot receive upstream
-              updates. We tried and backed out.
+
+          <a
+            href={VERCEL_DEPLOY_BUTTON_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-6 py-3 rounded-lg font-semibold text-sm shadow-lg shadow-amber-500/20"
+          >
+            <VercelMark />
+            Deploy with Vercel
+          </a>
+          <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+            Vercel doesn&apos;t bring you back here on its own yet: when the deploy finishes, click{" "}
+            <strong className="text-slate-400">Continue to Dashboard</strong>, then{" "}
+            <strong className="text-slate-400">Visit</strong> to open your instance.
+          </p>
+        </div>
+
+        <aside className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 space-y-5">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-slate-500 mb-3">
+              What gets created
+            </p>
+            <ul className="space-y-3 text-sm text-slate-400">
+              <li className="flex gap-3">
+                <StepBadge n={1} />
+                <span>
+                  <strong className="text-slate-200">A copy of the code</strong> in your GitHub
+                  account (
+                  <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
+                    kebab-house
+                  </code>
+                  ). It&apos;s yours; Vercel redeploys on every push.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <StepBadge n={2} />
+                <span>
+                  <strong className="text-slate-200">A Vercel project</strong> on your account, free
+                  Hobby plan.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <StepBadge n={3} />
+                <span>
+                  <strong className="text-slate-200">A free Upstash Redis database</strong>,
+                  attached automatically — your token and settings survive restarts.
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-slate-500 mb-3">
+              What&apos;s left (optional)
+            </p>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              <strong className="text-slate-200">An update token</strong>, for one-click updates
+              from the dashboard: a GitHub token with <em>Contents: read &amp; write</em> on your
+              new repo, saved in <em>Settings → Advanced</em> as{" "}
+              <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
+                KEBAB_UPDATE_PAT
+              </code>
+              . Each update copies the latest release into your repo and stops if you edited one of
+              the files it needs to change.
             </p>
           </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
 
+// ── Alternative: Fork + Vercel Import ──────────────────────────────────
+
+function ForkAlternativeCard() {
+  return (
+    <section
+      aria-labelledby="fork-heading"
+      className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 sm:p-8 mb-12 sm:mb-14"
+    >
+      <div className="max-w-3xl">
+        <div>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+              Alternative
+            </span>
+            <span className="text-xs font-mono text-slate-500">~ 5 min</span>
+          </div>
+          <h2 id="fork-heading" className="text-xl sm:text-2xl font-bold text-white mb-3">
+            Fork on GitHub, deploy on Vercel
+          </h2>
+          <p className="text-sm text-slate-400 leading-relaxed mb-6">
+            Prefer a real GitHub fork of{" "}
+            <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1.5 py-0.5">
+              Yassinello/kebab-mcp
+            </code>
+            ? You keep the shared git history, GitHub&apos;s <em>Sync fork</em> button works, and
+            the dashboard updates through GitHub&apos;s merge-upstream. You attach the Upstash
+            database yourself.
+          </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <a
               href={GITHUB_FORK_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 transition-colors px-6 py-3 rounded-lg font-semibold text-sm shadow-lg shadow-amber-500/20"
+              className="inline-flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white transition-colors px-5 py-2.5 rounded-lg font-semibold text-sm"
             >
               <GitHubMark />
               1. Fork on GitHub
@@ -111,7 +205,7 @@ function RecommendedCard() {
               href={VERCEL_IMPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white transition-colors px-6 py-3 rounded-lg font-semibold text-sm"
+              className="inline-flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white transition-colors px-5 py-2.5 rounded-lg font-semibold text-sm"
             >
               <VercelMark />
               2. Import to Vercel
@@ -119,64 +213,42 @@ function RecommendedCard() {
           </div>
         </div>
 
-        <aside className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-          <p className="text-xs font-mono uppercase tracking-widest text-slate-500 mb-4">
+        <details className="mt-6 rounded-xl border border-slate-800 bg-slate-950/60 px-5 py-4">
+          <summary className="cursor-pointer text-xs font-mono uppercase tracking-widest text-slate-500 hover:text-slate-300">
             Step by step
-          </p>
-          <ol className="space-y-3 text-sm text-slate-400">
+          </summary>
+          <ol className="space-y-3 text-sm text-slate-400 mt-4">
             <li className="flex gap-3">
               <StepBadge n={1} />
               <span>
-                Click <strong>Fork on GitHub</strong>. Keep the source as{" "}
-                <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
-                  Yassinello/kebab-mcp
-                </code>{" "}
-                and confirm.
+                Click <strong>Fork on GitHub</strong>, keep the source as{" "}
+                <code className="font-mono text-xs">Yassinello/kebab-mcp</code>, confirm.
               </span>
             </li>
             <li className="flex gap-3">
               <StepBadge n={2} />
               <span>
-                Open <strong>Import to Vercel</strong>. Find your fork in the list and click{" "}
-                <strong>Import</strong>. Keep all defaults (Next.js preset, root{" "}
-                <code className="font-mono text-xs">./</code>), leave env vars empty, click{" "}
+                Open <strong>Import to Vercel</strong>, pick your fork, keep the defaults, click{" "}
                 <strong>Deploy</strong>.
               </span>
             </li>
             <li className="flex gap-3">
               <StepBadge n={3} />
               <span>
-                After the first deploy completes (~60s), open the project → <strong>Storage</strong>{" "}
-                tab → <strong>Connect Database</strong> → <strong>Upstash for Redis</strong> (Free
-                plan). Vercel injects{" "}
-                <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
-                  KV_REST_API_*
-                </code>{" "}
-                and auto-redeploys.
+                In the project: <strong>Storage</strong> → <strong>Connect Database</strong> →{" "}
+                <strong>Upstash for Redis</strong> (Free). Vercel injects{" "}
+                <code className="font-mono text-xs">KV_REST_API_*</code> and redeploys.
               </span>
             </li>
             <li className="flex gap-3">
               <StepBadge n={4} />
               <span>
-                Open your deploy URL → land on{" "}
-                <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
-                  /welcome
-                </code>{" "}
-                → mint your{" "}
-                <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
-                  MCP_AUTH_TOKEN
-                </code>
-                .
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <StepBadge n={5} />
-              <span>
-                Paste the token into Claude, Cursor, Windsurf, or any MCP-compatible client.
+                Open your deploy URL → <code className="font-mono text-xs">/welcome</code> → mint
+                your token and connect your AI client.
               </span>
             </li>
           </ol>
-        </aside>
+        </details>
       </div>
     </section>
   );
@@ -338,20 +410,21 @@ function AfterDeployment() {
       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-8 text-sm text-slate-400">
         <li>
           <strong className="text-slate-200">Open the welcome flow</strong> — mint your{" "}
-          <code className="font-mono text-xs">MCP_AUTH_TOKEN</code> and copy it.
+          <code className="font-mono text-xs">MCP_AUTH_TOKEN</code> and copy it. With Upstash
+          already attached, the storage step is skipped.
         </li>
         <li>
-          <strong className="text-slate-200">Connect a client</strong> — paste the token into
-          Claude, Cursor, Windsurf, or ChatGPT.
+          <strong className="text-slate-200">Connect a client</strong> — <em>Add to Claude</em> in
+          one click, or paste the token into Cursor, Codex or ChatGPT.
         </li>
         <li>
           <strong className="text-slate-200">Add connectors</strong> — drop Google, Slack, Notion,
           etc. credentials in Settings to activate tools.
         </li>
         <li>
-          <strong className="text-slate-200">Stay up to date</strong> — open the dashboard&apos;s{" "}
-          <em>Update now</em> banner, or click <em>Sync fork</em> on GitHub. New releases land in
-          one click.
+          <strong className="text-slate-200">Stay up to date</strong> — click <em>Update now</em> in
+          the dashboard when a release is out. It syncs a fork through GitHub, or copies the release
+          into a Deploy Button repo.
         </li>
       </ul>
     </section>

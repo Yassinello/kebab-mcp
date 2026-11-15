@@ -65,11 +65,20 @@ You can connect more than one Slack workspace and switch between them per tool c
 
 Tokens for each account are stored separately in tenant-scoped KV (never an env var) and never leave the server — the dashboard only ever sees account names.
 
-## Obsidian Vault (via GitHub)
+## Memory Vault (KV or GitHub)
 
-Required: `GITHUB_PAT`, `GITHUB_REPO` (in `owner/repo` format), and optionally `GITHUB_BRANCH` (default `main`).
+Required: nothing. The vault is active on every instance.
 
-The vault connector treats a GitHub repo as the storage backend for your Obsidian vault. Create a private repo, push your vault to it, and the connector reads/writes files via the GitHub Contents API.
+Two storage backends, same 13 tools and the same `vault://` resources:
+
+- **KV (default)** — without GitHub credentials, notes live in the instance's KV store (Upstash, or the filesystem KV in Docker / `npm run dev`): one key per note (`vault:note:<path>`) plus an index (`vault:index`: title, date, size, outgoing `[[links]]`). Limits: 256 KB per note and 5,000 notes; above 50 MB in total, `vault_write` and `vault_stats` add a warning. Search matches titles first, then contents, ignoring accents and case, and is capped (`truncated: true` when the content scan stopped early). `vault_recent` is ordered by modification date; `vault_backlinks` and `vault_due` read only the notes the index points at.
+- **GitHub (Obsidian)** — set `GITHUB_PAT` and `GITHUB_REPO` (`owner/repo`; optionally `GITHUB_BRANCH`, default `main`). The connector reads and writes the repo through the GitHub Contents API; every write is a commit. Create a private repo and push your Obsidian vault to it.
+
+Selection: `github` when both `GITHUB_PAT` and `GITHUB_REPO` are set, otherwise `kv`. `KEBAB_VAULT_BACKEND=kv|github` forces one. Existing GitHub vaults keep working unchanged.
+
+**Import a GitHub vault into the KV**: `/config → Connectors → Memory Vault → Import GitHub vault into KV` (admin route `POST /api/admin/vault` with `{"action":"import-github"}`). Markdown files are copied; other files are reported as skipped and notes over 256 KB as too large. Notes already copied with the same version are skipped, so running it again resumes an import cut short by the time limit. The import never switches backend: when you are ready, set `KEBAB_VAULT_BACKEND=kv` (or remove the GitHub credentials) and redeploy.
+
+**Index consistency (KV)**: each write updates the note, then the index. Writes on one instance are serialised; two instances writing at the same instant can lose an index entry (never the note). The index is rebuilt from the notes automatically when it is missing, when a write meets a note the index does not know, and when the health check sees a mismatch — or by hand with **Rebuild index** on the connector card.
 
 Notes carry a `provenance` in their frontmatter: `save_article` writes `provenance: external` (plus `source: <url>`), `vault_write` / `vault_append` add `provenance: assistant` when the note has none, and notes without the field count as `user`. An existing value is never overwritten. `vault_search` shows the provenance of each result; `vault_list` does not.
 

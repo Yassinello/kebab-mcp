@@ -12,7 +12,7 @@ const INTEGRATIONS = [
   { name: "WhatsApp", what: "Inbox, search, send" },
   { name: "Browser Automation", what: "Browse, extract, act" },
   { name: "Paywall Readers", what: "Read full articles" },
-  { name: "Obsidian Vault", what: "Your notes on GitHub" },
+  { name: "Memory Vault", what: "Your notes, built in or on GitHub" },
   { name: "Google Workspace", what: "Gmail, Calendar, Drive" },
   { name: "Slack", what: "Channels and threads" },
   { name: "Notion", what: "Pages and databases" },

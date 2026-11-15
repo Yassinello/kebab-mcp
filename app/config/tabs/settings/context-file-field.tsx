@@ -16,7 +16,7 @@ interface ContextState {
  * - `inline`: persists the markdown directly in the KV store under
  *   `mymcp:context:inline`. Always available.
  * - `vault`: persists a vault path under `MYMCP_CONTEXT_PATH` env var.
- *   Only enabled when the Obsidian Vault connector is active.
+ *   Only enabled when the Memory Vault connector is active (it is by default).
  */
 export function ContextFileField({
   vaultEnabled,
@@ -121,8 +121,8 @@ export function ContextFileField({
           disabled={!vaultEnabled}
           title={
             vaultEnabled
-              ? "Pick a markdown file from your Obsidian vault"
-              : "Configure the Obsidian Vault connector to enable this mode"
+              ? "Pick a markdown note from your memory vault"
+              : "Enable the Memory Vault connector to use this mode"
           }
           className={`px-3 py-1.5 transition-colors ${
             state.mode === "vault"

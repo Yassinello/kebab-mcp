@@ -334,7 +334,7 @@ recipe stays as the human-in-the-loop gate before tagging a release.
 | `behind_by: 0` when fork is clearly behind | Compare URL direction inverted (Phase 62 / STAB-01 regression) |
 | 401/403 on Test connection | PAT scope insufficient — needs `public_repo` (public) or `repo` (private) |
 | Banner shows "diverged" on a clean fork | Fork has at least 1 commit not in upstream — verify with `git log upstream/main..main` |
-| Update click → 422 "not-a-fork" | Vercel project not configured as a GitHub fork in the API sense; use GitHub UI to sync manually |
+| Update click → 422 "not-a-fork" | GitHub refused `merge-upstream` on a repo it lists as a fork of upstream; use GitHub's *Sync fork* button. (Repos that are not forks, such as Deploy Button copies, use release sync and never hit this.) |
 
 ---
 

@@ -32,6 +32,7 @@ function resetEnv() {
   for (const key of Object.keys(process.env)) {
     if (
       key.startsWith("MYMCP_") ||
+      key.startsWith("KEBAB_") ||
       key.startsWith("GOOGLE_") ||
       key.startsWith("GITHUB_") ||
       key.startsWith("BROWSERBASE_") ||
@@ -139,7 +140,8 @@ async function run() {
     // tools-length check for disabled packs (the static `entry.toolCount` is the
     // authoritative surface for disabled-card UI; covered by the metadata-consistency
     // contract test).
-    const DYNAMIC_EMPTY_PACKS = new Set(["skills"]);
+    // api-connections / custom-tools are user-defined too (0 tools until authored).
+    const DYNAMIC_EMPTY_PACKS = new Set(["skills", "api-connections", "custom-tools"]);
     const reg = await resolveRegistryAsync();
     for (const pack of reg) {
       if (!DYNAMIC_EMPTY_PACKS.has(pack.manifest.id) && pack.enabled) {
@@ -151,6 +153,26 @@ async function run() {
       assert(pack.manifest.id.length > 0, `${pack.manifest.id} has id`);
       assert(pack.manifest.label.length > 0, `${pack.manifest.id} has label`);
     }
+  }
+
+  console.log("\nTest 8: Vault active by default, without GitHub credentials (VLT-04)");
+  resetEnv();
+  {
+    const reg = await resolveRegistryAsync();
+    const vault = reg.find((p) => p.manifest.id === "vault");
+    assert(vault!.enabled === true, "vault pack enabled without GITHUB_PAT/GITHUB_REPO");
+    assert(vault!.reason === "active", "reason is 'active'");
+    assert(vault!.manifest.tools.length === 13, "vault exposes its 13 tools");
+  }
+
+  console.log("\nTest 9: MYMCP_DISABLE_VAULT still force-disables the vault");
+  resetEnv();
+  process.env.MYMCP_DISABLE_VAULT = "true";
+  {
+    const reg = await resolveRegistryAsync();
+    const vault = reg.find((p) => p.manifest.id === "vault");
+    assert(vault!.enabled === false, "vault pack disabled");
+    assert(vault!.reason.includes("MYMCP_DISABLE_VAULT"), "reason mentions disable var");
   }
 
   // Restore env

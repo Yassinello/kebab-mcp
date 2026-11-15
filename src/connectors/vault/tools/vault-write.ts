@@ -1,12 +1,15 @@
 import { z } from "zod";
 import yaml from "js-yaml";
-import { vaultWrite } from "../lib/github";
+import { getVaultBackend } from "../lib/select";
 import { ensureProvenance, noteProvenance, parseNoteFrontmatter } from "../lib/provenance";
 
 export const vaultWriteSchema = {
   path: z.string().describe("Path in the vault, e.g. Veille/mon-article.md"),
   content: z.string().describe("Markdown content of the note"),
-  message: z.string().optional().describe('Git commit message (default: "Update via Kebab MCP")'),
+  message: z
+    .string()
+    .optional()
+    .describe('Change message: the Git commit message on GitHub (default: "Update via Kebab MCP")'),
   frontmatter: z
     .record(z.string(), z.any())
     .optional()
@@ -14,7 +17,9 @@ export const vaultWriteSchema = {
   sha: z
     .string()
     .optional()
-    .describe("Known SHA of existing file (skips extra API call for updates)"),
+    .describe(
+      "Version (sha) of the note from a previous vault_read. The write is refused if the note changed since."
+    ),
 };
 
 export async function handleVaultWrite(params: {
@@ -61,7 +66,10 @@ export async function handleVaultWrite(params: {
   // frontmatter already declares a provenance (never clobbered).
   content = ensureProvenance(content, "assistant");
 
-  const result = await vaultWrite(params.path, content, params.message, params.sha);
+  const result = await getVaultBackend().write(params.path, content, {
+    message: params.message,
+    expectedVersion: params.sha,
+  });
 
   return {
     content: [
@@ -74,6 +82,8 @@ export async function handleVaultWrite(params: {
             path: result.path,
             sha: result.sha,
             provenance: noteProvenance(content),
+            // KV backend only: soft-limit warning (vault above 50 MB).
+            ...(result.warning ? { warning: result.warning } : {}),
           },
           null,
           2

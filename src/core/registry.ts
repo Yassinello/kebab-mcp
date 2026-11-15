@@ -87,9 +87,13 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
   },
   {
     id: "vault",
-    label: "Obsidian Vault",
-    description: "Read, search, and write markdown notes in a GitHub-hosted Obsidian vault.",
-    requiredEnvVars: ["GITHUB_PAT", "GITHUB_REPO"],
+    label: "Memory Vault",
+    description:
+      "Read, search, and write markdown notes — stored in your KV, or in a GitHub repo (Obsidian).",
+    // VLT-04 (Kebab House phase 2): active by default — without GitHub
+    // credentials the vault lives in the KV store. Keep in lockstep with the
+    // manifest (registry-metadata contract test).
+    requiredEnvVars: [],
     toolCount: 13,
     loader: () => import("@/connectors/vault/manifest").then((m) => m.vaultConnector),
   },

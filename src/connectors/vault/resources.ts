@@ -1,9 +1,10 @@
 /**
- * Phase 50 / MCP-01 — Obsidian Vault MCP resource provider.
+ * Phase 50 / MCP-01 — vault MCP resource provider.
  *
- * Exposes every `.md` file in the operator's GitHub-backed vault as an
- * MCP resource. URI scheme: `vault://<path>` where `<path>` is the
- * GitHub content path (relative to the repo root).
+ * Exposes every `.md` note of the vault as an MCP resource, whatever the
+ * backend (Kebab House phase 2: GitHub repository or KV store). URI scheme:
+ * `vault://<path>` where `<path>` is the note path relative to the vault
+ * root.
  *
  * Pilot provider for the `resources/*` capability. See
  * `src/core/resources.ts` for the registry wiring.
@@ -11,14 +12,15 @@
 
 import type { ResourceProvider, ResourceSpec, ResourceContent } from "@/core/resources";
 import { ResourceDispatchError } from "@/core/resources";
-import { vaultRead, vaultTree, validateVaultPath } from "./lib/github";
+import { validateVaultPath } from "./lib/paths";
+import { getVaultBackend } from "./lib/select";
 
 const SCHEME = "vault";
 const URI_PREFIX = `${SCHEME}://`;
 
 function uriFor(path: string): string {
-  // Normalize separators; strip any leading ./ — GitHub content paths
-  // never start with a slash.
+  // Normalize separators; strip any leading ./ — vault paths never start
+  // with a slash.
   const clean = path.replace(/^\.\//, "");
   return `${URI_PREFIX}${clean}`;
 }
@@ -34,13 +36,13 @@ export const vaultResources: ResourceProvider = {
   scheme: SCHEME,
 
   async list(): Promise<ResourceSpec[]> {
-    const tree = await vaultTree();
+    const tree = await getVaultBackend().tree();
     return tree
       .filter((f) => f.path.endsWith(".md"))
       .map((f) => ({
         uri: uriFor(f.path),
         name: f.path,
-        description: `Obsidian vault note — ${f.path}`,
+        description: `Vault note — ${f.path}`,
         mimeType: "text/markdown",
       }));
   },
@@ -57,14 +59,14 @@ export const vaultResources: ResourceProvider = {
         "invalid_uri"
       );
     }
-    // Only .md — vault is Obsidian-shaped; binary files require a tool.
+    // Only .md — the vault is Markdown-shaped; binary files require a tool.
     if (!path.endsWith(".md")) {
       throw new ResourceDispatchError(
         `vault resource must end in .md: ${path}`,
         "unsupported_extension"
       );
     }
-    const file = await vaultRead(path);
+    const file = await getVaultBackend().read(path);
     return {
       uri,
       mimeType: "text/markdown",
