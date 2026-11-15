@@ -6,7 +6,7 @@ order: 25
 
 ## What is storage in Kebab MCP?
 
-Kebab MCP keeps three kinds of data alive between requests: **connector credentials** (the API keys you paste into `/config → Connectors`), **skills** (the prompt templates you write or compose), and **runtime settings** (timezone, display name, per-tool toggles). Everything else — logs, caches, MCP session state — is in-memory and disposable.
+Kebab MCP keeps three kinds of data alive between requests: **connector credentials** (the API keys you paste into `/config → Connectors`), **skills** (the prompt templates you write or compose), and **runtime settings** (timezone, display name, per-tool toggles). Without a GitHub repository, the **memory vault** lives here too (`vault:note:*` keys and a `vault:index`) — see the Memory Vault section of the connectors guide. Everything else — logs, caches, MCP session state — is in-memory and disposable.
 
 That data has to live somewhere. Kebab MCP picks one of three backends at boot, based on what's available in your environment. The pick is not a setting — it's a detection. If Upstash Redis is reachable, it uses Upstash. Otherwise it falls back to the local filesystem. Otherwise it runs read-only from env vars only. The current mode is shown in the **Storage** tab as a coloured badge: `Upstash Redis ✓`, `Filesystem ✓`, `Filesystem (temporary) ⚠`, `Static ⚠`, or `KV unreachable ✗`.
 

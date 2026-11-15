@@ -103,7 +103,7 @@ async function guidance(step: SetupStep): Promise<string> {
         "STEP 4/4 — Connectors (optional).",
         "Never ask the user to paste a password, token or API key in this conversation.",
         "Gmail, Calendar, Drive, Slack and Notion usually exist as native connectors in the AI client: recommend those first.",
-        "Kebab House adds what native connectors lack: LinkedIn and WhatsApp (Unipile, paid), a browser (Browserbase), paywalled articles, Apify scrapers, a GitHub-backed notes vault.",
+        "Kebab House adds what native connectors lack: LinkedIn and WhatsApp (Unipile, paid), a browser (Browserbase), paywalled articles, Apify scrapers, a notes vault (built in, or an Obsidian repo on GitHub).",
         `If the user wants one, tell them to open their Kebab House dashboard at ${dashboardLink("connectors")} (relative to their Kebab House URL) and paste the credentials there.`,
         'Then call kebab_setup with action "complete" and step "connectors".',
       ].join("\n");

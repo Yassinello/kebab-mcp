@@ -120,7 +120,7 @@ Details: [content/docs/skills.md](content/docs/skills.md).
 
 ### 🗄️ Memory vault
 
-Your Obsidian vault on GitHub becomes long-term memory that every client can read and write: search, read, write, append, move, backlinks, and `save_article` to clip a web page into your notes. Plain Markdown in a Git repo you own.
+Long-term memory that every client can read and write: search, read, write, append, move, backlinks, and `save_article` to clip a web page into your notes. It works from the first deploy, with nothing to set up: notes are stored in your instance's KV (Upstash, or the local file in Docker). Prefer Obsidian? Point it at a GitHub repo (`GITHUB_PAT` + `GITHUB_REPO`) and every note is plain Markdown in a Git repo you own; a dashboard button imports a GitHub vault into the KV.
 
 ### 🧰 Long-tail tools
 
@@ -142,7 +142,7 @@ Self-hosted by design: your credentials live in your own Upstash KV, with no tel
 | Connector                         | Tools             | Auth                                | Setup |
 | --------------------------------- | ----------------- | ----------------------------------- | ----- |
 | **Skills**                        | 3 (+ dyn.)        | —                                   | 0 min |
-| **Obsidian Vault**                | 14                | GitHub PAT                          | 2 min |
+| **Memory Vault**                  | 13                | — (GitHub PAT optional)             | 0 min |
 | **Unipile (LinkedIn + WhatsApp)** | 23                | DSN + token                         | 3 min |
 | **Apify (LinkedIn)**              | 10                | API token                           | 1 min |
 | **Browser Automation**            | 7                 | Browserbase + OpenRouter            | 3 min |
@@ -307,6 +307,7 @@ v0.12 renamed the env-var prefix from `MYMCP_*` to `KEBAB_*`. Both are accepted 
 | `KEBAB_LOCALE`            | `MYMCP_LOCALE`            | `en-US`             | Locale for date/number formatting |
 | `KEBAB_DISPLAY_NAME`      | `MYMCP_DISPLAY_NAME`      | `User`              | Display name in dashboard         |
 | `KEBAB_CONTEXT_PATH`      | `MYMCP_CONTEXT_PATH`      | `System/context.md` | Path to context file in vault     |
+| `KEBAB_VAULT_BACKEND`     | `MYMCP_VAULT_BACKEND`     | auto                | Vault storage: `kv` or `github`   |
 | `KEBAB_TOOL_TIMEOUT`      | `MYMCP_TOOL_TIMEOUT`      | `30000`             | Tool timeout in ms                |
 | `KEBAB_ERROR_WEBHOOK_URL` | `MYMCP_ERROR_WEBHOOK_URL` | —                   | Webhook for error alerts          |
 
@@ -329,7 +330,7 @@ src/
       manifest.ts      ← Connector definition (single source of truth)
       lib/             ← Gmail, Calendar, Contacts, Drive, Chat wrappers
       tools/           ← Individual tool handlers
-    vault/             ← Obsidian Vault (13 tools)
+    vault/             ← Memory Vault (13 tools; KV or GitHub backend)
     skills/            ← Skills library (skills_list, skill_load, skill_read_file)
     browser/ slack/ notion/ apify/ unipile/ paywall/ composio/
     github/ linear/ airtable/ webhook/ admin/
