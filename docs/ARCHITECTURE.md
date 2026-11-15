@@ -6,7 +6,7 @@ Reading this if you want to: add a connector, add a tool, change auth/registry, 
 
 ## Project Overview
 
-Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 connectors (Google Workspace, Obsidian Vault, Browser Automation, Slack, Notion, Composio, Skills, API Connections, Custom Tools, Paywall, Apify, Unipile (LinkedIn + WhatsApp), GitHub, Linear, Airtable, Webhook, Admin) — plus dynamic, user-defined tools via the Skills, API Connections, and Custom Tools connectors. Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
+Open-source personal MCP server framework. Ships 100+ pre-built tools across 17 connectors (Google Workspace, Memory Vault, Browser Automation, Slack, Notion, Composio, Skills, API Connections, Custom Tools, Paywall, Apify, Unipile (LinkedIn + WhatsApp), GitHub, Linear, Airtable, Webhook, Admin) — plus dynamic, user-defined tools via the Skills, API Connections, and Custom Tools connectors. Deployed on Vercel or Docker as a Next.js app. Config-driven: connectors auto-activate based on env vars.
 
 ## Architecture
 

@@ -80,7 +80,7 @@ src/
   core/           ← Framework-level code (types, registry, config, auth, logging)
   connectors/
     google/       ← Google Workspace connector (18 tools)
-    vault/        ← Obsidian Vault connector (14 tools)
+    vault/        ← Memory Vault connector (13 tools; KV or GitHub backend)
     browser/      ← Browser Automation connector (4 tools)
     slack/        ← Slack connector (6 tools)
     notion/       ← Notion connector (5 tools)
