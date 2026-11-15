@@ -71,6 +71,11 @@ export interface ToolDefinition {
    */
   openWorld?: boolean;
   /**
+   * Kebab House phase 3 (APP-02): tool `_meta`, e.g. the MCP Apps view
+   * that renders its result (`ui.resourceUri`).
+   */
+  meta?: Record<string, unknown>;
+  /**
    * Kebab House phase 1 (TRU-02): the tool returns content written by third
    * parties; its text output is framed as untrusted. Most tools are listed in
    * src/core/untrusted-content.ts instead.
@@ -119,6 +124,11 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   deprecated?: string;
   destructive: boolean;
   openWorld?: boolean;
+  /**
+   * Kebab House phase 3 (APP-02): tool `_meta`, e.g. the MCP Apps view
+   * that renders its result (`ui.resourceUri`).
+   */
+  meta?: Record<string, unknown>;
   /**
    * Kebab House phase 1 (TRU-02): the tool returns content written by third
    * parties; its text output is framed as untrusted. Most tools are listed in

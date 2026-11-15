@@ -316,6 +316,7 @@ async function buildHandler(
               inputSchema: z.object(tool.schema),
               ...(tool.outputSchema ? { outputSchema: z.record(z.string(), z.unknown()) } : {}),
               annotations,
+              ...(tool.meta ? { _meta: tool.meta } : {}),
             },
             // The SDK passes (args, ctx); loggedHandler only needs args.
             (args) => loggedHandler(args as Record<string, unknown>) as Promise<CallToolResult>
