@@ -40,6 +40,29 @@ describe("frameUntrustedResult", () => {
     ).not.toContain("<untrusted_content");
   });
 
+  it("frames the JSON output of vault_read / vault_batch_read for external notes", () => {
+    const json = (provenance: string, body: string) =>
+      JSON.stringify(
+        { path: "a.md", frontmatter: { provenance, source: "https://x" }, body },
+        null,
+        2
+      );
+    expect(
+      frameUntrustedResult("vault_read", ok(json("external", "b"))).content[0]!.text
+    ).toContain("<untrusted_content");
+    expect(
+      frameUntrustedResult(
+        "vault_batch_read",
+        ok(JSON.stringify([JSON.parse(json("external", "b"))], null, 2))
+      ).content[0]!.text
+    ).toContain("<untrusted_content");
+    // A user note whose body mentions the field is not framed (bodies are JSON strings).
+    expect(
+      frameUntrustedResult("vault_read", ok(json("user", "x\nprovenance: external\n"))).content[0]!
+        .text
+    ).not.toContain("<untrusted_content");
+  });
+
   it("honours the manifest opt-in, errors and the opt-out", () => {
     expect(
       frameUntrustedResult("custom_x", ok("t"), { externalContent: true }).content[0]!.text

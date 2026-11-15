@@ -91,8 +91,14 @@ export function frameText(text: string, source: string): string {
 function shouldFrame(toolName: string, result: ToolResult, optIn: boolean): boolean {
   if (optIn || EXTERNAL_CONTENT_TOOLS.has(toolName)) return true;
   if (PROVENANCE_TOOLS.has(toolName)) {
+    // vault_read / vault_batch_read return JSON (`"provenance": "external"`
+    // inside the parsed frontmatter); raw Markdown frontmatter is matched too.
+    // Note bodies are JSON strings (newlines escaped), so a body line cannot
+    // trigger the match.
     return result.content.some(
-      (c) => c.type === "text" && /(^|\n)provenance:\s*external\b/.test(c.text)
+      (c) =>
+        c.type === "text" &&
+        /(^|\n)\s*(provenance:\s*external\b|"provenance":\s*"external")/.test(c.text)
     );
   }
   return false;
