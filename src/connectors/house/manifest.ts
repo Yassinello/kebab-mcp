@@ -68,7 +68,7 @@ export const houseConnector: ConnectorManifest = {
       name: "kebab_status",
       title: "Kebab House status",
       description:
-        "Show the state of the user's Kebab House: active profile, number of skills, connectors and this week's usage. Use when the user asks what their hub/assistant knows or has.",
+        "Show the state of the user's Kebab House: active profile, number of skills, recent notes, connectors and this week's usage. Use when the user asks what their hub/assistant knows or has.",
       schema: kebabStatusSchema,
       handler: async () => handleKebabStatus(),
       destructive: false,
@@ -90,7 +90,7 @@ export const houseConnector: ConnectorManifest = {
       name: "kebab_weekly_recap",
       title: "Weekly recap",
       description:
-        "Recap of one week of Kebab House use: tool calls, skills used, clients, notes added, compared with the week before. Default: the last complete week.",
+        "Recap of one week of Kebab House use: tool calls, skills used, clients, notes added and changed, compared with the week before. Default: the last complete week.",
       schema: weeklyRecapSchema,
       handler: async (args) => handleWeeklyRecap(args),
       destructive: false,

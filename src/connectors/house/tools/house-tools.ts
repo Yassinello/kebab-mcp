@@ -84,7 +84,7 @@ export async function handleKebabStatus(): Promise<ToolResult> {
     `- Profile: **${profile.name}**${profile.preview ? "" : " (empty — say “Set up my Kebab House”)"}`,
     `- Skills: ${skillNames.length}${skillNames.length ? ` (${skillNames.slice(0, 8).join(", ")}${skillNames.length > 8 ? ", …" : ""})` : ""}`,
     `- Connectors: ${connectors.length ? connectors.join(", ") : "none beyond the built-ins"}`,
-    `- This week (${week.week}): ${week.total} tool calls, ${week.notes} notes added`,
+    `- This week (${week.week}): ${plural(week.total, "tool call")}, ${plural(week.notes, "note")} added`,
   ];
   if (notes.length) lines.push(`- Recent notes: ${notes.map((n) => n.path).join(", ")}`);
   if (week.skills.length) {
@@ -159,6 +159,10 @@ export function weekStart(week: string): Date {
   return new Date(mondayW1 + (w - 1) * 7 * 86_400_000);
 }
 
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 function delta(now: number, before: number): string {
   const d = now - before;
   return d === 0 ? "same as the week before" : `${d > 0 ? "+" : ""}${d} vs the week before`;
@@ -178,8 +182,8 @@ export async function handleWeeklyRecap(args: { week?: string | undefined }): Pr
   );
   const lines = [
     `# Week ${cur.week}`,
-    `- ${cur.total} tool calls (${delta(cur.total, prev.total)})`,
-    `- ${cur.notes} notes added (${delta(cur.notes, prev.notes)})`,
+    `- ${plural(cur.total, "tool call")} (${delta(cur.total, prev.total)})`,
+    `- ${plural(cur.notes, "note")} added (${delta(cur.notes, prev.notes)})`,
   ];
   if (cur.skills.length)
     lines.push(`- Skills used: ${cur.skills.map((s) => `${s.name} ×${s.count}`).join(", ")}`);
