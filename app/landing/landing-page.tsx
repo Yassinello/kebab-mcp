@@ -1,12 +1,13 @@
 import LandingHeader from "./header";
 import Hero from "./hero";
+import Audience from "./audience";
 import WhyKebab from "./why-kebab";
-import Product from "./product";
 import HowItWorks from "./how-it-works";
+import Product from "./product";
 import Connectors from "./connectors";
 import Compatibility from "./compatibility";
-import Trust from "./trust";
 import Guardrails from "./guardrails";
+import Faq from "./faq";
 import CtaSection from "./cta-section";
 import LandingFooter from "./footer";
 
@@ -16,13 +17,14 @@ export default function LandingPage() {
       <LandingHeader />
       <main>
         <Hero />
+        <Audience />
         <WhyKebab />
-        <Product />
         <HowItWorks />
-        <Connectors />
         <Compatibility />
+        <Product />
+        <Connectors />
         <Guardrails />
-        <Trust />
+        <Faq />
         <CtaSection />
       </main>
       <LandingFooter />

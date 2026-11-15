@@ -1,9 +1,10 @@
 /**
- * Hero illustration — the money shot. A horizontal kebab skewer threaded
- * with five chunks, each labelled with a tool name (Gmail, Notion,
- * Slack, GitHub, Calendar). A subtle flame underneath sells the "hot off
- * the grill" metaphor. Pure SVG — no image asset, scales freely, ships
- * inside the JS bundle (~3KB gzipped).
+ * Hero illustration — a horizontal kebab skewer threaded with the five
+ * ingredients of the hub (skills, profile, memory, tools, guardrails), each
+ * drawn as a simple glyph. Deliberately no third-party service logos: the
+ * landing tells people to use their client's own Gmail/Slack/Notion
+ * connectors. A subtle flame underneath sells the "hot off the grill"
+ * metaphor. Pure inline SVG — no image asset, scales freely.
  */
 export default function SkewerIllustration() {
   return (
@@ -12,8 +13,12 @@ export default function SkewerIllustration() {
       xmlns="http://www.w3.org/2000/svg"
       className="w-full h-auto max-w-lg mx-auto"
       role="img"
-      aria-label="A kebab skewer threaded with the icons of Gmail, Notion, Slack, GitHub and Google Calendar"
+      aria-labelledby="hero-skewer-title"
     >
+      <title id="hero-skewer-title">
+        A kebab skewer threaded with the five ingredients: skills, profile, memory, tools and
+        guardrails
+      </title>
       <defs>
         <linearGradient id="hero-meat" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#fbbf24" />
@@ -60,26 +65,21 @@ export default function SkewerIllustration() {
       {/* Sharpened tip */}
       <path d="M455 167 L472 169 L460 178 Z" fill="#cbd5e1" />
 
-      {/* Five chunks alternating veg / meat / veg / meat / veg */}
-      {/* Chunk 1 — Gmail (veg-style round) */}
+      {/* Five chunks alternating veg / meat / veg / meat / veg — one per ingredient */}
+      {/* Chunk 1 — Skills (veg-style round): a lightning bolt */}
       <g transform="translate(75, 188)">
         <circle r="34" fill="url(#hero-veg)" />
         <circle r="34" fill="none" stroke="#92400e" strokeWidth="1.5" opacity="0.4" />
-        {/* Mini Gmail mark — envelope */}
-        <g
-          transform="translate(-14, -10)"
+        <path
+          d="M3 -17 L-10 3 L-1 3 L-4 17 L10 -4 L1 -4 Z"
+          fill="#fef3c7"
           stroke="#7c2d12"
           strokeWidth="2"
-          fill="none"
-          strokeLinecap="round"
           strokeLinejoin="round"
-        >
-          <rect x="0" y="0" width="28" height="20" rx="2" fill="#fef3c7" />
-          <path d="M0 2 L14 12 L28 2" />
-        </g>
+        />
       </g>
 
-      {/* Chunk 2 — Notion (meat-style cube) */}
+      {/* Chunk 2 — Profile (meat-style cube): a head and shoulders */}
       <g transform="translate(160, 184) rotate(-3)">
         <rect x="-32" y="-32" width="64" height="64" rx="6" fill="url(#hero-meat)" />
         <rect
@@ -93,33 +93,29 @@ export default function SkewerIllustration() {
           strokeWidth="1.5"
           opacity="0.5"
         />
-        <text
-          x="0"
-          y="6"
-          textAnchor="middle"
-          fontSize="24"
-          fontWeight="700"
-          fontFamily="Georgia, serif"
-          fill="#fef3c7"
-        >
-          N
-        </text>
+        <circle cx="0" cy="-7" r="8" fill="#fef3c7" />
+        <path d="M-15 17 a15 13 0 0 1 30 0 Z" fill="#fef3c7" />
       </g>
 
-      {/* Chunk 3 — Slack (veg-style round, larger) */}
+      {/* Chunk 3 — Memory (veg-style round, larger): a notebook */}
       <g transform="translate(248, 180)">
         <circle r="36" fill="url(#hero-veg)" />
         <circle r="36" fill="none" stroke="#92400e" strokeWidth="1.5" opacity="0.4" />
-        {/* Slack hash mark */}
-        <g transform="translate(-12, -12)" stroke="#7c2d12" strokeWidth="3" strokeLinecap="round">
-          <line x1="6" y1="0" x2="6" y2="24" />
-          <line x1="18" y1="0" x2="18" y2="24" />
-          <line x1="0" y1="8" x2="24" y2="8" />
-          <line x1="0" y1="16" x2="24" y2="16" />
+        <g
+          transform="translate(-12, -15)"
+          stroke="#7c2d12"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="0" y="0" width="24" height="30" rx="2.5" fill="#fef3c7" />
+          <line x1="7" y1="0" x2="7" y2="30" />
+          <line x1="12" y1="9" x2="19" y2="9" />
+          <line x1="12" y1="15" x2="19" y2="15" />
         </g>
       </g>
 
-      {/* Chunk 4 — GitHub (meat-style cube) */}
+      {/* Chunk 4 — Tools (meat-style cube): a wrench */}
       <g transform="translate(336, 175) rotate(2)">
         <rect x="-30" y="-30" width="60" height="60" rx="6" fill="url(#hero-meat)" />
         <rect
@@ -133,31 +129,51 @@ export default function SkewerIllustration() {
           strokeWidth="1.5"
           opacity="0.5"
         />
-        {/* GH cat silhouette simplified */}
-        <path
-          d="M0 -16 c-9 0 -16 7 -16 16 c0 7 5 13 11 15 c1 0 1 -1 1 -1 v-3 c-4 1 -6 -2 -6 -2 c-1 -2 -2 -3 -2 -3 c-2 -1 0 -1 0 -1 c2 0 3 2 3 2 c2 3 5 2 7 2 c0 -2 1 -3 2 -4 c-5 -1 -10 -3 -10 -11 c0 -2 1 -4 2 -6 c0 -1 -1 -3 0 -6 c0 0 2 -1 7 2 c2 -1 4 -1 6 -1 c2 0 4 0 6 1 c5 -3 7 -2 7 -2 c1 3 0 5 0 6 c1 2 2 4 2 6 c0 8 -5 10 -10 11 c1 1 2 3 2 5 v6 c0 1 0 2 1 1 c6 -2 11 -8 11 -15 c0 -9 -7 -16 -16 -16z"
-          fill="#fef3c7"
-        />
+        <g transform="rotate(45)">
+          <rect x="-3.5" y="-4" width="7" height="22" rx="3" fill="#fef3c7" />
+          <path d="M-9 -12 a9 9 0 1 0 18 0 l0 -5 l-5 0 l0 5 l-8 0 l0 -5 l-5 0 Z" fill="#fef3c7" />
+        </g>
       </g>
 
-      {/* Chunk 5 — Calendar (veg-style round, smaller, near tip) */}
+      {/* Chunk 5 — Guardrails (veg-style round, smaller, near tip): a shield */}
       <g transform="translate(415, 172)">
         <circle r="28" fill="url(#hero-veg)" />
         <circle r="28" fill="none" stroke="#92400e" strokeWidth="1.5" opacity="0.4" />
-        {/* Mini calendar */}
         <g
-          transform="translate(-10, -10)"
+          transform="translate(-11, -13)"
           stroke="#7c2d12"
-          strokeWidth="1.8"
-          fill="#fef3c7"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <rect x="0" y="2" width="20" height="18" rx="1.5" />
-          <line x1="0" y1="7" x2="20" y2="7" />
-          <line x1="6" y1="0" x2="6" y2="4" />
-          <line x1="14" y1="0" x2="14" y2="4" />
+          <path d="M11 0 L0 4 v8 c0 7 5 12 11 14 c6 -2 11 -7 11 -14 v-8 Z" fill="#fef3c7" />
+          <path d="M6 13 l4 4 l6 -7" fill="none" />
         </g>
+      </g>
+
+      {/* Ingredient labels */}
+      <g
+        fontSize="15"
+        fontWeight="600"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+        fill="#cbd5e1"
+        textAnchor="middle"
+      >
+        <text x="75" y="140">
+          Skills
+        </text>
+        <text x="160" y="136">
+          Profile
+        </text>
+        <text x="248" y="129">
+          Memory
+        </text>
+        <text x="336" y="130">
+          Tools
+        </text>
+        <text x="415" y="129">
+          Guardrails
+        </text>
       </g>
 
       {/* Flame underneath — three tongues */}
@@ -175,9 +191,9 @@ export default function SkewerIllustration() {
 
       {/* Wisps of smoke above */}
       <g opacity="0.25" stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round">
-        <path d="M120 130 q-8 -10 0 -20 q8 -10 0 -20" />
-        <path d="M250 110 q-8 -10 0 -20 q8 -10 0 -20" />
-        <path d="M380 120 q-8 -10 0 -20 q8 -10 0 -20" />
+        <path d="M120 100 q-8 -10 0 -20 q8 -10 0 -20" />
+        <path d="M250 95 q-8 -10 0 -20 q8 -10 0 -20" />
+        <path d="M380 100 q-8 -10 0 -20 q8 -10 0 -20" />
       </g>
     </svg>
   );
