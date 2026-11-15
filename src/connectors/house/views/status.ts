@@ -1,6 +1,6 @@
 import { renderView } from "./bridge";
 
-/** APP-10 — state of the hub: profile, skills, connectors, this week. */
+/** APP-10 — state of the hub: profile, skills, recent notes, connectors, this week. */
 export const STATUS_VIEW = renderView(
   "Kebab House",
   `<h1>Kebab House</h1>
@@ -21,6 +21,10 @@ kh.onResult((res) => {
   if (d.week.skills.length) {
     root.append(kh.el("h2", "Most used skills this week"));
     d.week.skills.slice(0, 5).forEach((s) => { const r = kh.el("div", undefined, "row"); r.append(kh.el("span", s.name), kh.el("span", s.count, "muted")); root.append(r); });
+  }
+  if (d.notes && d.notes.length) {
+    root.append(kh.el("h2", "Recent notes"));
+    d.notes.forEach((n) => { const r = kh.el("div", undefined, "row"); r.append(kh.el("span", n.path), kh.el("span", (n.date || "").slice(0, 10), "muted")); root.append(r); });
   }
   root.append(kh.el("h2", "Connectors"));
   const chips = kh.el("div");

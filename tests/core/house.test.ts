@@ -31,7 +31,17 @@ vi.mock("@/core/registry", () => ({
   getEnabledPacksLazy: async () => [
     { manifest: { core: true, label: "Skills" } },
     { manifest: { core: false, label: "Slack" } },
+    { manifest: { id: "vault", core: true, label: "Memory Vault" } },
   ],
+}));
+const recent = vi.fn(async (_limit: number, opts?: { since?: string }) =>
+  [
+    { path: "Inbox/idea.md", message: "add", date: "2026-11-04T09:00:00Z", author: "me" },
+    { path: "Inbox/later.md", message: "add", date: "2026-11-12T09:00:00Z", author: "me" },
+  ].filter((n) => !opts?.since || n.date >= opts.since)
+);
+vi.mock("@/connectors/vault/lib/select", () => ({
+  getVaultBackend: () => ({ recent }),
 }));
 vi.mock("@/connectors/skills/lib/library", () => ({
   skillsListPayload: async () => ({
@@ -55,6 +65,7 @@ import {
   handleKebabStatus,
   handleSkillsGallery,
   handleWeeklyRecap,
+  weekStart,
 } from "@/connectors/house/tools/house-tools";
 import { UI_MIME_TYPE } from "@/connectors/house/views/bridge";
 
@@ -107,5 +118,32 @@ describe("tools (APP-02/10/12, RCP-01)", () => {
     expect(text).toContain("12 tool calls (+7 vs the week before)");
     expect(text).toContain("3 notes added (same as the week before)");
     expect(text).toContain("morning-brief ×4");
+    // Only the notes of that week (Mon 2 Nov → Sun 8 Nov 2026).
+    expect(text).toContain("Notes changed: Inbox/idea.md");
+    expect(text).not.toContain("Inbox/later.md");
+    expect(recent).toHaveBeenLastCalledWith(30, { since: "2026-11-02T00:00:00.000Z" });
+  });
+
+  it("shows recent vault notes in the status, and survives a failing vault", async () => {
+    const ok = await handleKebabStatus();
+    expect(ok.content[0]!.text).toContain("Recent notes: Inbox/idea.md, Inbox/later.md");
+    recent.mockRejectedValueOnce(new Error("GitHub down"));
+    const down = await handleKebabStatus();
+    expect(down.content[0]!.text).not.toContain("Recent notes");
+    expect((down.structuredContent as { notes: unknown[] }).notes).toEqual([]);
+  });
+
+  it("computes the Monday of an ISO week", () => {
+    expect(weekStart("2026-W45").toISOString()).toBe("2026-11-02T00:00:00.000Z");
+    expect(weekStart("2026-W01").toISOString()).toBe("2025-12-29T00:00:00.000Z");
+  });
+});
+
+describe("weekly-review template (RCP-02)", () => {
+  it("uses kebab_weekly_recap when available, with a vault fallback", async () => {
+    const { readFileSync } = await import("node:fs");
+    const md = readFileSync("content/skill-templates/weekly-review/SKILL.md", "utf8");
+    expect(md).toContain("kebab_weekly_recap");
+    expect(md).toContain("vault_recent");
   });
 });

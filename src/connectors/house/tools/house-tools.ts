@@ -25,6 +25,39 @@ async function profileSummary(): Promise<{ name: string; preview: string }> {
   return { name, preview };
 }
 
+/**
+ * Recent vault notes, best effort: the vault may be disabled, unconfigured
+ * or slow (GitHub), and the status must render anyway.
+ */
+async function recentNotes(
+  enabled: boolean,
+  limit: number,
+  since?: string
+): Promise<{ path: string; date: string }[]> {
+  if (!enabled) return [];
+  try {
+    const { getVaultBackend } = await import("@/connectors/vault/lib/select");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const notes = await Promise.race([
+        getVaultBackend().recent(limit, since ? { since } : undefined),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timeout")), 4000);
+        }),
+      ]);
+      return notes.map((n) => ({ path: n.path, date: n.date }));
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return [];
+  }
+}
+
+function vaultEnabled(packs: { manifest: { id: string } }[]): boolean {
+  return packs.some((p) => p.manifest.id === "vault");
+}
+
 // ── APP-10 kebab_status ──────────────────────────────────────────────
 
 export const kebabStatusSchema = {};
@@ -38,10 +71,12 @@ export async function handleKebabStatus(): Promise<ToolResult> {
   ]);
   const skillNames = ((skills.skills as { name: string }[] | undefined) ?? []).map((s) => s.name);
   const connectors = packs.filter((p) => !p.manifest.core).map((p) => p.manifest.label);
+  const notes = await recentNotes(vaultEnabled(packs), 5);
   const data = {
     profile,
     skills: { count: skillNames.length, names: skillNames.slice(0, 50) },
     connectors,
+    notes,
     week,
   };
   const lines = [
@@ -51,6 +86,7 @@ export async function handleKebabStatus(): Promise<ToolResult> {
     `- Connectors: ${connectors.length ? connectors.join(", ") : "none beyond the built-ins"}`,
     `- This week (${week.week}): ${week.total} tool calls, ${week.notes} notes added`,
   ];
+  if (notes.length) lines.push(`- Recent notes: ${notes.map((n) => n.path).join(", ")}`);
   if (week.skills.length) {
     lines.push(
       `- Most used skills: ${week.skills
@@ -115,6 +151,14 @@ function previousWeekOf(week: string): string {
   return isoWeek(new Date(thursday.getTime() - 7 * 86_400_000));
 }
 
+/** Monday 00:00 UTC of an ISO week. */
+export function weekStart(week: string): Date {
+  const [y, w] = week.split("-W").map(Number) as [number, number];
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const mondayW1 = jan4.getTime() - ((jan4.getUTCDay() || 7) - 1) * 86_400_000;
+  return new Date(mondayW1 + (w - 1) * 7 * 86_400_000);
+}
+
 function delta(now: number, before: number): string {
   const d = now - before;
   return d === 0 ? "same as the week before" : `${d > 0 ? "+" : ""}${d} vs the week before`;
@@ -122,10 +166,16 @@ function delta(now: number, before: number): string {
 
 export async function handleWeeklyRecap(args: { week?: string | undefined }): Promise<ToolResult> {
   const week = args.week ?? recentWeeks(2)[1]!;
-  const [cur, prev] = (await Promise.all([
+  const start = weekStart(week);
+  const end = new Date(start.getTime() + 7 * 86_400_000);
+  const [cur, prev, packs] = (await Promise.all([
     readWeekUsage(week),
     readWeekUsage(previousWeekOf(week)),
-  ])) as [WeekUsage, WeekUsage];
+    getEnabledPacksLazy(),
+  ])) as [WeekUsage, WeekUsage, { manifest: { id: string } }[]];
+  const notes = (await recentNotes(vaultEnabled(packs), 30, start.toISOString())).filter(
+    (n) => !n.date || new Date(n.date).getTime() < end.getTime()
+  );
   const lines = [
     `# Week ${cur.week}`,
     `- ${cur.total} tool calls (${delta(cur.total, prev.total)})`,
@@ -142,6 +192,7 @@ export async function handleWeeklyRecap(args: { week?: string | undefined }): Pr
         .map((t) => `${t.name} (${t.count})`)
         .join(", ")}`
     );
+  if (notes.length) lines.push(`- Notes changed: ${notes.map((n) => n.path).join(", ")}`);
   if (cur.total === 0) lines.push("", "Nothing was recorded that week.");
-  return result(lines.join("\n"), { week: cur, previous: prev });
+  return result(lines.join("\n"), { week: cur, previous: prev, notes });
 }
