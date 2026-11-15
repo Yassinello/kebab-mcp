@@ -13,6 +13,7 @@ import {
   canAdvanceToTest,
   isTerminal,
   nextStep,
+  shouldSkipStorageStep,
   type WelcomeState,
   type WizardStep,
 } from "../../app/welcome/wizard-steps";
@@ -98,5 +99,22 @@ describe("wizard-steps", () => {
     for (const s of ["storage", "mint", "test"] as const) {
       expect(nextStep(s as WizardStep, alreadyInit)).toBe("done");
     }
+  });
+
+  it("shouldSkipStorageStep: only durable Upstash on the storage step (DEP-03)", () => {
+    const upstash = { healthy: true, mode: "upstash" as const, durable: true };
+    expect(shouldSkipStorageStep(base({ storage: upstash }))).toBe(true);
+    // Not once the user has moved past (or come back via "← Storage" — the
+    // shell's one-shot ref handles that; here: other steps never skip).
+    expect(shouldSkipStorageStep(base({ step: "mint", storage: upstash }))).toBe(false);
+    // Filesystem / memory / not-yet-durable keep the step.
+    expect(
+      shouldSkipStorageStep(base({ storage: { healthy: true, mode: "filesystem", durable: true } }))
+    ).toBe(false);
+    expect(shouldSkipStorageStep(base({ storage: { ...upstash, durable: false } }))).toBe(false);
+    expect(shouldSkipStorageStep(base({ storage: { ...upstash, healthy: false } }))).toBe(false);
+    expect(shouldSkipStorageStep(base({ storage: upstash, claim: "already-initialized" }))).toBe(
+      false
+    );
   });
 });

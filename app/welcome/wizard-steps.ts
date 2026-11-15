@@ -86,6 +86,26 @@ export function canAdvanceToMint(state: WelcomeState): boolean {
 }
 
 /**
+ * Kebab House phase 2 (DEP-03): skip the storage step automatically?
+ *
+ * A Deploy Button instance arrives with Upstash already attached (the
+ * button's `stores` parameter), so there is nothing to choose on the
+ * storage step. When the first detection says durable Upstash, the wizard
+ * opens on the token step instead. Filesystem / memory / degraded KV keep
+ * the step: the operator has a decision (or a warning) to see there.
+ * Only from the storage step — never once the user has moved on.
+ */
+export function shouldSkipStorageStep(state: WelcomeState): boolean {
+  return (
+    state.claim !== "already-initialized" &&
+    state.step === "storage" &&
+    state.storage.mode === "upstash" &&
+    state.storage.healthy &&
+    state.storage.durable === true
+  );
+}
+
+/**
  * Gate: can we leave the mint step?
  *
  * Predicate: a token was minted AND the user checked the "I saved it"
