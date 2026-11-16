@@ -1,13 +1,19 @@
 import { composeRequestPipeline, rehydrateStep, rateLimitStep } from "@/core/pipeline";
 import type { PipelineContext } from "@/core/pipeline";
-import { OAuthError, registerClient } from "@/core/oauth";
+import { MAX_CLIENT_METADATA_BYTES, OAuthError, registerClient } from "@/core/oauth";
 import { jsonResponse, oauthErrorResponse, preflight } from "@/core/oauth-http";
 
 /** OAU-04 — RFC 7591 Dynamic Client Registration (public clients). */
 async function postHandler(ctx: PipelineContext): Promise<Response> {
   try {
     const text = await ctx.request.text();
-    if (text.length > 16 * 1024) throw new OAuthError("invalid_client_metadata", "body too large");
+    // Audit 2026-11 (A3): registration metadata is capped (stored for up to a year).
+    if (Buffer.byteLength(text, "utf8") > MAX_CLIENT_METADATA_BYTES) {
+      throw new OAuthError(
+        "invalid_client_metadata",
+        `client metadata must be at most ${MAX_CLIENT_METADATA_BYTES} bytes`
+      );
+    }
     let meta: Record<string, unknown>;
     try {
       meta = JSON.parse(text) as Record<string, unknown>;
@@ -36,7 +42,16 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
 }
 
 export const POST = composeRequestPipeline(
-  [rehydrateStep, rateLimitStep({ scope: "oauth-register", keyFrom: "ip", limit: 10 })],
+  [
+    rehydrateStep,
+    rateLimitStep({
+      scope: "oauth-register",
+      keyFrom: "ip",
+      limit: 10,
+      windowSeconds: 3600,
+      alwaysOn: true,
+    }),
+  ],
   postHandler
 );
 

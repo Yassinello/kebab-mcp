@@ -1,4 +1,11 @@
 import { defineTool, type ConnectorManifest } from "@/core/types";
+import { uiToolMeta } from "@/connectors/house/views/bridge";
+import {
+  OUTGOING_APPROVAL_HINT,
+  gateOutgoingSend,
+  previewIdSchemaField,
+} from "@/core/approval-gate";
+import { slackSendApproval, slackSendDmApproval } from "./lib/send-approval";
 import { slackChannelsSchema, handleSlackChannels } from "./tools/slack-channels";
 import { slackReadSchema, handleSlackRead } from "./tools/slack-read";
 import { slackSendSchema, handleSlackSend } from "./tools/slack-send";
@@ -9,6 +16,9 @@ import { slackProfileSchema, handleSlackProfile } from "./tools/slack-profile";
 import { slackGuide } from "./guide";
 import { hasConfiguredAccountSync } from "@/core/connector-accounts";
 import { getConfig } from "@/core/config-facade";
+
+/** Audit 2026-11 (A4): previews of outgoing messages render in the review view. */
+const APPROVE_VIEW_META = uiToolMeta("approve");
 
 export const slackConnector: ConnectorManifest = {
   id: "slack",
@@ -93,18 +103,28 @@ export const slackConnector: ConnectorManifest = {
     }),
     defineTool({
       name: "slack_send",
+      meta: APPROVE_VIEW_META,
       description:
-        "Send a message to a Slack channel. Supports Slack markdown. Can reply in a thread using thread_ts. Always show the message to the user for approval before calling.",
-      schema: slackSendSchema,
-      handler: async (args) => handleSlackSend(args),
+        "Send a message to a Slack channel. Supports Slack markdown. Can reply in a thread using thread_ts. " +
+        OUTGOING_APPROVAL_HINT,
+      schema: { ...slackSendSchema, preview_id: previewIdSchemaField },
+      handler: async (args) =>
+        gateOutgoingSend(slackSendApproval, args, (a) =>
+          handleSlackSend(a as Parameters<typeof handleSlackSend>[0])
+        ),
       destructive: true,
     }),
     defineTool({
       name: "slack_send_dm",
+      meta: APPROVE_VIEW_META,
       description:
-        "Send a direct message to a person by user id, email, or name (auto-resolved). Use this instead of slack_send when the target is a person, not a channel. Always show the message to the user for approval before calling.",
-      schema: slackSendDmSchema,
-      handler: async (args) => handleSlackSendDm(args),
+        "Send a direct message to a person by user id, email, or name (auto-resolved). Use this instead of slack_send when the target is a person, not a channel. " +
+        OUTGOING_APPROVAL_HINT,
+      schema: { ...slackSendDmSchema, preview_id: previewIdSchemaField },
+      handler: async (args) =>
+        gateOutgoingSend(slackSendDmApproval, args, (a) =>
+          handleSlackSendDm(a as Parameters<typeof handleSlackSendDm>[0])
+        ),
       destructive: true,
     }),
     defineTool({

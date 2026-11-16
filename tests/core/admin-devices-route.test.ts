@@ -344,6 +344,38 @@ describe("/api/admin/devices — POST set-connectors", () => {
   });
 });
 
+describe("/api/admin/devices — POST set-access (audit 2026-11)", () => {
+  it("sets the access level of a static-token device, keeping its scope", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const tid = tokenId(TOKEN_A);
+    kvStore.set(
+      `devices:${tid}`,
+      JSON.stringify({ label: "Team", createdAt: "x", connectors: ["apify"] })
+    );
+    const res = await POST(
+      makeReq("POST", { action: "set-access", tokenId: tid, access: "memory" })
+    );
+    expect(res.status).toBe(200);
+    expect(JSON.parse(kvStore.get(`devices:${tid}`)!)).toMatchObject({
+      access: "memory",
+      connectors: ["apify"],
+    });
+  });
+
+  it("refuses an invalid level and an unknown device", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const bad = await POST(
+      makeReq("POST", { action: "set-access", tokenId: tokenId(TOKEN_A), access: "admin" })
+    );
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBe("invalid_access");
+    const unknown = await POST(
+      makeReq("POST", { action: "set-access", tokenId: "deadbeef", access: "read" })
+    );
+    expect(unknown.status).toBe(404);
+  });
+});
+
 describe("/api/admin/devices — POST unknown action", () => {
   it("returns 400", async () => {
     envVars.MCP_AUTH_TOKEN = TOKEN_A;

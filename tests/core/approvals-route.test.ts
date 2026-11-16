@@ -59,16 +59,30 @@ import { createPreview, getPreview, consume, signApproval } from "@/core/approva
 
 const ADMIN = "admin-token-for-tests";
 
+/**
+ * Audit 2026-11 (A2): decisions come from the dashboard page — admin cookie
+ * session + same-origin browser request. `bearer` sends the key in an
+ * Authorization header instead (what an AI client holding it would do).
+ */
 function post(
   id: string,
   body: unknown,
-  opts: { token?: string | null; origin?: string } = {}
+  opts: {
+    token?: string | null;
+    origin?: string;
+    bearer?: boolean;
+    site?: string | null;
+  } = {}
 ): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     host: "kebab.test",
   };
-  if (opts.token !== null) headers.authorization = `Bearer ${opts.token ?? ADMIN}`;
+  if (opts.token !== null) {
+    if (opts.bearer) headers.authorization = `Bearer ${opts.token ?? ADMIN}`;
+    else headers.cookie = `kebab_admin_token=${opts.token ?? ADMIN}`;
+  }
+  if (opts.site !== null) headers["sec-fetch-site"] = opts.site ?? "same-origin";
   if (opts.origin) headers.origin = opts.origin;
   const req = new Request(`https://kebab.test/api/approvals/${id}`, {
     method: "POST",
@@ -105,9 +119,60 @@ describe("POST /api/approvals/<id>", () => {
 
   it("refuses a cross-origin POST (CSRF)", async () => {
     const { id, sig } = await pending();
-    const res = await post(id, { decision: "approve", sig }, { origin: "https://evil.example" });
+    const res = await post(
+      id,
+      { decision: "approve", sig },
+      { origin: "https://evil.example", site: "cross-site" }
+    );
     expect(res.status).toBe(403);
+    // Same without Sec-Fetch-Site: the Origin must be this instance.
+    const res2 = await post(
+      id,
+      { decision: "approve", sig },
+      { origin: "https://evil.example", site: null }
+    );
+    expect(res2.status).toBe(403);
     expect((await getPreview(id))?.status).toBe("pending");
+  });
+
+  it("refuses the admin key sent in an Authorization header (audit A2)", async () => {
+    const { id, sig } = await pending();
+    // An AI client holding the admin key cannot approve its own send.
+    const res = await post(id, { decision: "approve", sig }, { bearer: true });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ ok: false, error: "browser_session_required" });
+    // …not even when it also carries the cookie and same-origin headers.
+    const req = new Request(`https://kebab.test/api/approvals/${id}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host: "kebab.test",
+        authorization: `Bearer ${ADMIN}`,
+        cookie: `kebab_admin_token=${ADMIN}`,
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({ decision: "approve", sig }),
+    });
+    expect((await POST(req, { params: Promise.resolve({ id }) })).status).toBe(403);
+    expect((await getPreview(id))?.status).toBe("pending");
+  });
+
+  it("refuses a non-browser request with the cookie (no Sec-Fetch-Site, no Origin)", async () => {
+    const { id, sig } = await pending();
+    const res = await post(id, { decision: "approve", sig }, { site: null });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "same_origin_required" });
+    expect((await getPreview(id))?.status).toBe("pending");
+  });
+
+  it("accepts the cookie session with a same-origin Origin header", async () => {
+    const { id, sig } = await pending();
+    const res = await post(
+      id,
+      { decision: "approve", sig },
+      { origin: "https://kebab.test", site: null }
+    );
+    expect(res.status).toBe(200);
   });
 
   it("refuses a bad or missing signature", async () => {

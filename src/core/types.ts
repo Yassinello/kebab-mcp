@@ -107,6 +107,18 @@ export interface ToolDefinition {
    *   mutation — same bucket, same future work.
    */
   destructive: boolean;
+  /**
+   * Audit 2026-11 (access levels): the tool's ONLY effect is writing the
+   * user's own profile, notes or skills (vault_write, my_context_update…).
+   * Such tools stay available to devices at access level "memory". Never
+   * set it on deletes, sends, posts or anything reaching a third party.
+   */
+  memoryWrite?: boolean;
+  /**
+   * Audit 2026-11 (access levels): operator tooling (logs, caches,
+   * backups). Only listed and callable for devices at access level "full".
+   */
+  adminOnly?: boolean;
 }
 
 /**
@@ -123,6 +135,10 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   example?: string;
   deprecated?: string;
   destructive: boolean;
+  /** See ToolDefinition.memoryWrite. */
+  memoryWrite?: boolean;
+  /** See ToolDefinition.adminOnly. */
+  adminOnly?: boolean;
   openWorld?: boolean;
   /**
    * Kebab House phase 3 (APP-02): tool `_meta`, e.g. the MCP Apps view

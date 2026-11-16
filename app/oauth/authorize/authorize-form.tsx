@@ -2,6 +2,33 @@
 
 import { useState } from "react";
 
+/** Mirrors AccessLevel in src/core/devices.ts (kept local: this is a client component). */
+type Access = "read" | "memory" | "full";
+
+/**
+ * Audit 2026-11 — the three access levels offered on the consent page, in
+ * plain words. Default: "memory" (read + save to your own profile, notes
+ * and skills), so onboarding works without letting the client send anything.
+ */
+const ACCESS_CHOICES: { value: Access; title: string; detail: string }[] = [
+  {
+    value: "read",
+    title: "Read only",
+    detail: "Load skills, read your profile and notes.",
+  },
+  {
+    value: "memory",
+    title: "Read + my profile and notes (recommended)",
+    detail: "Also save to your profile, notes and skills.",
+  },
+  {
+    value: "full",
+    title: "Everything",
+    detail:
+      "Also send messages and change things in your connected apps. Each message still needs your approval.",
+  },
+];
+
 /**
  * Kebab House phase 1 (OAU-06, TRU-05) — consent form. The decision is
  * POSTed with fetch and the browser then navigates to the returned URL:
@@ -13,13 +40,23 @@ export function AuthorizeForm(props: {
   clientName: string;
   clientId: string;
   clientKind: string;
-  redirectHost: string;
+  /** Host for web callbacks; the whole URI for an app's own scheme. */
+  redirectTarget: string;
+  redirectIsApp: boolean;
   profiles: string[];
+  /** Settings of this client's existing device (re-authorization), if any. */
+  existing?: {
+    label: string;
+    profile: string | null;
+    skillTags: string[] | null;
+    access: Access;
+  } | null;
 }) {
-  const [label, setLabel] = useState(props.clientName.slice(0, 40));
-  const [skillTags, setSkillTags] = useState("");
-  const [profile, setProfile] = useState("");
-  const [writeAllowed, setWriteAllowed] = useState(false);
+  const existing = props.existing ?? null;
+  const [label, setLabel] = useState((existing?.label ?? props.clientName).slice(0, 40));
+  const [skillTags, setSkillTags] = useState((existing?.skillTags ?? []).join(", "));
+  const [profile, setProfile] = useState(existing?.profile ?? "");
+  const [access, setAccess] = useState<Access>(existing?.access ?? "memory");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +66,7 @@ export function AuthorizeForm(props: {
     try {
       const res = await fetch("/api/oauth/authorize", {
         method: "POST",
-        credentials: "include",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: props.query,
@@ -40,7 +77,7 @@ export function AuthorizeForm(props: {
             .map((t) => t.replace(/^#/, "").trim())
             .filter(Boolean),
           profile: profile || null,
-          writeAllowed,
+          access,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { redirect?: string; message?: string };
@@ -61,15 +98,52 @@ export function AuthorizeForm(props: {
       <div>
         <h1 className="text-lg font-semibold">Connect {props.clientName}?</h1>
         <p className="text-sm text-text-dim mt-1">
-          It will be able to use your Kebab House: your skills, your profile and the tools you
-          allow. You will be sent back to <span className="font-mono">{props.redirectHost}</span>.
+          It will be able to use your Kebab House: your skills, your profile and what you allow
+          below.
         </p>
+        {props.redirectIsApp ? (
+          <p className="text-sm text-text-dim mt-2">
+            You will then be sent to this app on your computer:{" "}
+            <span className="font-mono break-all">{props.redirectTarget}</span>. Only continue if
+            you just started this connection from that app.
+          </p>
+        ) : (
+          <p className="text-sm text-text-dim mt-2">
+            You will then be sent back to <span className="font-mono">{props.redirectTarget}</span>.
+          </p>
+        )}
+        {existing && (
+          <p className="text-[11px] text-text-muted mt-1">
+            This client is already in your Devices list as “{existing.label}”. Its settings are kept
+            unless you change them here.
+          </p>
+        )}
         {props.clientKind === "cimd" && (
           <p className="text-[11px] text-text-muted mt-1 break-all">
             Client identity: <span className="font-mono">{props.clientId}</span>
           </p>
         )}
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-medium mb-1">What can it do?</legend>
+        {ACCESS_CHOICES.map((c) => (
+          <label key={c.value} className="flex items-start gap-2 text-xs cursor-pointer">
+            <input
+              type="radio"
+              name="access"
+              value={c.value}
+              checked={access === c.value}
+              onChange={() => setAccess(c.value)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium">{c.title}</span>
+              <span className="block text-text-dim">{c.detail}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
 
       <label className="block text-xs font-medium">
         Name in your Devices list
@@ -82,7 +156,7 @@ export function AuthorizeForm(props: {
       </label>
 
       <label className="block text-xs font-medium">
-        Profile served by my_context
+        Profile this client uses
         <select
           value={profile}
           onChange={(e) => setProfile(e.target.value)}
@@ -100,27 +174,13 @@ export function AuthorizeForm(props: {
       </label>
 
       <label className="block text-xs font-medium">
-        Skill tags visible (empty = every skill)
+        Skills this client sees (tags, empty = all)
         <input
           value={skillTags}
           onChange={(e) => setSkillTags(e.target.value)}
           placeholder="e.g. perso, rituals"
           className="mt-1 w-full bg-bg-muted border border-border rounded-md px-3 py-1.5 text-sm"
         />
-      </label>
-
-      <label className="flex items-start gap-2 text-xs">
-        <input
-          type="checkbox"
-          checked={writeAllowed}
-          onChange={(e) => setWriteAllowed(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">Allow actions that change things</span> (send messages,
-          write notes, create issues…). Off by default: the client can read and load skills only.
-          You can change this later in Devices.
-        </span>
       </label>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
@@ -144,7 +204,7 @@ export function AuthorizeForm(props: {
         </button>
       </div>
       <p className="text-[11px] text-text-muted">
-        Connector access can be narrowed later in Settings → Devices.
+        You can change all of this later in Settings → Devices.
       </p>
     </div>
   );

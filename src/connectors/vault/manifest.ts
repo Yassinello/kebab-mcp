@@ -84,6 +84,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: vaultWriteSchema,
       handler: async (args) => handleVaultWrite(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "vault_read",
@@ -123,6 +124,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: vaultMoveSchema,
       handler: async (args) => handleVaultMove(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "save_article",
@@ -131,6 +133,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: saveArticleSchema,
       handler: async (args) => handleSaveArticle(args),
       destructive: true,
+      memoryWrite: true,
       // TRU-01: fetches an arbitrary URL — open world, unlike the rest of the vault.
       openWorld: true,
     }),
@@ -141,6 +144,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: vaultAppendSchema,
       handler: async (args) => handleVaultAppend(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "vault_batch_read",

@@ -12,17 +12,23 @@
  * counters, revocation — applies unchanged.
  *
  * Storage (root namespace only — OAuth is not tenant-aware in this phase):
- *   oauth:client:<client_id>     DCR client record
+ *   oauth:client:<client_id>     DCR client record (24 h until first authorization, then 1 year)
  *   oauth:cimd:<sha256(url)>     cached CIMD document (24 h)
  *   oauth:code:<sha256(code)>    authorization code (single use, 120 s)
  *   oauth:at:<sha256(token)>     access token (1 h)
  *   oauth:rt:<sha256(token)>     refresh token (30 days, rotated)
  *   oauth:family:<id>:revoked    refresh family revoked after reuse
  * Only SHA-256 hashes of codes and tokens are stored.
+ *
+ * Audit 2026-11 (A3): registration is capped (metadata size, number of
+ * clients, short TTL until a first authorization), a refresh token retried
+ * within a short grace window no longer revokes its family, the device is
+ * created (or the client's existing device reused) only once the code is
+ * exchanged, and native-app custom-scheme redirect URIs are accepted.
  */
 
 import { createHash, randomBytes } from "node:crypto";
-import { getKVStore } from "./kv-store";
+import { getKVStore, kvScanAll } from "./kv-store";
 import { safeFetch } from "./safe-fetch";
 import { getConfig } from "./config-facade";
 import { toMsg } from "./error-utils";
@@ -33,6 +39,17 @@ export const REFRESH_TOKEN_TTL_S = 30 * 24 * 60 * 60;
 export const CODE_TTL_S = 120;
 const CIMD_TTL_S = 24 * 60 * 60;
 const CLIENT_TTL_S = 365 * 24 * 60 * 60;
+/** A registered client that never completed an authorization expires after a day. */
+export const PENDING_CLIENT_TTL_S = 24 * 60 * 60;
+/** Largest accepted registration request (JSON metadata), in bytes. */
+export const MAX_CLIENT_METADATA_BYTES = 4 * 1024;
+/** Most registered (DCR) clients kept at once. */
+export const MAX_REGISTERED_CLIENTS = 500;
+/**
+ * A rotated refresh token presented again within this window (a client
+ * retrying after a lost response) is refused without revoking its family.
+ */
+export const REFRESH_REUSE_GRACE_S = 60;
 
 export class OAuthError extends Error {
   constructor(
@@ -46,7 +63,8 @@ export class OAuthError extends Error {
       | "invalid_target"
       | "invalid_redirect_uri"
       | "invalid_client_metadata"
-      | "access_denied",
+      | "access_denied"
+      | "temporarily_unavailable",
     message: string,
     readonly status = 400
   ) {
@@ -95,20 +113,59 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
   return b64url(createHash("sha256").update(verifier).digest()) === challenge;
 }
 
-/** https redirect URIs, or loopback http with any port (native / CLI clients). */
+/**
+ * Schemes never accepted as a redirect target: they run code, read local
+ * files, or are not an app callback at all.
+ */
+const FORBIDDEN_REDIRECT_SCHEMES: ReadonlySet<string> = new Set([
+  "javascript:",
+  "data:",
+  "file:",
+  "vbscript:",
+  "about:",
+  "blob:",
+  "filesystem:",
+  "view-source:",
+  "ws:",
+  "wss:",
+  "ftp:",
+  "mailto:",
+  "tel:",
+  "sms:",
+]);
+
+/** True for a private-use URI scheme of a native app (RFC 8252 §7.1), e.g. `cursor:`. */
+export function isCustomSchemeRedirect(raw: string): boolean {
+  try {
+    const p = new URL(raw).protocol;
+    return p !== "https:" && p !== "http:" && !FORBIDDEN_REDIRECT_SCHEMES.has(p);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Accepted redirect URIs: https; http on a loopback address (any port, CLI
+ * clients); or a native app's private-use scheme (`cursor://…`,
+ * `vscode://…`, `com.example.app:/cb`). Never javascript:, data:, file:,
+ * vbscript:, about:, blob: and the like, nor plain http to another host.
+ */
 export function isAllowedRedirectUri(raw: string): boolean {
+  if (typeof raw !== "string" || raw.length > 2000) return false;
   let u: URL;
   try {
     u = new URL(raw);
   } catch {
     return false;
   }
-  if (u.hash) return false;
+  if (u.hash || u.username || u.password) return false;
   if (u.protocol === "https:") return true;
   if (u.protocol === "http:") {
     return u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "[::1]";
   }
-  return false;
+  if (FORBIDDEN_REDIRECT_SCHEMES.has(u.protocol)) return false;
+  // Private-use scheme: a plain scheme name, and something after it.
+  return /^[a-z][a-z0-9+.-]*:$/.test(u.protocol) && raw.length > u.protocol.length + 1;
 }
 
 /**
@@ -144,14 +201,81 @@ export interface OAuthClient {
   kind: "dcr" | "cimd";
   client_uri?: string;
   logo_uri?: string;
+  /** DCR: epoch seconds of registration. */
+  registered_at?: number;
+  /** DCR: true once an authorization code was exchanged (then kept 1 year). */
+  authorized?: boolean;
 }
 
 function cleanName(v: unknown, fallback: string): string {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, 100) : fallback;
 }
 
+function parseClientRecord(raw: string | null): OAuthClient | null {
+  if (!raw) return null;
+  try {
+    const c = JSON.parse(raw) as OAuthClient;
+    return c && typeof c === "object" && typeof c.client_id === "string" ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A DCR client that never completed an authorization and is past its 24 h. */
+function isStalePendingClient(c: OAuthClient, nowS: number): boolean {
+  return (
+    c.kind === "dcr" &&
+    c.authorized !== true &&
+    typeof c.registered_at === "number" &&
+    nowS - c.registered_at > PENDING_CLIENT_TTL_S
+  );
+}
+
+/**
+ * Keep the number of registered clients bounded: when the cap is reached,
+ * drop stale or never-authorized clients (oldest first); if every client
+ * was authorized, refuse the new registration.
+ */
+async function makeRoomForClient(): Promise<void> {
+  const kv = getKVStore();
+  const keys = await kvScanAll(kv, "oauth:client:*");
+  if (keys.length < MAX_REGISTERED_CLIENTS) return;
+  const nowS = Math.floor(Date.now() / 1000);
+  const records = await Promise.all(
+    keys.map(async (key) => ({ key, c: parseClientRecord(await kv.get(key)) }))
+  );
+  const live: { key: string; c: OAuthClient }[] = [];
+  for (const r of records) {
+    // Unreadable records and expired pending clients never count.
+    if (!r.c || isStalePendingClient(r.c, nowS)) await kv.delete(r.key);
+    else live.push({ key: r.key, c: r.c });
+  }
+  let excess = live.length - MAX_REGISTERED_CLIENTS + 1;
+  const unused = live
+    .filter(({ c }) => c.authorized !== true)
+    .sort((a, b) => (a.c.registered_at ?? 0) - (b.c.registered_at ?? 0));
+  for (const r of unused) {
+    if (excess <= 0) break;
+    await kv.delete(r.key);
+    excess -= 1;
+  }
+  if (excess > 0) {
+    throw new OAuthError(
+      "temporarily_unavailable",
+      "too many registered clients; revoke unused ones in the dashboard and try again",
+      429
+    );
+  }
+}
+
 /** OAU-04 — Dynamic Client Registration (public clients only). */
 export async function registerClient(meta: Record<string, unknown>): Promise<OAuthClient> {
+  if (Buffer.byteLength(JSON.stringify(meta), "utf8") > MAX_CLIENT_METADATA_BYTES) {
+    throw new OAuthError(
+      "invalid_client_metadata",
+      `client metadata must be at most ${MAX_CLIENT_METADATA_BYTES} bytes`
+    );
+  }
   const uris = meta.redirect_uris;
   if (!Array.isArray(uris) || uris.length === 0 || uris.length > 10) {
     throw new OAuthError("invalid_redirect_uri", "redirect_uris must list 1 to 10 URIs");
@@ -160,7 +284,7 @@ export async function registerClient(meta: Record<string, unknown>): Promise<OAu
     if (typeof u !== "string" || !isAllowedRedirectUri(u)) {
       throw new OAuthError(
         "invalid_redirect_uri",
-        "redirect URIs must be https, or http on a loopback address"
+        "redirect URIs must be https, http on a loopback address, or an app's own scheme"
       );
     }
   }
@@ -176,10 +300,27 @@ export async function registerClient(meta: Record<string, unknown>): Promise<OAu
     client_name: cleanName(meta.client_name, "MCP client"),
     redirect_uris: uris as string[],
     kind: "dcr",
+    registered_at: Math.floor(Date.now() / 1000),
+    authorized: false,
   };
   if (typeof meta.client_uri === "string") client.client_uri = meta.client_uri.slice(0, 300);
-  await getKVStore().set(`oauth:client:${client.client_id}`, JSON.stringify(client), CLIENT_TTL_S);
+  await makeRoomForClient();
+  await getKVStore().set(
+    `oauth:client:${client.client_id}`,
+    JSON.stringify(client),
+    PENDING_CLIENT_TTL_S
+  );
   return client;
+}
+
+/** After a first successful authorization, keep a DCR client for the long TTL. */
+async function markClientAuthorized(clientId: string): Promise<void> {
+  if (isCimdClientId(clientId)) return;
+  const kv = getKVStore();
+  const key = `oauth:client:${clientId}`;
+  const c = parseClientRecord(await kv.get(key));
+  if (!c || c.authorized === true) return;
+  await kv.set(key, JSON.stringify({ ...c, authorized: true }), CLIENT_TTL_S);
 }
 
 function isCimdClientId(clientId: string): boolean {
@@ -261,9 +402,12 @@ export async function getClient(clientId: string): Promise<OAuthClient> {
     throw new OAuthError("invalid_client", "unknown client", 401);
   }
   if (isCimdClientId(clientId)) return resolveCimdClient(clientId);
-  const raw = await getKVStore().get(`oauth:client:${clientId}`);
-  if (!raw) throw new OAuthError("invalid_client", "unknown client", 401);
-  return JSON.parse(raw) as OAuthClient;
+  const c = parseClientRecord(await getKVStore().get(`oauth:client:${clientId}`));
+  // The filesystem KV ignores TTLs: enforce the 24 h of a pending client here.
+  if (!c || isStalePendingClient(c, Math.floor(Date.now() / 1000))) {
+    throw new OAuthError("invalid_client", "unknown client", 401);
+  }
+  return c;
 }
 
 // ── authorization request validation ─────────────────────────────────
@@ -338,17 +482,36 @@ export async function validateAuthorize(
 
 // ── codes and tokens ─────────────────────────────────────────────────
 
+/**
+ * The owner's consent, applied to the client's device when the code is
+ * exchanged (audit 2026-11, A3) — so an abandoned authorization leaves no
+ * device behind, and a re-authorization updates the client's device.
+ */
+export interface PendingDevice {
+  label: string;
+  clientName: string;
+  skillTags: string[] | null;
+  profile: string | null;
+  access: "read" | "memory" | "full";
+}
+
 interface CodeRecord {
   client_id: string;
   redirect_uri: string;
   code_challenge: string;
   resource: string;
   deviceId: string;
+  /** Device settings to apply on exchange; absent = the device already exists. */
+  device?: PendingDevice;
   /** Epoch seconds — enforced in code because the filesystem KV ignores TTLs. */
   exp: number;
 }
 
-export async function issueCode(v: ValidatedAuthorize, deviceId: string): Promise<string> {
+export async function issueCode(
+  v: ValidatedAuthorize,
+  deviceId: string,
+  device?: PendingDevice
+): Promise<string> {
   const code = randomToken(32);
   const rec: CodeRecord = {
     client_id: v.client.client_id,
@@ -356,6 +519,7 @@ export async function issueCode(v: ValidatedAuthorize, deviceId: string): Promis
     code_challenge: v.code_challenge,
     resource: v.resource,
     deviceId,
+    ...(device ? { device } : {}),
     exp: Math.floor(Date.now() / 1000) + CODE_TTL_S,
   };
   await getKVStore().set(`oauth:code:${sha256(code)}`, JSON.stringify(rec), CODE_TTL_S);
@@ -368,6 +532,8 @@ interface TokenRecord {
   familyId: string;
   exp: number;
   used?: boolean;
+  /** Epoch seconds of the rotation (refresh tokens). */
+  usedAt?: number;
 }
 
 export interface TokenResponse {
@@ -430,7 +596,19 @@ export async function exchangeCode(p: {
   if (p.resource && p.resource.replace(/\/$/, "") !== rec.resource) {
     throw new OAuthError("invalid_target", "resource does not match the authorization request");
   }
-  return issueTokens(rec.deviceId, rec.client_id, randomToken(12));
+  let deviceId = rec.deviceId;
+  if (rec.device) {
+    // Loaded lazily: devices.ts pulls the connector registry, which must not
+    // load with the auth pipeline that imports this module.
+    const { applyOAuthConsent } = await import("./devices");
+    deviceId = await applyOAuthConsent({
+      ...rec.device,
+      clientId: rec.client_id,
+      fallbackId: rec.deviceId,
+    });
+  }
+  await markClientAuthorized(rec.client_id);
+  return issueTokens(deviceId, rec.client_id, randomToken(12));
 }
 
 async function familyRevoked(familyId: string): Promise<boolean> {
@@ -453,16 +631,30 @@ export async function refreshTokens(p: {
   if (rec.exp < Math.floor(Date.now() / 1000)) {
     throw new OAuthError("invalid_grant", "refresh token is invalid or expired");
   }
-  if (rec.used || (await familyRevoked(rec.familyId))) {
-    // Reuse of a rotated token: assume theft, revoke the whole family.
+  const now = Math.floor(Date.now() / 1000);
+  if (await familyRevoked(rec.familyId)) {
+    throw new OAuthError("invalid_grant", "refresh token was already used; please sign in again");
+  }
+  if (rec.used) {
+    // A retry right after a rotation (lost response, parallel refresh) is
+    // refused but does not end the session of the client holding the new
+    // tokens.
+    if (typeof rec.usedAt === "number" && now - rec.usedAt <= REFRESH_REUSE_GRACE_S) {
+      throw new OAuthError(
+        "invalid_grant",
+        "refresh token was just rotated; use the refresh token from the latest response"
+      );
+    }
+    // Reuse of a rotated token outside the grace window: assume theft,
+    // revoke the whole family.
     await kv.set(`oauth:family:${rec.familyId}:revoked`, "1", REFRESH_TOKEN_TTL_S);
     throw new OAuthError("invalid_grant", "refresh token was already used; please sign in again");
   }
   if (!(await deviceActive(rec.deviceId))) {
     throw new OAuthError("invalid_grant", "this client was revoked in the dashboard");
   }
-  const remaining = Math.max(1, rec.exp - Math.floor(Date.now() / 1000));
-  await kv.set(key, JSON.stringify({ ...rec, used: true }), remaining);
+  const remaining = Math.max(1, rec.exp - now);
+  await kv.set(key, JSON.stringify({ ...rec, used: true, usedAt: now }), remaining);
   return issueTokens(rec.deviceId, rec.clientId, rec.familyId);
 }
 

@@ -1,6 +1,12 @@
 import { headers } from "next/headers";
-import { OAuthError, readAuthorizeParams, validateAuthorize } from "@/core/oauth";
+import {
+  OAuthError,
+  isCustomSchemeRedirect,
+  readAuthorizeParams,
+  validateAuthorize,
+} from "@/core/oauth";
 import { listProfiles } from "@/core/profiles";
+import { findOAuthDeviceByClientId, type OAuthDeviceSettings } from "@/core/devices";
 import { getConfig } from "@/core/config-facade";
 import { AuthorizeForm } from "./authorize-form";
 
@@ -27,13 +33,23 @@ export default async function AuthorizePage({
   const origin = override ? new URL(override).origin : `${proto}://${host}`;
 
   let error: string | null = null;
-  let client: { name: string; id: string; redirectHost: string; kind: string } | null = null;
+  let client: {
+    name: string;
+    id: string;
+    redirectTarget: string;
+    redirectIsApp: boolean;
+    kind: string;
+  } | null = null;
   try {
     const v = await validateAuthorize(readAuthorizeParams(sp), origin);
+    // Audit 2026-11 (A3): a native app's own scheme (cursor://…) opens an
+    // app on this computer — show the whole target, not just a host.
+    const redirectIsApp = isCustomSchemeRedirect(v.redirect_uri);
     client = {
       name: v.client.client_name,
       id: v.client.client_id,
-      redirectHost: new URL(v.redirect_uri).host,
+      redirectTarget: redirectIsApp ? v.redirect_uri : new URL(v.redirect_uri).host,
+      redirectIsApp,
       kind: v.client.kind,
     };
   } catch (err) {
@@ -41,6 +57,15 @@ export default async function AuthorizePage({
   }
 
   const profiles = client ? (await listProfiles()).map((p) => p.name) : [];
+  // Re-authorization: start from the settings of the client's existing device.
+  let existing: OAuthDeviceSettings | null = null;
+  if (client) {
+    try {
+      existing = await findOAuthDeviceByClientId(client.id);
+    } catch {
+      existing = null;
+    }
+  }
 
   return (
     <main className="min-h-screen bg-bg text-text flex items-center justify-center px-4 py-10">
@@ -60,8 +85,19 @@ export default async function AuthorizePage({
             clientName={client.name}
             clientId={client.id}
             clientKind={client.kind}
-            redirectHost={client.redirectHost}
+            redirectTarget={client.redirectTarget}
+            redirectIsApp={client.redirectIsApp}
             profiles={profiles}
+            existing={
+              existing
+                ? {
+                    label: existing.label,
+                    profile: existing.profile,
+                    skillTags: existing.skillTags,
+                    access: existing.access,
+                  }
+                : null
+            }
           />
         )}
       </div>

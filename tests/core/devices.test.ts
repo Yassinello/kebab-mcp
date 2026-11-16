@@ -86,6 +86,10 @@ import {
   revokeOAuthDevice,
   setDeviceWriteAllowed,
   getDeviceWriteAllowedFrom,
+  getDeviceAccessLevelFrom,
+  setDeviceAccessLevel,
+  findOAuthDeviceByClientId,
+  applyOAuthConsent,
 } from "@/core/devices";
 import { tokenId } from "@/core/auth";
 import { createHash } from "node:crypto";
@@ -544,7 +548,7 @@ describe("OAuth devices (Kebab House OAU-08, TRU-05)", () => {
       connectors: null,
       skillTags: ["perso"],
       profile: "perso",
-      writeAllowed: false,
+      access: "read",
     });
     const rows = await listDevices();
     expect(rows).toHaveLength(2);
@@ -566,5 +570,110 @@ describe("OAuth devices (Kebab House OAU-08, TRU-05)", () => {
     await revokeOAuthDevice("0a1b2c3d");
     expect(await isOAuthDevice("0a1b2c3d")).toBe(false);
     expect(await listDevices()).toHaveLength(1);
+  });
+});
+
+describe("access levels (audit 2026-11, contract 1)", () => {
+  const kv = { get: async (k: string) => store.get(k) ?? null };
+  const put = (id: string, entry: Record<string, unknown>) =>
+    store.set(`devices:${id}`, JSON.stringify({ label: "x", createdAt: "t", ...entry }));
+
+  it("derives the level from legacy entries (back-compat)", async () => {
+    // No entry (static token never labelled, bootstrap token) → full.
+    expect(await getDeviceAccessLevelFrom("00000001", kv)).toBe("full");
+    // Static token entry without oauth marker → full.
+    put("00000002", {});
+    expect(await getDeviceAccessLevelFrom("00000002", kv)).toBe("full");
+    // Legacy OAuth: writeAllowed true → full, false/absent → read.
+    put("00000003", { oauth: { clientId: "a", clientName: "a" }, writeAllowed: true });
+    put("00000004", { oauth: { clientId: "b", clientName: "b" }, writeAllowed: false });
+    put("00000005", { oauth: { clientId: "c", clientName: "c" } });
+    expect(await getDeviceAccessLevelFrom("00000003", kv)).toBe("full");
+    expect(await getDeviceAccessLevelFrom("00000004", kv)).toBe("read");
+    expect(await getDeviceAccessLevelFrom("00000005", kv)).toBe("read");
+    // Explicit level wins; an invalid one, a corrupt or revoked entry fail closed.
+    put("00000006", { oauth: { clientId: "d", clientName: "d" }, access: "memory" });
+    put("00000007", { access: "admin" });
+    put("00000008", { revokedAt: "now" });
+    store.set("devices:00000009", "{not json");
+    expect(await getDeviceAccessLevelFrom("00000006", kv)).toBe("memory");
+    expect(await getDeviceAccessLevelFrom("00000007", kv)).toBe("read");
+    expect(await getDeviceAccessLevelFrom("00000008", kv)).toBe("read");
+    expect(await getDeviceAccessLevelFrom("00000009", kv)).toBe("read");
+    // writeAllowed is derived: true only for full.
+    expect(await getDeviceWriteAllowedFrom("00000006", kv)).toBe(false);
+  });
+
+  it("lets the owner set the level of any device, keeping the other fields", async () => {
+    envVars.MCP_AUTH_TOKEN = TOKEN_A;
+    const id = tokenId(TOKEN_A);
+    await setDeviceConnectors(id, []);
+    await setDeviceAccessLevel(id, "memory");
+    expect(await getDeviceAccessLevelFrom(id, kv)).toBe("memory");
+    expect(await getDeviceConnectors(id)).toEqual([]);
+    const [row] = await listDevices();
+    expect(row).toMatchObject({ tokenId: id, access: "memory", writeAllowed: false });
+    await expect(setDeviceAccessLevel(id, "root" as never)).rejects.toThrow();
+    // A lowered level survives a rename and a rotation.
+    await setDeviceLabel(id, "laptop");
+    expect(await getDeviceAccessLevelFrom(id, kv)).toBe("memory");
+    const { newTokenId } = await rotateDeviceToken(id);
+    expect(await getDeviceAccessLevelFrom(newTokenId, kv)).toBe("memory");
+  });
+
+  it("keeps writeAllowed in sync on OAuth devices (set-write-allowed back-compat)", async () => {
+    put("0a0a0a0a", { oauth: { clientId: "kc_1", clientName: "c" }, access: "memory" });
+    await setDeviceWriteAllowed("0a0a0a0a", true);
+    expect(JSON.parse(store.get("devices:0a0a0a0a")!)).toMatchObject({
+      access: "full",
+      writeAllowed: true,
+    });
+    await setDeviceAccessLevel("0a0a0a0a", "memory");
+    expect(JSON.parse(store.get("devices:0a0a0a0a")!)).toMatchObject({
+      access: "memory",
+      writeAllowed: false,
+    });
+  });
+});
+
+describe("OAuth re-authorization reuses the client's device (audit 2026-11, A3)", () => {
+  const consent = {
+    label: "Cursor",
+    clientId: "kc_cursor",
+    clientName: "Cursor",
+    skillTags: null,
+    profile: null,
+    access: "memory" as const,
+  };
+
+  it("creates the device on first consent, then updates the same one", async () => {
+    const id = await applyOAuthConsent({ ...consent, fallbackId: "1a2b3c4d" });
+    expect(id).toBe("1a2b3c4d");
+    // The owner narrows its connectors in the dashboard.
+    await setDeviceConnectors(id, []);
+    const again = await applyOAuthConsent({
+      ...consent,
+      fallbackId: "99999999",
+      label: "Cursor work",
+      access: "full",
+    });
+    expect(again).toBe(id);
+    expect(store.has("devices:99999999")).toBe(false);
+    expect(await findOAuthDeviceByClientId("kc_cursor")).toMatchObject({
+      id,
+      label: "Cursor work",
+      access: "full",
+      connectors: [],
+    });
+    expect([...store.keys()].filter((k) => k.startsWith("devices:"))).toHaveLength(1);
+  });
+
+  it("ignores revoked devices and never overwrites a tombstone", async () => {
+    const id = await applyOAuthConsent({ ...consent, fallbackId: "1a2b3c4d" });
+    await revokeOAuthDevice(id);
+    expect(await findOAuthDeviceByClientId("kc_cursor")).toBeNull();
+    const fresh = await applyOAuthConsent({ ...consent, fallbackId: id });
+    expect(fresh).not.toBe(id);
+    expect(JSON.parse(store.get(`devices:${id}`)!).revokedAt).toBeTruthy();
   });
 });
