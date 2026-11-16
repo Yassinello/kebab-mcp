@@ -213,6 +213,28 @@ export class FakeGitHub {
       if (!entry) return json({ message: "Not Found" }, 404);
       return json({ encoding: "base64", content: repo.blobs.get(entry.sha)!.toString("base64") });
     }
+    if (method === "GET" && rest === "/commits") {
+      // First-parent history, newest first, paginated like GitHub.
+      const refName = url.searchParams.get("sha") ?? repo.meta.default_branch;
+      const start = repo.commits.has(refName) ? refName : repo.refs.get(`heads/${refName}`);
+      if (!start) return json({ message: "Not Found" }, 404);
+      const perPage = Number(url.searchParams.get("per_page") ?? 30);
+      const page = Number(url.searchParams.get("page") ?? 1);
+      const shas: string[] = [];
+      for (let cur: string | undefined = start; cur; cur = repo.commits.get(cur)?.parents[0]) {
+        shas.push(cur);
+      }
+      return json(
+        shas.slice((page - 1) * perPage, page * perPage).map((sha) => {
+          const c = repo.commits.get(sha)!;
+          return {
+            sha,
+            commit: { message: c.message, tree: { sha: c.tree } },
+            parents: c.parents.map((p) => ({ sha: p })),
+          };
+        })
+      );
+    }
     if (method === "GET" && rest === "/releases/latest") {
       if (!repo.latestRelease) return json({ message: "Not Found" }, 404);
       return json({
@@ -296,6 +318,14 @@ export class FakeGitHub {
     const ca = repo.commits.get(a);
     const cb = repo.commits.get(b);
     if (!ca || !cb) return json({ message: "Not Found" }, 404);
+    const status =
+      a === b
+        ? "identical"
+        : this.isAncestor(repo, a, b)
+          ? "ahead"
+          : this.isAncestor(repo, b, a)
+            ? "behind"
+            : "diverged";
     // Commits reachable from b, stopping at a (linear histories in tests).
     const commits: string[] = [];
     let cur: string | undefined = b;
@@ -323,11 +353,12 @@ export class FakeGitHub {
     for (const [p, e] of tb) {
       if (ta.has(p) && ta.get(p)!.sha !== e.sha) files.push({ filename: p, status: "modified" });
     }
+    const listed = status === "ahead" || status === "diverged" ? commits : [];
     return json({
-      status: "ahead",
-      total_commits: commits.length,
+      status,
+      total_commits: listed.length,
       html_url: `https://github.com/${repoName}/compare/${a}...${b}`,
-      commits: commits.map((sha) => ({
+      commits: listed.map((sha) => ({
         sha,
         html_url: `https://github.com/${repoName}/commit/${sha}`,
         commit: { message: repo.commits.get(sha)!.message },

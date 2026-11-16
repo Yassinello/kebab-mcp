@@ -4,9 +4,15 @@
 </p>
 
 <p align="center">
-  <a href="https://kebab-mcp.vercel.app/deploy"><strong>🚀 Deploy your Kebab</strong></a>
+  <a href="https://kebab-mcp.vercel.app/deploy"><strong>🚀 Deploy Kebab House</strong></a>
   &middot;
-  <a href="https://mymcp-home.vercel.app"><strong>Live demo →</strong></a>
+  <a href="https://kebab-mcp.vercel.app"><strong>Website →</strong></a>
+</p>
+
+<p align="center">
+  Your skills, profile and memory in every AI client.<br />
+  For people who use more than one AI client — say Claude, Cursor and ChatGPT.<br />
+  You need a GitHub account and a free Vercel account: about 10 minutes, no code. Free and open source.
 </p>
 
 <p align="center">
@@ -44,21 +50,21 @@
    │                The AI clients you already use                      │
    │      Claude  ·  Claude Code  ·  Cursor  ·  Codex  ·  ChatGPT       │
    └─────────────────────────────┬──────────────────────────────────────┘
-                                 │  one MCP endpoint, one token per client
+                                 │  one MCP endpoint: sign-in or a device token
                                  ▼
    ┌────────────────────────────────────────────────────────────────────┐
    │               Kebab House  (your Vercel deploy)                    │
    │                                                                    │
    │   Skills library  ·  personal profile  ·  memory vault  ·  tools   │
    │                                                                    │
-   │   Dashboard at /config: write and import Skills, scope each        │
-   │   client token to a "hat", enable connectors, watch live logs.     │
+   │   Dashboard at /config: edit your profile, skills and notes,       │
+   │   connect clients, choose what each may do, see what they did.     │
    └─────────────────────────────┬──────────────────────────────────────┘
                                  │  your tokens, never ours
                                  ▼
    ┌────────────────────────────────────────────────────────────────────┐
    │   GitHub vault (Obsidian) · LinkedIn · WhatsApp · Browser          │
-   │   Google Workspace · Slack · Notion · Linear · Airtable · …        │
+   │   Paywalled articles · Apify · webhooks · any HTTP API · …         │
    └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -68,27 +74,29 @@
 
 **Why it exists.** Skills are siloed per client. A skill you write in Claude doesn't exist in Cursor or Codex, and there is no API to sync them. Kebab House is the one place you keep them, and every client reads from it.
 
-**Who it's not for.** If you use a single AI client and its native skills and memory are enough, you don't need this. Kebab House earns its keep when you use two or more AI clients and want them to share the same skills and context.
+**Who it's for.** People who use two or more AI clients and want them to share the same skills and context. If you use a single AI client and its native skills and memory are enough, you don't need this.
+
+**What you need.** A GitHub account and a free Vercel account; about 10 minutes, no code. The one-click deploy also creates a free Upstash database. It runs on your Vercel and Upstash free plans.
 
 ---
 
 <p align="center">
   <img src="public/screenshots/dashboard.png" alt="Kebab House dashboard" width="720" />
 </p>
-<p align="center"><em>The dashboard — skills, connectors, tools, devices, logs, settings.</em></p>
+<p align="center"><em>The dashboard — overview, profile, skills, memory, connectors, devices, logs.</em></p>
 
 ## Which AI clients?
 
-An honest matrix. **Full** means the client connects to your endpoint with a token and can use everything: skills, profile, vault and write actions.
+An honest matrix. **Full** means the client connects to your endpoint and can use everything: skills, profile, notes and write actions. Claude, ChatGPT, Cursor and Claude Code **sign in** (OAuth): you paste the URL, approve on your instance and choose the client's access level. Other clients use a **device token** (*Devices → Add device*).
 
 | Client                       | Support    | How it connects                                                      | How it gets your skills                                      |
 | ---------------------------- | ---------- | -------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Claude** (web and desktop) | Full       | *Settings → Connectors → Add custom connector*, URL with your token  | On demand over MCP, plus an optional *relay skill* upload    |
-| **Claude Code**              | Full       | `claude mcp add --transport http …`                                  | On demand over MCP, or a native copy into `~/.claude/skills` |
-| **Cursor**                   | Full       | `~/.cursor/mcp.json`                                                 | On demand over MCP                                           |
-| **Codex**                    | Full       | `~/.codex/config.toml`                                               | On demand over MCP, or a native copy into `~/.codex/skills`  |
-| **ChatGPT**                  | Partial    | Custom MCP connector, ChatGPT on the web only                        | On demand over MCP, plus an optional *relay skill* upload    |
-| Windsurf, VS Code, n8n, …    | Compatible | Any client that speaks MCP Streamable HTTP (not tested on every release) | On demand over MCP                                       |
+| **Claude** (web and desktop) | Full       | *Settings → Connectors → Add custom connector*, URL only, then sign in | On demand over MCP, plus an optional *relay skill* upload    |
+| **Claude Code**              | Full       | `claude mcp add --transport http …`, sign in on first use            | On demand over MCP, or a native copy into `~/.claude/skills` |
+| **Cursor**                   | Full       | `~/.cursor/mcp.json` with the URL, sign in                           | On demand over MCP                                           |
+| **Codex**                    | Full       | `~/.codex/config.toml` with a device token                           | On demand over MCP, or a native copy into `~/.codex/skills`  |
+| **ChatGPT**                  | Partial    | Custom MCP connector, ChatGPT on the web only, sign in               | On demand over MCP, plus an optional *relay skill* upload    |
+| Windsurf, VS Code, n8n, …    | Compatible | Any client that speaks MCP Streamable HTTP: sign-in or device token (not tested on every release) | On demand over MCP |
 
 **Why ChatGPT is partial.** Custom MCP connectors only work in ChatGPT on the web, not in the desktop or mobile apps, and write actions through a custom connector are limited to Business and Enterprise plans. On other plans, expect read-only use (list and load skills, read your profile and vault).
 
@@ -124,15 +132,17 @@ Long-term memory that every client can read and write: search, read, write, appe
 
 ### 🧰 Long-tail tools
 
-The things native connectors don't cover, or cover in only one client: **LinkedIn and WhatsApp** (read and send through Unipile, LinkedIn reads through Apify), **browser automation** (Browserbase + Stagehand) and paywalled-article reading. Also on the skewer: Google Workspace, Slack, Notion, GitHub Issues, Linear, Airtable, Composio (1000+ apps via the bridge) and inbound webhooks. Each connector turns on when its credentials are present.
+The things native connectors don't cover, or cover in only one client: **LinkedIn and WhatsApp** (read and send through Unipile, LinkedIn reads through Apify), **browser automation** (Browserbase + Stagehand) and paywalled-article reading. Also available: Google Workspace, Slack, Notion, GitHub Issues, Linear, Airtable, Composio (1000+ apps via the bridge) and inbound webhooks — but when your AI client has its own connector for one of these, use that. Each connector turns on when its credentials are present.
 
 **Bring your own sauce:** *API Connections* turns any HTTP API into an MCP tool (a URL, a method and a schema, no code), and *Custom Tools* compose existing tools into new ones.
 
 ### 📊 Dashboard
 
-`/config` covers skills, connector status, per-tool toggles, per-client tokens and their scopes, live logs, deep health checks, OAuth flows, a tool playground and one-click upstream updates. The welcome wizard handles first-run token minting and credential collection.
+`/config` is the hub's home: **Overview, Profile, Skills, Memory, Connectors, Devices, Logs**. Under *Advanced*: Tools (per-tool toggles), Playground, Health, Storage, Documentation and Settings (including export / import and one-click updates). The welcome wizard mints your admin key on first run.
 
 ### 🔒 Security and ownership
+
+**Guardrails.** Content from outside (web pages, e-mails, messages, scraped data) reaches the model labelled as data, not instructions. Messages sent through Kebab House (e-mail via Gmail, Slack, Google Chat, LinkedIn, WhatsApp) wait for your approval on a signed page outside the chat. A client that signs in picks an access level: read only, read + my profile and notes, or everything. Every tool call is counted per client each week, and recent calls are kept with duration and status. Details: [docs/SECURITY.md](docs/SECURITY.md).
 
 Self-hosted by design: your credentials live in your own Upstash KV, with no telemetry and no server of ours in the loop. Timing-safe token comparison, multi-tenant auth, per-token rate limits, SSRF protection on browser tools, HMAC validation on webhooks, env-only configuration (no config files, `git pull` never conflicts), HttpOnly OAuth cookies with PKCE.
 
@@ -201,7 +211,8 @@ Updates: add a GitHub token with *Contents: read & write* on your new repo as `K
 ```bash
 git clone https://github.com/Yassinello/kebab-mcp.git
 cd kebab-mcp
-cp .env.example .env    # Fill MCP_AUTH_TOKEN at minimum
+cp .env.example .env    # Fill MCP_AUTH_TOKEN and ADMIN_AUTH_TOKEN at minimum
+                        # (generate each with: openssl rand -hex 32)
 
 # Docker
 docker compose up
@@ -210,7 +221,9 @@ docker compose up
 npm install && npm run dev
 ```
 
-Dashboard at `http://localhost:3000/config?token=<your-token>`, MCP endpoint at `http://localhost:3000/api/mcp`.
+Docker runs in production mode, where the dashboard refuses the MCP token: set `ADMIN_AUTH_TOKEN` to a second value (your admin key), or set `KEBAB_ADMIN_TOKEN_FALLBACK=1` to reuse `MCP_AUTH_TOKEN` for the dashboard. Without either, `/config` answers "Admin auth misconfigured".
+
+Dashboard at `http://localhost:3000/config?token=<your-admin-key>`, MCP endpoint at `http://localhost:3000/api/mcp`.
 
 See [`.env.example`](.env.example) for every env var. Connectors auto-activate when their credentials are present — no toggling needed.
 
@@ -229,43 +242,32 @@ You can also ask Claude in a Claude Code conversation: *"Run `npx @yassinello/cr
 
 ### Connect your AI client
 
-The dashboard (`/config → Settings`, and the last welcome step) generates these snippets with your URL and token filled in. One token per client lets you scope each one to its own hat from `/config → Devices`.
+**Sign-in first.** Claude, ChatGPT, Cursor and Claude Code connect with OAuth: give them the URL only (`https://your-app.vercel.app/api/mcp`). They open your instance's consent page, where you sign in with your admin key and choose the access level: *read only*, *read + my profile and notes* (recommended) or *everything*. The client then appears in *Devices*, where you can bind a profile or revoke it.
+
+**Device token for the others.** Codex, Windsurf, n8n and any client without sign-in get their own token: *Devices → Add device*. Never paste your admin key into an AI client: it opens your dashboard. Details: [docs/CLIENTS.md](docs/CLIENTS.md).
+
+The dashboard (the last welcome step and *Devices*) generates these snippets with your URL filled in.
 
 <details>
 <summary><strong>Claude, Claude Code, Cursor, Codex, ChatGPT, Windsurf — config snippets</strong></summary>
 
-**Claude (claude.ai and Claude Desktop)** — *Settings → Connectors → Add custom connector*. Name it `Kebab House` and paste `https://your-app.vercel.app/api/mcp?token=YOUR_MCP_AUTH_TOKEN` as the remote MCP server URL. Leave the OAuth fields empty.
+**Claude (claude.ai and Claude Desktop)** — *Settings → Connectors → Add custom connector*. Name it `Kebab House` and paste `https://your-app.vercel.app/api/mcp` as the remote MCP server URL. Leave the advanced OAuth Client ID and Secret empty: Claude registers itself and opens your sign-in page.
 
-**Claude Desktop (config file)** — `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+**Claude Code** — `claude mcp add --transport http kebab-house https://your-app.vercel.app/api/mcp`. Claude Code opens the sign-in page the first time it connects (or run `/mcp` to authenticate).
 
-```json
-{
-  "mcpServers": {
-    "kebab": {
-      "url": "https://your-app.vercel.app/api/mcp",
-      "headers": { "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN" }
-    }
-  }
-}
-```
-
-**Claude Code** — run `claude mcp add --transport http kebab-mcp https://your-app.vercel.app/api/mcp --header "Authorization: Bearer YOUR_MCP_AUTH_TOKEN"`, or edit `~/.claude.json` (global) or `.mcp.json` (per-project):
+**Cursor** — `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project), or the dashboard's *Add to Cursor* button. Cursor opens the sign-in page:
 
 ```json
 {
   "mcpServers": {
-    "kebab": {
-      "type": "http",
-      "url": "https://your-app.vercel.app/api/mcp",
-      "headers": { "Authorization": "Bearer YOUR_MCP_AUTH_TOKEN" }
-    }
+    "kebab": { "url": "https://your-app.vercel.app/api/mcp" }
   }
 }
 ```
 
-**Cursor** — `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project): same shape as Claude Desktop.
+**ChatGPT (web)** — add a custom MCP connector (developer mode) with `https://your-app.vercel.app/api/mcp` and OAuth authentication. See [Which AI clients?](#which-ai-clients) for the plan limits.
 
-**Codex** — `~/.codex/config.toml`, with the token in an environment variable:
+**Codex** — create a device token (*Devices → Add device*), put it in an environment variable, then in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.kebab]
@@ -273,11 +275,22 @@ url = "https://your-app.vercel.app/api/mcp"
 bearer_token_env_var = "KEBAB_TOKEN"
 ```
 
-**ChatGPT (web)** — add a custom MCP connector (developer mode) with `https://your-app.vercel.app/api/mcp?token=YOUR_MCP_AUTH_TOKEN` and no authentication. See [Which AI clients?](#which-ai-clients) for the plan limits.
+**Fallback: a device token instead of sign-in** — for a client that cannot sign in (or a Claude Desktop config file), use a device token from *Devices → Add device*:
 
-**Windsurf** — `~/.codeium/windsurf/mcp_config.json`: same shape as Claude Desktop, but the URL field is named `serverUrl`.
+```json
+{
+  "mcpServers": {
+    "kebab": {
+      "url": "https://your-app.vercel.app/api/mcp",
+      "headers": { "Authorization": "Bearer YOUR_DEVICE_TOKEN" }
+    }
+  }
+}
+```
 
-**Other MCP clients** — POST to `https://your-app.vercel.app/api/mcp` with `Authorization: Bearer YOUR_MCP_AUTH_TOKEN`, or use the `?token=` URL when the client can't set headers.
+**Windsurf** — `~/.codeium/windsurf/mcp_config.json`: same shape as the fallback above, but the URL field is named `serverUrl`.
+
+**Other MCP clients** — POST to `https://your-app.vercel.app/api/mcp` with `Authorization: Bearer YOUR_DEVICE_TOKEN`, or use `?token=YOUR_DEVICE_TOKEN` in the URL when the client can't set headers.
 
 </details>
 
@@ -290,7 +303,7 @@ All configuration is via environment variables. Full reference: [`.env.example`]
 | Variable           | Required | Description                                                      |
 | ------------------ | -------- | ---------------------------------------------------------------- |
 | `MCP_AUTH_TOKEN`   | Yes      | Bearer token(s) for MCP endpoint — supports comma-separated list |
-| `ADMIN_AUTH_TOKEN` | No       | Separate token for dashboard (falls back to `MCP_AUTH_TOKEN`)    |
+| `ADMIN_AUTH_TOKEN` | Yes in production (Docker) when `MCP_AUTH_TOKEN` is set | Your admin key: opens the dashboard. Falls back to `MCP_AUTH_TOKEN` only with `KEBAB_ADMIN_TOKEN_FALLBACK=1` |
 
 `MCP_AUTH_TOKEN` accepts a comma-separated list of tokens, one per MCP client. Each token must be ≥ 16 characters. An 8-character SHA-256 hash prefix is stored with every log entry so you can identify which client made each call — without logging the token itself.
 

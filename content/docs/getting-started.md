@@ -1,23 +1,24 @@
 ---
 title: Getting started
-summary: Deploy your personal MCP server in 5 minutes
+summary: Deploy your Kebab House in about 10 minutes
 order: 10
 ---
 
-## What Kebab MCP gives you
+## What Kebab House gives you
 
-A single Vercel deploy that exposes 97+ tools across 19 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation, Unipile LinkedIn writes, and bring-your-own HTTP APIs) behind one MCP endpoint. Plus user-defined Skills and Custom Tools that compose existing tools into new ones — no code, no deploy. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
+One deploy on your own Vercel account gives every AI client you use the same profile, the same skills and the same memory, behind one MCP endpoint. On top: the tools your clients don't ship (LinkedIn, WhatsApp, a real browser, paywalled articles, any HTTP API as a tool), and guardrails that keep outgoing messages and write access under your control.
 
-## Five-minute deploy
+You need a GitHub account and a free Vercel account; about 10 minutes, no code.
+
+## Deploy
 
 The recommended path is the **Deploy with Vercel** button on [/deploy](https://kebab-mcp.vercel.app/deploy).
 
 1. **Deploy with Vercel.** One click creates a copy of the repo in your GitHub account, a Vercel project and a free Upstash Redis database, then deploys. No env vars required.
 2. When the build is done, open the new Vercel URL. You'll land on `/welcome` (Upstash is already attached, so the storage step is skipped).
-3. Click **Initialize this instance.** Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to Upstash KV, and the dashboard becomes live.
-4. Copy the install snippet for your client — the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other — and paste it into your client config.
-
-That's it. Your AI assistant now has tools.
+3. Click **Initialize this instance.** Kebab House mints your **admin key** (stored as `MCP_AUTH_TOKEN` in your database). It opens this dashboard — keep it somewhere safe, and do not paste it into AI clients.
+4. Connect your clients. Claude, ChatGPT, Cursor and Claude Code: add the instance URL and sign in, then pick the access level (*read + my profile and notes* is the recommended one). Other clients: **Devices → Add device** gives each one its own device token.
+5. In your AI client, say **“Set up my Kebab House”**: a short interview writes your profile and installs the rituals you pick.
 
 > **Prefer a real fork?** Fork [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) on GitHub, import the fork at [vercel.com/new](https://vercel.com/new), then attach *Upstash for Redis* from the project's *Storage* tab. Both paths get one-click updates (below).
 
@@ -29,12 +30,12 @@ If you set up storage credentials directly in Vercel env vars instead, they take
 
 ## Configuring updates (Vercel)
 
-If you deployed on Vercel, you can pull upstream Kebab MCP (`Yassinello/kebab-mcp`) releases directly from the dashboard — no terminal required.
+If you deployed on Vercel, you can pull upstream Kebab House (`Yassinello/kebab-mcp`) releases directly from the dashboard — no terminal required.
 
 **One-time setup:**
 
 1. Generate a GitHub Personal Access Token. Fine-grained PATs need *Contents: read/write* on the repo your instance deploys from. Classic PATs: `public_repo` for a public repo, `repo` for a private one.
-2. Open `/config → Settings → Advanced → Updates`.
+2. Open `/config → Advanced → Settings → Advanced → Updates`.
 3. Paste the PAT, click **Save token**, then **Test connection**.
 
 **How it works after setup:**
@@ -58,8 +59,10 @@ git clone https://github.com/Yassinello/kebab-mcp
 cd kebab-mcp
 npm install
 cp .env.example .env.local
-# fill in MCP_AUTH_TOKEN at minimum
+# fill in MCP_AUTH_TOKEN at minimum (generate one: openssl rand -hex 32)
 npm run dev
 ```
 
 The dashboard is at `http://localhost:3000/config?token=<your-token>` and the MCP endpoint at `http://localhost:3000/api/mcp`.
+
+**Docker** runs in production mode, where the dashboard refuses the MCP token: also set `ADMIN_AUTH_TOKEN` (a second `openssl rand -hex 32` value, your admin key), or `KEBAB_ADMIN_TOKEN_FALLBACK=1` to reuse `MCP_AUTH_TOKEN` for the dashboard.

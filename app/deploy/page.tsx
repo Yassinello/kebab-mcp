@@ -6,6 +6,7 @@ import {
   GITHUB_FORK_URL,
   VERCEL_IMPORT_URL,
   VERCEL_DEPLOY_BUTTON_URL,
+  SHOWCASE_URL,
 } from "../landing/deploy-url";
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default function DeployPage() {
           <AfterDeployment />
         </div>
       </main>
-      <LandingFooter />
+      <LandingFooter landingUrl={`${SHOWCASE_URL}/`} />
     </div>
   );
 }
