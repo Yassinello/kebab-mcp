@@ -369,6 +369,33 @@ describe("PRO-02 — 2026-07-28 client (server/discover, per-request envelope)",
     expect(result._meta?.["io.modelcontextprotocol/serverInfo"]?.name).toBe("Kebab House");
   });
 
+  it("subscriptions/listen is acknowledged and closed at once (no stream held to the 90 s limit)", async () => {
+    const t0 = Date.now();
+    const res = await modern(40, "subscriptions/listen", {
+      notifications: {
+        toolsListChanged: true,
+        promptsListChanged: true,
+        resourcesListChanged: true,
+      },
+    });
+    const body = await Promise.race([
+      res.text(),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("listen stream still open after 3 s")), 3000)
+      ),
+    ]);
+    expect(Date.now() - t0).toBeLessThan(3000);
+    expect(body).toContain("notifications/subscriptions/acknowledged");
+  });
+
+  it("advertises no listChanged capability (nothing is pushed across serverless instances)", async () => {
+    const msg = await readRpc(await modern(41, "server/discover"));
+    const caps = (msg.result as { capabilities: Record<string, { listChanged?: boolean }> })
+      .capabilities;
+    expect(caps.tools?.listChanged).toBe(false);
+    expect(caps.prompts?.listChanged).toBe(false);
+  });
+
   it("tools/list carries titles + TRU-01 annotations", async () => {
     const msg = await readRpc(await modern(2, "tools/list"));
     expect(msg.error).toBeUndefined();
