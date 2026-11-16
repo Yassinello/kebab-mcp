@@ -13,7 +13,7 @@ There are two places those env vars can live:
 - **Vercel project env vars** (or `.env.local` for local dev) — frozen at the deploy boundary, take precedence on conflict.
 - **Upstash KV** (via the dashboard "Save" button) — persists instantly across cold starts, no redeploy. This is the default for credentials saved through `/config → Connectors`.
 
-The dashboard always reflects the merged view: a connector configured via either path shows as **Active**. If you save in the dashboard but the badge doesn't flip, check **Settings → Storage** — if you're in `Filesystem (temporary)` mode, the credential vanishes on the next cold start. The fix is to provision Upstash (Vercel Marketplace one-clicks the integration).
+The dashboard always reflects the merged view: a connector configured via either path shows as **Active**. If you save in the dashboard but the badge doesn't flip, check **Advanced → Storage** — if you're in `Filesystem (temporary)` mode, the credential vanishes on the next cold start. The fix is to provision Upstash (Vercel Marketplace one-clicks the integration).
 
 ## Google Workspace
 

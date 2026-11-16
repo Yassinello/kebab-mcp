@@ -12,7 +12,7 @@ Fix: add the [Upstash integration](https://vercel.com/integrations/upstash) (fre
 
 ## Storage badge shows "KV unreachable ✗"
 
-The runtime sees `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` but the ping check failed. Kebab MCP refuses to save in this state by design — silent fallback to `/tmp` would re-introduce the disappearing-data bug. Common causes:
+The runtime sees `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` but the ping check failed. Kebab House refuses to save in this state by design — silent fallback to `/tmp` would re-introduce the disappearing-data bug. Common causes:
 
 - Upstash database paused (free tier auto-pauses after long idle — open the [Upstash console](https://console.upstash.com) and resume)
 - Token rotated in Upstash but not pushed to Vercel
@@ -34,8 +34,12 @@ Pick option 1 unless you're explicitly building a static showcase. See the [Stor
 
 Cause: the request didn't carry a valid token. Fix:
 
-- Browser dashboard: visit `/config?token=YOUR_MCP_AUTH_TOKEN` once. Kebab MCP sets a cookie and you can navigate normally afterward.
-- MCP client: confirm the client is sending `Authorization: Bearer <token>` (or `?token=` for clients that only accept URLs).
+- Browser dashboard: visit `/config?token=YOUR_ADMIN_KEY` once. Kebab House sets a cookie and you can navigate normally afterward.
+- MCP client: sign in again from the client (Claude, ChatGPT, Cursor, Claude Code), or check that it sends its device token as `Authorization: Bearer <token>` (or `?token=` for clients that only accept URLs). A revoked device stops working at once.
+
+## "Admin auth misconfigured" on /config (Docker)
+
+Cause: Docker runs in production mode, where `MCP_AUTH_TOKEN` alone does not open the dashboard. Fix: set `ADMIN_AUTH_TOKEN` to a second value (`openssl rand -hex 32`) and use it to sign in, or set `KEBAB_ADMIN_TOKEN_FALLBACK=1` to reuse `MCP_AUTH_TOKEN`. Restart the container.
 
 ## Welcome page reappears every time I deploy
 
@@ -55,7 +59,7 @@ Open the **error details** panel under the failed test. Common causes:
 
 ## Browserbase / Stagehand timeouts
 
-Cause: complex pages exceed the 60s Vercel function timeout. Fix: bump `BROWSER_TIMEOUT_MS` in env vars to 50000 max (Vercel hard cap), or run Kebab MCP in Docker / a VPS where you control the timeout.
+Cause: complex pages exceed the 60s Vercel function timeout. Fix: bump `BROWSER_TIMEOUT_MS` in env vars to 50000 max (Vercel hard cap), or run Kebab House in Docker / a VPS where you control the timeout.
 
 ## Tool calls succeed but return empty content
 
@@ -83,7 +87,7 @@ Same v0.1.16 release: the post-save reload was a hard `window.location.reload()`
 
 [github.com/Yassinello/kebab-mcp/issues](https://github.com/Yassinello/kebab-mcp/issues). Include:
 
-- Kebab MCP version (visible in the sidebar footer)
+- Kebab House version (visible in the sidebar footer)
 - Connector affected
 - Steps to reproduce
 - The error from `/config → Logs` if applicable

@@ -5,7 +5,10 @@
 # docs/examples/docker-compose.multi.yml.
 #
 # Boot:
-#   cp .env.example .env   # fill in MCP_AUTH_TOKEN at minimum
+#   cp .env.example .env   # fill in MCP_AUTH_TOKEN and ADMIN_AUTH_TOKEN at minimum
+#                          # (each: openssl rand -hex 32), or set
+#                          # KEBAB_ADMIN_TOKEN_FALLBACK=1 to reuse MCP_AUTH_TOKEN
+#                          # for the dashboard
 #   docker compose up -d
 #
 # Verify:

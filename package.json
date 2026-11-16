@@ -1,7 +1,7 @@
 {
   "name": "kebab-mcp",
   "version": "0.1.16",
-  "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes. (formerly MyMCP)",
+  "description": "Kebab House — your skills, profile and memory in every AI client. A self-hosted personal AI hub (MCP server) for people who use more than one AI client.",
   "keywords": [
     "mcp",
     "model-context-protocol",

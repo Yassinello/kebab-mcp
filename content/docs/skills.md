@@ -22,7 +22,7 @@ Skills also appear as MCP prompts (slash commands in Claude Desktop / Claude Cod
 
 ## Templates (rituals)
 
-`/config → Skills → Templates` offers ready-made rituals: `remember`, `morning-brief`, `meeting-prep`, `weekly-review`, `read-later`. **Install** copies one into your library (tag `rituals`) through the regular import, so it is versioned and yours to edit. Installing again updates it in place (new version, never a duplicate) and keeps your display name and extra tags. They read your profile (`my_context`), use your notes when the vault is connected, use a calendar or email tool when the client has one, and skip what is not available. The sources live in `content/skill-templates/<name>/SKILL.md`; after editing one, run `npm run gen:skill-templates`.
+`/config → Skills → Templates` offers ready-made rituals: `remember`, `morning-brief`, `meeting-prep`, `weekly-review`, `read-later`, `handoff`. **Install** copies one into your library (tag `rituals`) through the regular import, so it is versioned and yours to edit. Installing again updates it in place (new version, never a duplicate) and keeps your display name and extra tags. They read your profile (`my_context`), use your notes when the vault is connected, use a calendar or email tool when the client has one, and skip what is not available. The sources live in `content/skill-templates/<name>/SKILL.md`; after editing one, run `npm run gen:skill-templates`.
 
 ## Profiles (tags)
 
@@ -55,12 +55,12 @@ Give skills tags (`perso`, `cadens`, …). In `/config → Devices`, open a toke
 
 ## Inline vs remote skills
 
-- **Inline**: source lives in Kebab MCP's KV store. Edit anytime from `/config → Skills`.
+- **Inline**: source lives in Kebab House's KV store. Edit anytime from `/config → Skills`.
 - **Remote**: source is fetched from a URL on each invocation (with caching). Useful for sharing skills across deployments — point at a raw GitHub URL or a `skills.sh` skill page.
 
 ## Importing a skill from a URL
 
-`/config → Skills → Import from URL`. Paste a raw GitHub markdown URL or a `skills.sh` skill page. Kebab MCP fetches it (with byte cap and SSRF protection), parses the frontmatter into a skill definition, and shows a preview before saving.
+`/config → Skills → Import from URL`. Paste a raw GitHub markdown URL or a `skills.sh` skill page. Kebab House fetches it (with byte cap and SSRF protection), parses the frontmatter into a skill definition, and shows a preview before saving.
 
 ## Skill Composer
 
