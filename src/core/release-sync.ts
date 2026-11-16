@@ -7,18 +7,24 @@
  * repos, so the fork update flow can't help them. Release sync works on
  * file contents instead of git history:
  *
- *   1. Installed version = `version` in the repo's package.json (fallback:
- *      the running VERSION) → upstream release tag `vX.Y.Z` → upstream
- *      commit. Target = upstream's latest release.
+ *   1. Base = the upstream COMMIT the user's files came from (see
+ *      detectSyncBase): the `Kebab-Upstream-Commit` trailer of the last
+ *      sync, else the upstream commit whose tree equals the user's root
+ *      commit (a Deploy Button clone is one commit holding upstream `main`
+ *      as it was that day, usually past the last release tag), else the
+ *      release tag of `version` in the repo's package.json. Target =
+ *      upstream's latest release. A base already at or past the target is
+ *      "up to date" (never a downgrade).
  *   2. Upstream `compare` between the two commits → changed paths
  *      (added / modified / removed / renamed).
  *   3. Conflict check BEFORE any write: for every path we would touch, the
- *      user's blob must equal the upstream blob at the installed version
- *      (or already equal the target). Anything else is a local edit → stop
- *      and list the files.
+ *      user's blob must equal the upstream blob at the base (or already
+ *      equal the target). Anything else is a local edit → stop and list
+ *      the files.
  *   4. Blobs are copied into the user's repo one by one (sequenced calls),
  *      a tree is built on top of the user's current tree, a commit
- *      "chore: sync Kebab House vX.Y.Z" is created with the user's HEAD as
+ *      "chore: sync Kebab House vX.Y.Z" (with the `Kebab-Upstream-Commit`
+ *      trailer naming the target commit) is created with the user's HEAD as
  *      parent, and only then is `refs/heads/<default branch>` moved
  *      (fast-forward only). A failure anywhere before that last call leaves
  *      the repo untouched — orphan blobs/trees are invisible and GC'd.
@@ -49,6 +55,12 @@ export const RELEASE_SYNC_MAX_BYTES = 20 * 1024 * 1024;
 /** GitHub's compare API lists at most 300 files; past that we diff trees. */
 const COMPARE_FILES_CAP = 300;
 const EXCLUDED_PREFIXES = [".github/workflows/"];
+/** GitHub's max page size for the commits list. */
+const COMMITS_PAGE = 100;
+/** How many pages of upstream history to scan for the commit a clone came from (~300 commits). */
+const UPSTREAM_SCAN_PAGES = 3;
+/** Trailer written on every sync commit: the upstream commit the repo now matches. */
+export const UPSTREAM_COMMIT_TRAILER = "Kebab-Upstream-Commit";
 
 const UPSTREAM_FULL = `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`;
 const UPSTREAM_RELEASES_URL = `https://github.com/${UPSTREAM_FULL}/releases`;
@@ -158,6 +170,8 @@ interface CompareFile {
 }
 
 interface CompareData {
+  /** `ahead`: the second commit is ahead of the first; `behind`, `identical`, `diverged`. */
+  status?: string;
   total_commits: number;
   html_url: string;
   commits: Array<{ sha: string; html_url: string; commit: { message: string } }>;
@@ -329,6 +343,129 @@ export async function resolveReleaseCommit(
   return { tag, commitSha: obj.sha, treeSha: commit.tree.sha };
 }
 
+/** Where the user's files came from upstream (D3, 2026-11 audit). */
+export interface SyncBase {
+  commitSha: string;
+  treeSha: string;
+  /** trailer = recorded by a previous sync; root-tree = clone detected by its first commit; tag = package.json version. */
+  source: "trailer" | "root-tree" | "tag";
+  /** Human label for messages: "v0.1.16" or "upstream commit abc1234". */
+  label: string;
+}
+
+interface ListedCommit {
+  sha: string;
+  commit: { message: string; tree: { sha: string } };
+  parents: Array<{ sha: string }>;
+}
+
+/** One page of a branch's history (newest first); null when GitHub can't list it. */
+async function listCommits(
+  token: string,
+  repo: string,
+  ref: string | null,
+  page: number
+): Promise<ListedCommit[] | null> {
+  const q = `${ref ? `sha=${encodeURIComponent(ref)}&` : ""}per_page=${COMMITS_PAGE}&page=${page}`;
+  let res;
+  try {
+    res = await ghFetch(`/repos/${repo}/commits?${q}`, token);
+  } catch {
+    return null;
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw failFromStatus("list-commits", res.status, res.data);
+  }
+  return res.ok && Array.isArray(res.data) ? (res.data as ListedCommit[]) : null;
+}
+
+function commitBase(commitSha: string, treeSha: string, source: SyncBase["source"]): SyncBase {
+  return { commitSha, treeSha, source, label: `upstream commit ${commitSha.slice(0, 7)}` };
+}
+
+const TRAILER_RE = new RegExp(`^${UPSTREAM_COMMIT_TRAILER}:\\s*([0-9a-f]{7,40})\\s*$`, "m");
+const LEGACY_SYNC_RE = /^chore: sync Kebab House v(\S+)/;
+
+/**
+ * D3 (2026-11 audit): find the upstream commit the user's repo was created
+ * from or last synced to. Using package.json's version alone was wrong for
+ * Deploy Button clones: the button clones `main`, which is usually past the
+ * last release tag while still declaring that release's version, so every
+ * file changed on `main` since the tag looked like a local edit.
+ *
+ *   1. The newest `Kebab-Upstream-Commit:` trailer in the user's recent
+ *      history (written by every sync). A legacy sync commit without the
+ *      trailer ("chore: sync Kebab House vX.Y.Z") means the tag vX.Y.Z.
+ *   2. The user's root commit (a clone is one initial commit): the upstream
+ *      commit, among the ~300 most recent on the default branch, with the
+ *      same tree.
+ *   3. The release tag of the installed version (package.json).
+ */
+export async function detectSyncBase(
+  token: string,
+  userRepo: string,
+  ref: string,
+  installedVersion: string
+): Promise<SyncBase | null> {
+  const userCommits = await listCommits(token, userRepo, ref, 1);
+  if (userCommits) {
+    for (const c of userCommits) {
+      const msg = c.commit?.message ?? "";
+      const recorded = msg.match(TRAILER_RE)?.[1];
+      if (recorded) {
+        const res = await ghFetch(`/repos/${UPSTREAM_FULL}/git/commits/${recorded}`, token).catch(
+          () => null
+        );
+        const data = (res?.data ?? null) as { sha?: string; tree?: { sha?: string } } | null;
+        if (res?.ok && data?.tree?.sha) {
+          return commitBase(data.sha ?? recorded, data.tree.sha, "trailer");
+        }
+        break; // unknown upstream commit (history rewritten?): fall back below
+      }
+      const legacy = msg.match(LEGACY_SYNC_RE)?.[1];
+      if (legacy) {
+        const rel = await resolveReleaseCommit(token, releaseTagFor(legacy));
+        if (rel) {
+          return {
+            commitSha: rel.commitSha,
+            treeSha: rel.treeSha,
+            source: "tag",
+            label: releaseTagFor(legacy),
+          };
+        }
+        break;
+      }
+    }
+
+    const root = userCommits.length < COMMITS_PAGE ? userCommits.at(-1) : undefined;
+    const rootTree = root && root.parents.length === 0 ? root.commit?.tree?.sha : undefined;
+    if (rootTree) {
+      for (let page = 1; page <= UPSTREAM_SCAN_PAGES; page++) {
+        const upstream = await listCommits(token, UPSTREAM_FULL, null, page);
+        if (!upstream) break;
+        const hit = upstream.find((c) => c.commit?.tree?.sha === rootTree);
+        if (hit) return commitBase(hit.sha, rootTree, "root-tree");
+        if (upstream.length < COMMITS_PAGE) break;
+      }
+    }
+  }
+
+  const rel = await resolveReleaseCommit(token, releaseTagFor(installedVersion));
+  return rel
+    ? {
+        commitSha: rel.commitSha,
+        treeSha: rel.treeSha,
+        source: "tag",
+        label: releaseTagFor(installedVersion),
+      }
+    : null;
+}
+
+/** The base already contains the target release (same commit, or newer): nothing to sync. */
+function baseIsAtOrPastTarget(cmp: CompareData): boolean {
+  return cmp.status === "identical" || cmp.status === "behind";
+}
+
 async function getLatestRelease(
   token: string
 ): Promise<{ tag: string; version: string; url: string } | null> {
@@ -486,7 +623,7 @@ export async function computeReleaseSyncStatus(
       return { ok: true, payload: { ...base, available: false, status: "identical" } };
     }
 
-    const from = await resolveReleaseCommit(token, releaseTagFor(installedVersion));
+    const from = await detectSyncBase(token, deployedRepo, repo.defaultBranch, installedVersion);
     const to = await resolveReleaseCommit(token, latest.tag);
     if (!from || !to) {
       return {
@@ -502,6 +639,19 @@ export async function computeReleaseSyncStatus(
       `/repos/${UPSTREAM_FULL}/compare/${from.commitSha}...${to.commitSha}`,
       token
     );
+    if (baseIsAtOrPastTarget(cmp)) {
+      // A clone of `main` taken after the latest release: newer than the
+      // release, so nothing to propose (and never a downgrade).
+      return {
+        ok: true,
+        payload: {
+          ...base,
+          latestVersion: installedVersion,
+          available: false,
+          status: "identical",
+        },
+      };
+    }
     const { breaking, breakingReasons } = detectBreaking(cmp.commits);
     return {
       ok: true,
@@ -608,9 +758,8 @@ async function applyReleaseSyncInner(
     return { ok: true, upToDate: true, version: fromVersion };
   }
   const toVersion = latest.version;
-  const manualUrl = `https://github.com/${UPSTREAM_FULL}/compare/${releaseTagFor(fromVersion)}...${latest.tag}`;
 
-  const from = await resolveReleaseCommit(token, releaseTagFor(fromVersion));
+  const from = await detectSyncBase(token, userRepo, headSha, fromVersion);
   if (!from) {
     return {
       ok: false,
@@ -629,15 +778,20 @@ async function applyReleaseSyncInner(
     };
   }
 
-  // 3. What changed upstream between the two releases.
+  const manualUrl = `https://github.com/${UPSTREAM_FULL}/compare/${
+    from.source === "tag" ? from.label : from.commitSha.slice(0, 12)
+  }...${latest.tag}`;
+
+  // 3. What changed upstream between the base and the target release.
   const cmp = await gh<CompareData>(
     "compare",
     `/repos/${UPSTREAM_FULL}/compare/${from.commitSha}...${to.commitSha}`,
     token
   );
+  if (baseIsAtOrPastTarget(cmp)) return { ok: true, upToDate: true, version: fromVersion };
   const files = cmp.files ?? [];
 
-  // 4. The three trees: upstream at installed, upstream at target, user now.
+  // 4. The three trees: upstream at the base, upstream at target, user now.
   const baseTree = await readTree(token, UPSTREAM_FULL, from.treeSha);
   const targetTree = await readTree(token, UPSTREAM_FULL, to.treeSha);
   const userTree = await readTree(token, userRepo, headCommit.tree.sha);
@@ -671,9 +825,9 @@ async function applyReleaseSyncInner(
       manualUrl,
       message:
         `${plan.conflicts.length} file${plan.conflicts.length === 1 ? " was" : "s were"} changed in ` +
-        `${userRepo} since v${fromVersion}, and v${toVersion} changes ${plan.conflicts.length === 1 ? "it" : "them"} too. ` +
+        `${userRepo} since ${from.label}, and v${toVersion} changes ${plan.conflicts.length === 1 ? "it" : "them"} too. ` +
         "Release sync never overwrites your edits, so nothing was written. Restore these files to " +
-        `their v${fromVersion} content (or port your edits after updating by hand), then retry.`,
+        `their ${from.label} content (or port your edits after updating by hand), then retry.`,
     };
   }
   if (fileCount === 0) return { ok: true, upToDate: true, version: toVersion };
@@ -735,8 +889,9 @@ async function applyReleaseSyncInner(
       body: {
         message:
           `chore: sync Kebab House v${toVersion}\n\n` +
-          `Release sync from ${UPSTREAM_FULL} v${fromVersion} → v${toVersion}.\n` +
-          `Upstream changes: ${cmp.html_url}`,
+          `Release sync from ${UPSTREAM_FULL} ${from.label} → v${toVersion}.\n` +
+          `Upstream changes: ${cmp.html_url}\n\n` +
+          `${UPSTREAM_COMMIT_TRAILER}: ${to.commitSha}`,
         tree: tree.sha,
         parents: [headSha],
       },
