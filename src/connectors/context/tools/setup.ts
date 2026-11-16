@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolResult } from "@/core/types";
 import { getContextKVStore, getRequestOrigin } from "@/core/request-context";
-import { getCallerMeta, type CallerMeta } from "@/core/token-scope";
+import { getCallerMeta } from "@/core/token-scope";
 import { DEFAULT_PROFILE, listProfiles } from "@/core/profiles";
 import { getPublicOrigin } from "@/core/approvals";
 import { toMsg } from "@/core/error-utils";
@@ -72,7 +72,7 @@ function text(t: string): ToolResult {
  * request) from the configured public URL. It carries no credential: the
  * owner signs in as usual.
  */
-export function dashboardLink(tab: "connectors" | "settings" | "devices" | "skills"): string {
+export function dashboardLink(tab: "connectors" | "profile" | "devices" | "skills"): string {
   const origin = getRequestOrigin() ?? getPublicOrigin();
   return `${origin}/config?tab=${tab}`;
 }
@@ -85,7 +85,7 @@ export function dashboardLink(tab: "connectors" | "settings" | "devices" | "skil
 function canWriteMemory(): boolean {
   // `access` is the device access level ("read" | "memory" | "full") when the
   // transport provides it; older callers only carry `writeAllowed`.
-  const meta = getCallerMeta() as (CallerMeta & { access?: unknown }) | null;
+  const meta = getCallerMeta();
   if (!meta) return true;
   if (typeof meta.access === "string") return meta.access === "memory" || meta.access === "full";
   return meta.writeAllowed;
@@ -121,7 +121,7 @@ async function profileGuidance(profileName: string): Promise<string> {
     'Keep it concise Markdown (under ~400 words) with the headings "Role", "Current projects", "Recurring tasks", "Preferences", "Never".',
     "Show the draft to the user and ask for corrections. Only once they approve it, save it with my_context_update (mode: replace).",
     `This client writes to the profile "${profileName}". Existing profiles: ${hats}.`,
-    `If the user wears several hats (e.g. personal and a company), tell them to add one profile per hat on the Profile page of their dashboard (${dashboardLink("settings")}) and to choose which profile each client uses in Devices. Do not try to create other profiles yourself.`,
+    `If the user wears several hats (e.g. personal and a company), tell them to add one profile per hat on the Profile page of their dashboard (${dashboardLink("profile")}) and to choose which profile each client uses in Devices. Do not try to create other profiles yourself.`,
   ];
   if (!canWriteMemory()) {
     lines.push(

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getEnabledPacksLazy } from "@/core/registry";
-import { getToolAccessContext, isConnectorAllowed } from "@/core/token-scope";
+import { getCallerMeta, getToolAccessContext, isConnectorAllowed } from "@/core/token-scope";
+import { isToolAllowedForAccess } from "@/core/tool-access";
 import { getDisabledTools } from "@/core/tool-toggles";
 import { runWithCredentials } from "@/core/request-context";
 import { getHydratedCredentialSnapshot } from "@/core/credential-store";
@@ -588,6 +589,14 @@ async function runStep(
   if (access && !isConnectorAllowed(access.connectorScope, lookup.packId)) {
     throw new Error(
       `tool "${step.toolName}" is outside this token's connector scope (connector "${lookup.packId}")`
+    );
+  }
+  // Audit 2026-11 (access levels): a step may not use a tool the calling
+  // client could not call directly (e.g. mcp_logs from a "memory" device).
+  const callerAccess = getCallerMeta()?.access;
+  if (callerAccess && !isToolAllowedForAccess(lookup.tool, callerAccess)) {
+    throw new Error(
+      `tool "${step.toolName}" needs a higher access level than this client has (${callerAccess})`
     );
   }
   if ((await getDisabledTools()).has(step.toolName)) {

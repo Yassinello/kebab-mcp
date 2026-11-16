@@ -50,9 +50,7 @@ function usageSeg(raw: string): string {
 function hasFullAccess(meta: CallerMeta | null): boolean {
   if (!meta) return true;
   // `access` ("read" | "memory" | "full") when the transport provides it.
-  const access = (meta as CallerMeta & { access?: unknown }).access;
-  if (typeof access === "string") return access === "full";
-  return meta.writeAllowed;
+  return meta.access === "full";
 }
 
 function callerView(): CallerView {
@@ -176,7 +174,7 @@ async function clientNameMapper(): Promise<(name: string) => string> {
   };
 }
 
-async function labelClients(
+export async function labelClients(
   clients: { name: string; count: number }[]
 ): Promise<{ name: string; count: number }[]> {
   if (!clients.length) return clients;

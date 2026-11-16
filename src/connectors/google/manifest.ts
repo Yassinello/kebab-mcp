@@ -48,7 +48,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
 2. Enable these APIs: **Gmail**, **Google Calendar**, **People**, **Google Drive**, **Google Chat**
 3. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**, type **Desktop app**
 4. Copy the client ID into \`GOOGLE_CLIENT_ID\` and the secret into \`GOOGLE_CLIENT_SECRET\`
-5. Open **/config → Connectors** in your Kebab MCP dashboard, expand Google Workspace, and enter your credentials. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
+5. Open **/config → Connectors** in your Kebab House dashboard, expand Google Workspace, and enter your credentials. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
 
 ### Troubleshooting
 - _invalid_grant_: the refresh token was revoked (password change, 6 months idle, or too many tokens) — re-run the credential flow from /config.

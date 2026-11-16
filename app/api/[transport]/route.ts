@@ -1,6 +1,7 @@
 import { createMcpHandler } from "mcp-handler";
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { getCurrentTenantId } from "@/core/request-context";
+import { getCurrentTenantId, runWithRequestOrigin } from "@/core/request-context";
+import { publicOrigin } from "@/core/oauth";
 import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { getEnabledPacksLazy, logRegistryState } from "@/core/registry";
@@ -432,6 +433,12 @@ async function resolveTransportSegment(ctx: PipelineContext): Promise<string | n
  * credential-store.ts SEC-02 for the resolution order.
  */
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
+  // Contract 5 (2026-11 audit): tool handlers that hand the model an
+  // absolute link (dashboard, approval page) read this instance's origin.
+  return runWithRequestOrigin(publicOrigin(ctx.request), () => serveTransport(ctx));
+}
+
+async function serveTransport(ctx: PipelineContext): Promise<Response> {
   // PRO-02: mcp-handler 2.x serves every request it receives — it no longer
   // inspects the pathname (1.x answered only `<basePath>/mcp` and 404'd the
   // rest). Only `/api/mcp` is the MCP endpoint, so every other value of the

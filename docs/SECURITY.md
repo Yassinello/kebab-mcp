@@ -138,7 +138,7 @@ Kill switches, halt flags, the 10-minute duplicate guard, rate limits, hash-only
 Covered — every message that leaves your account through Kebab House:
 
 - **E-mail**: `gmail_send`, `gmail_reply`.
-- **Chat**: `slack_send`, `google_chat_send_message`.
+- **Chat**: `slack_send`, `slack_send_dm`, `google_chat_send_message`.
 - **LinkedIn and WhatsApp**: every Unipile tool that runs through `runGuardedWrite` (`whatsapp_send_message`, `linkedin_reply`, `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post`, `linkedin_cancel_invitation`) and the historical LinkedIn writes (`linkedin_send_connection`, `linkedin_send_message`, `linkedin_send_inmail`, `linkedin_engage` — `dry_run: true` stays a preview without approval).
 
 Not sends, so no approval: `gmail_draft` (a draft waits in your mailbox) and `calendar_create`.

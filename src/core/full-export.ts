@@ -537,7 +537,7 @@ export async function importFullExport(
         report.profiles.skipped.push({ name, reason: "already exists" });
         continue;
       }
-      await saveProfile(name, content);
+      await saveProfile(name, content, { by: "Import" });
       (existing?.trim() ? report.profiles.overwritten : report.profiles.imported).push(name);
     } catch (err) {
       report.profiles.skipped.push({ name, reason: toMsg(err) });

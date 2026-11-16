@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminMisconfiguredResponse } from "@/core/admin-misconfigured";
 import type { NextRequest } from "next/server";
 import {
   ensureBootstrapRehydratedFromUpstash,
@@ -423,16 +424,8 @@ export async function proxy(request: NextRequest) {
     process.env.MCP_AUTH_TOKEN?.trim() &&
     !fallbackOptIn
   ) {
-    return finalize(
-      new NextResponse(
-        JSON.stringify({
-          error:
-            "Admin auth misconfigured: ADMIN_AUTH_TOKEN is required when MCP_AUTH_TOKEN is set " +
-            "(or set KEBAB_ADMIN_TOKEN_FALLBACK=1 to allow shared-token fallback).",
-        }),
-        { status: 503, headers: { "Content-Type": "application/json" } }
-      )
-    );
+    const res = adminMisconfiguredResponse(request);
+    return finalize(new NextResponse(res.body, { status: res.status, headers: res.headers }));
   }
 
   if (adminGated && !adminToken) {

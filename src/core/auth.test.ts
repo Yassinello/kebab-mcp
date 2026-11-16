@@ -399,3 +399,17 @@ describe("checkAdminAuth — SEC-A-03 production token isolation", () => {
     expect(await checkAdminAuth(req)).toBeNull();
   });
 });
+
+describe("admin misconfiguration page is shared with the proxy (audit C1.7)", () => {
+  it("auth re-exports the dependency-free module", async () => {
+    const auth = await import("./auth");
+    const mod = await import("./admin-misconfigured");
+    expect(auth.adminMisconfiguredResponse).toBe(mod.adminMisconfiguredResponse);
+    const res = mod.adminMisconfiguredResponse(
+      new Request("https://x.example/config", { headers: { accept: "text/html" } })
+    );
+    expect(res.status).toBe(503);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    expect(await res.text()).toMatch(/ADMIN_AUTH_TOKEN/);
+  });
+});

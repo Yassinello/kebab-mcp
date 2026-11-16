@@ -157,7 +157,7 @@ describe("kebab_setup — profile step", () => {
     );
     expect(text).toMatch(/Do not start from zero if you already know the user/);
     expect(text).toMatch(/your own memory/);
-    expect(text).toMatch(/several hats[\s\S]*https:\/\/house\.example\.org\/config\?tab=settings/);
+    expect(text).toMatch(/several hats[\s\S]*https:\/\/house\.example\.org\/config\?tab=profile/);
     expect(text).not.toMatch(/IMPORTANT: this client cannot/);
   });
 
