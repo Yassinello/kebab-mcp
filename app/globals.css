@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+ * Colour tokens. Text tokens meet WCAG AA (≥ 4.5:1 for normal text) on the
+ * backgrounds they are used on — white, bg-muted, bg-sidebar, the matching
+ * *-bg tint and, for accent, the active-nav tint (accent/10 on the
+ * sidebar). tests/core/theme-contrast.test.ts measures every pair; adjust
+ * both together.
+ */
 @theme {
   --color-border: #e5e7eb;
   --color-border-light: #f3f4f6;
@@ -8,21 +15,21 @@
   --color-bg-card: #ffffff;
   --color-bg-muted: #f9fafb;
   --color-text: #111827;
-  --color-text-dim: #6b7280;
-  --color-text-muted: #9ca3af;
-  --color-accent: #3b82f6;
+  --color-text-dim: #4b5563;
+  --color-text-muted: #6b7280;
+  --color-accent: #1d4ed8;
   --color-amber-primary: #f59e0b;
   --color-amber-soft: #fef3c7;
-  --color-green: #16a34a;
+  --color-green: #15803d;
   --color-green-bg: #f0fdf4;
-  --color-orange: #ea580c;
+  --color-orange: #c2410c;
+  --color-orange-dark: #9a3412;
   --color-orange-bg: #fff7ed;
-  --color-red: #dc2626;
+  --color-red: #b91c1c;
   --color-red-bg: #fef2f2;
   --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", "Consolas", monospace;
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
 }

@@ -63,11 +63,25 @@ const SettingsTab = dynamic(
   () => import("./tabs/settings").then((m) => ({ default: m.SettingsTab })),
   { ssr: true, loading: () => <TabLoadingSkeleton label="Settings" /> }
 );
-// Storage and Devices are no longer top-level tabs — they live as
-// sub-tabs of SettingsTab (which imports them directly). The /config?
-// tab=storage and /config?tab=devices URLs still work: they render
-// SettingsTab with forceSub set, so existing bookmarks keep landing
-// on the correct view.
+// C1.2 / C1.3 / C1.5: the hub pages — Profile, Memory — and Devices /
+// Storage, promoted back to top-level pages (main menu and Advanced).
+const ProfileTab = dynamic(
+  () => import("./tabs/profile").then((m) => ({ default: m.ProfileTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Profile" /> }
+);
+const MemoryTab = dynamic(
+  () => import("./tabs/memory").then((m) => ({ default: m.MemoryTab })),
+  // ssr: false — the page is driven by client-side browsing and search.
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Memory" /> }
+);
+const DevicesTab = dynamic(
+  () => import("./tabs/devices").then((m) => ({ default: m.DevicesTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Devices" /> }
+);
+const StorageTab = dynamic(
+  () => import("./tabs/storage").then((m) => ({ default: m.StorageTab })),
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Storage" /> }
+);
 const HealthTab = dynamic(
   () => import("./tabs/health").then((m) => ({ default: m.HealthTab })),
   // ssr: false — health polls /api/health on an interval.
@@ -179,48 +193,30 @@ export function ConfigTabs({
       tab = (
         <SettingsTab
           config={config}
-          vaultEnabled={vaultEnabled}
           baseUrl={baseUrl}
           hasAuthToken={hasAuthToken}
           scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
-          tenantId={tenantId}
-          connectors={connectors}
         />
       );
       break;
-    // Storage and Devices were demoted from top-level tabs to Settings
-    // sub-tabs (cleaner sidebar — both are config surfaces, not daily-
-    // driver destinations). Anyone who bookmarked the old URLs still
-    // lands on the right view: we render SettingsTab with the matching
-    // forceSub so the sub-tab is pre-selected.
+    // C1.5: Devices is a main-menu page and Storage an Advanced page again
+    // (they were Settings sub-tabs; page.tsx redirects the old
+    // ?tab=settings&sub=devices|storage links here).
     case "storage":
-      section = "Settings";
-      tab = (
-        <SettingsTab
-          config={config}
-          vaultEnabled={vaultEnabled}
-          baseUrl={baseUrl}
-          hasAuthToken={hasAuthToken}
-          scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
-          tenantId={tenantId}
-          forceSub="storage"
-        />
-      );
+      section = "Storage";
+      tab = <StorageTab />;
       break;
     case "devices":
-      section = "Settings";
-      tab = (
-        <SettingsTab
-          config={config}
-          vaultEnabled={vaultEnabled}
-          baseUrl={baseUrl}
-          hasAuthToken={hasAuthToken}
-          scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
-          tenantId={tenantId}
-          forceSub="devices"
-          connectors={connectors}
-        />
-      );
+      section = "Devices";
+      tab = <DevicesTab tenantId={tenantId} baseUrl={baseUrl} connectors={connectors} />;
+      break;
+    case "profile":
+      section = "Profile";
+      tab = <ProfileTab vaultEnabled={vaultEnabled} initialPath={config.contextPath} />;
+      break;
+    case "memory":
+      section = "Memory";
+      tab = <MemoryTab />;
       break;
     case "health":
       section = "Health";
@@ -239,7 +235,6 @@ export function ConfigTabs({
           enabledCount={enabledCount}
           connectorCount={connectors.length}
           logs={logs}
-          config={config}
           version={version}
           commitSha={commitSha}
           tenantId={tenantId}

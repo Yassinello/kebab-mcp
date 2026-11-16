@@ -1,7 +1,7 @@
 "use client";
 
 import { PRODUCT } from "@/core/constants/brand";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import pkg from "../package.json";
 import { KebabLogo } from "./components/kebab-logo";
@@ -9,28 +9,38 @@ import { StorageModeBadge } from "./components/storage-mode-badge";
 
 const VERSION = `v${pkg.version}`;
 
-const PRIMARY_NAV = [
+interface NavItem {
+  href: string;
+  tab: string;
+  label: string;
+  icon: string;
+}
+
+// 2026-11 audit (C1.5): the main menu is the user's hub — what the AI
+// clients share (profile, skills, memory) and who uses it (devices, logs).
+export const PRIMARY_NAV: NavItem[] = [
   { href: "/config", tab: "overview", label: "Overview", icon: "grid" },
-  { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
-  { href: "/config?tab=tools", tab: "tools", label: "Tools", icon: "terminal" },
+  { href: "/config?tab=profile", tab: "profile", label: "Profile", icon: "user" },
   { href: "/config?tab=skills", tab: "skills", label: "Skills", icon: "sparkles" },
-  // Custom Tools was demoted from a top-level item to a sub-tab of Tools
-  // (?tab=tools&sub=custom). The tabs.tsx router still resolves the legacy
-  // ?tab=custom-tools URL for bookmark compatibility.
-  { href: "/config?tab=playground", tab: "playground", label: "Playground", icon: "play" },
+  { href: "/config?tab=memory", tab: "memory", label: "Memory", icon: "notebook" },
+  { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
+  { href: "/config?tab=devices", tab: "devices", label: "Devices", icon: "devices" },
   { href: "/config?tab=logs", tab: "logs", label: "Logs", icon: "activity" },
 ];
 
-const SECONDARY_NAV = [
-  { href: "/config?tab=documentation", tab: "documentation", label: "Documentation", icon: "book" },
+// Power-user pages, kept but out of the way under "Advanced".
+// Custom Tools is a sub-tab of Tools (?tab=tools&sub=custom); the legacy
+// ?tab=custom-tools URL still resolves (tabs.tsx).
+export const ADVANCED_NAV: NavItem[] = [
+  { href: "/config?tab=tools", tab: "tools", label: "Tools", icon: "terminal" },
+  { href: "/config?tab=playground", tab: "playground", label: "Playground", icon: "play" },
   { href: "/config?tab=health", tab: "health", label: "Health", icon: "heart" },
-  // Storage and Devices used to live here as top-level tabs. They were
-  // demoted to sub-tabs of Settings (sub=storage, sub=devices) — they
-  // are configuration surfaces, not daily-driver destinations. The
-  // tabs.tsx router still resolves /config?tab=storage and ?tab=devices
-  // to the same components for bookmark compatibility.
+  { href: "/config?tab=storage", tab: "storage", label: "Storage", icon: "database" },
+  { href: "/config?tab=documentation", tab: "documentation", label: "Documentation", icon: "book" },
   { href: "/config?tab=settings", tab: "settings", label: "Settings", icon: "settings" },
 ];
+
+const ADVANCED_OPEN_KEY = "kebab.sidebar.advancedOpen";
 
 const ICONS: Record<string, string> = {
   grid: "M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5ZM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4Z",
@@ -50,17 +60,22 @@ const ICONS: Record<string, string> = {
     "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   devices:
     "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M8 22h8 M12 18v4",
+  user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  notebook:
+    "M2 6h4 M2 10h4 M2 14h4 M2 18h4 M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M15 2v20",
+  chevron: "m9 18 6-6-6-6",
   puzzle:
     "M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z",
 };
 
-function Icon({ name }: { name: string }) {
+function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const d = ICONS[name];
   if (!d) return null;
   return (
     <svg
-      width="18"
-      height="18"
+      aria-hidden="true"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -74,7 +89,7 @@ function Icon({ name }: { name: string }) {
 }
 
 function renderNavItem(
-  item: { href: string; tab: string; label: string; icon: string },
+  item: NavItem,
   pathname: string | null,
   currentTab: string,
   setupMode: boolean
@@ -85,6 +100,7 @@ function renderNavItem(
     <li key={item.href}>
       <a
         href={disabled ? undefined : item.href}
+        aria-current={active ? "page" : undefined}
         // MOBILE-01: min-h-11 (~44px) ensures thumb-tappable hit area on
         // mobile per Apple HIG / Material guidance. sm: shrinks back to
         // the previous compact density on desktop.
@@ -135,6 +151,28 @@ export function Sidebar({
   // MOBILE-01: open/close state for the mobile drawer. Closed by default
   // so the page content renders immediately on small screens.
   const [mobileOpen, setMobileOpen] = useState(false);
+  // C1.5: the Advanced group is collapsed by default, open when one of its
+  // pages is the current one, and remembers the user's last choice.
+  const inAdvanced = ADVANCED_NAV.some((i) => i.tab === currentTab);
+  const [advancedPref, setAdvancedPref] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ADVANCED_OPEN_KEY);
+      if (saved !== null) setAdvancedPref(saved === "1");
+    } catch {
+      // localStorage unavailable — keep the default
+    }
+  }, []);
+  const advancedOpen = inAdvanced || advancedPref === true;
+  const toggleAdvanced = () => {
+    const next = !advancedOpen;
+    setAdvancedPref(next);
+    try {
+      localStorage.setItem(ADVANCED_OPEN_KEY, next ? "1" : "0");
+    } catch {
+      // localStorage unavailable — the choice lasts for this page only
+    }
+  };
 
   return (
     <>
@@ -180,28 +218,46 @@ export function Sidebar({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">{serverName}</p>
               <p className="text-[10px] text-text-muted truncate">
-                {setupMode ? "Setup mode" : "Personal MCP Server"}
+                {setupMode ? "Setup mode" : "Personal AI hub"}
               </p>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 overflow-y-auto flex flex-col">
+        <nav className="flex-1 px-4 overflow-y-auto flex flex-col" aria-label="Dashboard">
           <ul className="space-y-0.5">
             {PRIMARY_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
           </ul>
           <div className="mt-auto pt-4">
-            <ul className="space-y-0.5 border-t border-border pt-3">
-              {SECONDARY_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
-            </ul>
+            <div className="border-t border-border pt-3">
+              <button
+                type="button"
+                onClick={toggleAdvanced}
+                aria-expanded={advancedOpen}
+                aria-controls="sidebar-advanced"
+                className="w-full flex items-center gap-1.5 px-2.5 py-2 sm:py-1 min-h-11 sm:min-h-0 rounded-md text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text"
+              >
+                <span
+                  className={`inline-flex transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                >
+                  <Icon name="chevron" size={12} />
+                </span>
+                Advanced
+              </button>
+              {advancedOpen && (
+                <ul id="sidebar-advanced" className="space-y-0.5 mt-1">
+                  {ADVANCED_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
+                </ul>
+              )}
+            </div>
           </div>
         </nav>
 
         {/* Footer: user profile */}
         <div className="mt-auto border-t border-border px-4 py-3">
           <div className="flex items-center gap-2.5 px-1">
-            <div className="w-8 h-8 rounded-full bg-green/20 text-green flex items-center justify-center text-xs font-bold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-green-bg text-green flex items-center justify-center text-xs font-bold shrink-0">
               {userInitials}
             </div>
             <div className="flex-1 min-w-0">

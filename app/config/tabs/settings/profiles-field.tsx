@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatRelativeTime } from "@/core/relative-time";
+import { ProfileHistory } from "../profile-history";
 
 interface ProfileSummary {
   name: string;
   mode: "inline" | "vault";
   bytes: number;
   updatedAt: string | null;
+  by?: string;
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -14,7 +17,7 @@ const NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 /**
  * Kebab House phase 0 (CTX-06) — named profiles, one per "hat".
  *
- * The default profile is edited by <ContextFileField> just above; this
+ * The default profile is edited just above on the Profile page; this
  * component manages the extra profiles a token can be bound to (Devices →
  * Edit scope → Profile).
  */
@@ -107,7 +110,11 @@ export function ProfilesField() {
             <li key={p.name} className="flex items-center justify-between px-3 py-2 text-xs">
               <span className="font-mono">{p.name}</span>
               <span className="flex items-center gap-3">
-                <span className="text-text-muted">{(p.bytes / 1024).toFixed(1)} KB</span>
+                <span className="text-text-muted">
+                  {(p.bytes / 1024).toFixed(1)} KB
+                  {p.updatedAt ? ` · updated ${formatRelativeTime(p.updatedAt)}` : ""}
+                  {p.by ? ` by ${p.by}` : ""}
+                </span>
                 <button
                   type="button"
                   onClick={() => void openExisting(p.name)}
@@ -119,7 +126,7 @@ export function ProfilesField() {
                   type="button"
                   disabled={busy}
                   onClick={() => void remove(p.name)}
-                  className="text-red-500 underline disabled:opacity-50"
+                  className="text-red underline disabled:opacity-50"
                 >
                   Delete
                 </button>
@@ -167,8 +174,19 @@ export function ProfilesField() {
             >
               Cancel
             </button>
-            {error && <span className="text-xs text-red-500">{error}</span>}
+            {error && <span className="text-xs text-red">{error}</span>}
           </div>
+          {!editing.isNew && (
+            <ProfileHistory
+              name={editing.name}
+              onRestored={() => {
+                // fire-and-forget OK: refreshes the editor; errors keep the old text
+                void openExisting(editing.name);
+                // fire-and-forget OK: refreshes the list; errors keep the old one
+                void load();
+              }}
+            />
+          )}
         </div>
       ) : (
         <button

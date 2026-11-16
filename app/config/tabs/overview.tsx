@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { UsageCard } from "./overview/usage-card";
+import { HubSection } from "./overview/hub-card";
 import type { ToolLog } from "@/core/logging";
-import type { InstanceConfig } from "@/core/types";
 import { ConnectorHealthWidget } from "./connector-health";
 import { toMsg } from "@/core/error-utils";
 import { formatRelativeTime } from "@/core/relative-time";
@@ -128,7 +128,6 @@ export function OverviewTab({
   enabledCount,
   connectorCount,
   logs,
-  config,
   version,
   commitSha,
   tenantId,
@@ -138,7 +137,6 @@ export function OverviewTab({
   enabledCount: number;
   connectorCount: number;
   logs: ToolLog[];
-  config: InstanceConfig;
   version: string;
   commitSha?: string | undefined;
   tenantId?: string | null | undefined;
@@ -255,6 +253,15 @@ export function OverviewTab({
           <span className="font-mono text-sm text-text">{tenantId}</span>
         </div>
       )}
+
+      {/* C1.1: the user's hub first — profile, skills, clients, notes. */}
+      <HubSection />
+
+      {/* Kebab House phase 0: weekly usage */}
+      <UsageCard />
+
+      {/* Server details, below the hub: health, counters, version, endpoint. */}
+      <h2 className="text-sm font-semibold text-text-dim pt-4 border-t border-border">Server</h2>
 
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
@@ -494,19 +501,15 @@ export function OverviewTab({
       )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Active tools" value={totalTools} accent />
         <StatCard label="Active connectors" value={`${enabledCount} / ${connectorCount}`} />
         <StatCard
-          label="Last invocation"
+          label="Last tool call"
           value={lastLog ? new Date(lastLog.timestamp).toLocaleTimeString() : "—"}
           small
         />
-        <StatCard label="Display name" value={config.displayName} small />
       </div>
-
-      {/* Kebab House phase 0: weekly usage */}
-      <UsageCard />
 
       {/* Version info */}
       <Section title="Version">
@@ -570,7 +573,7 @@ export function OverviewTab({
       </Section>
 
       {/* Recent activity */}
-      <Section title="Recent activity">
+      <Section title="Recent tool calls">
         {logs.length === 0 ? (
           <p className="text-sm text-text-muted px-5 py-4">No tool invocations yet.</p>
         ) : (
