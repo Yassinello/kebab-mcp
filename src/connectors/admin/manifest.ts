@@ -18,6 +18,7 @@ const baseTools = [
     schema: mcpLogsSchema,
     handler: async (args) => handleMcpLogs(args),
     destructive: false,
+    adminOnly: true,
   }),
   defineTool({
     name: "mcp_cache_evict",
@@ -26,6 +27,7 @@ const baseTools = [
     schema: cacheEvictSchema,
     handler: async (args) => handleCacheEvict(args),
     destructive: true,
+    adminOnly: true,
   }),
 ];
 
@@ -44,6 +46,7 @@ if (getConfig("KEBAB_MCP_BACKUP_TOOLS") === "1") {
       schema: backupExportSchema,
       handler: async () => handleBackupExport(),
       destructive: false,
+      adminOnly: true,
     }),
     defineTool({
       name: "mcp_backup_import",
@@ -52,6 +55,7 @@ if (getConfig("KEBAB_MCP_BACKUP_TOOLS") === "1") {
       schema: backupImportSchema,
       handler: async (args) => handleBackupImport(args),
       destructive: true,
+      adminOnly: true,
     })
   );
 }

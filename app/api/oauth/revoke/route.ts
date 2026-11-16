@@ -16,7 +16,10 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
 }
 
 export const POST = composeRequestPipeline(
-  [rehydrateStep, rateLimitStep({ scope: "oauth-revoke", keyFrom: "ip", limit: 30 })],
+  [
+    rehydrateStep,
+    rateLimitStep({ scope: "oauth-revoke", keyFrom: "ip", limit: 60, alwaysOn: true }),
+  ],
   postHandler
 );
 

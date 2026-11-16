@@ -674,7 +674,8 @@
       "account",
       "body",
       "cc",
-      "message_id"
+      "message_id",
+      "preview_id"
     ],
     "destructive": true,
     "annotations": {
@@ -709,6 +710,7 @@
       "bcc",
       "body",
       "cc",
+      "preview_id",
       "subject",
       "to"
     ],
@@ -773,6 +775,7 @@
     "pack": "google",
     "schemaKeys": [
       "account",
+      "preview_id",
       "space_name",
       "text"
     ],
@@ -1617,6 +1620,7 @@
     "schemaKeys": [
       "account",
       "channel",
+      "preview_id",
       "text",
       "thread_ts"
     ],
@@ -1633,6 +1637,7 @@
     "pack": "slack",
     "schemaKeys": [
       "account",
+      "preview_id",
       "text",
       "to"
     ],

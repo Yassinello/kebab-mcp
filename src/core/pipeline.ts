@@ -62,6 +62,7 @@ export {
 export { hydrateCredentialsStep } from "./pipeline/credentials-step";
 export { bodyParseStep, type BodyParseOptions } from "./pipeline/body-parse-step";
 export { csrfStep } from "./pipeline/csrf-step";
+export { browserSessionStep, isSameOriginBrowserRequest } from "./pipeline/browser-session-step";
 
 /**
  * Marker string recognized by `tests/contract/pipeline-coverage.test.ts`.

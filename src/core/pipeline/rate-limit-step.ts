@@ -3,7 +3,7 @@
  *
  * Factory returning a Step that gates a request via `checkRateLimit(…)`.
  * Opt-in via `MYMCP_RATE_LIMIT_ENABLED=true` (defaults OFF so no existing
- * deployment is surprised).
+ * deployment is surprised), except for steps created with `alwaysOn`.
  *
  * Correctness precondition: this step MUST run after `authStep` on paths
  * that resolve a tenantId. `authStep` re-enters `requestContext.run`
@@ -39,8 +39,16 @@ export interface RateLimitStepOptions {
   scope: string;
   keyFrom: RateLimitKeyFrom;
   limit?: number;
+  /** Window length in seconds (default 60). */
+  windowSeconds?: number;
   /** Override the env var that controls opt-in. Defaults to `MYMCP_RATE_LIMIT_ENABLED`. */
   enabledEnv?: string;
+  /**
+   * Audit 2026-11: enforce the limit even when the opt-in flag is off — for
+   * anonymous endpoints that write to storage (OAuth registration, token,
+   * revocation).
+   */
+  alwaysOn?: boolean;
 }
 
 function deriveKey(keyFrom: RateLimitKeyFrom, request: Request, tokenId: string | null): string {
@@ -62,12 +70,13 @@ function deriveKey(keyFrom: RateLimitKeyFrom, request: Request, tokenId: string 
 export function rateLimitStep(options: RateLimitStepOptions): Step {
   const envKey = options.enabledEnv ?? "MYMCP_RATE_LIMIT_ENABLED";
   return async (ctx, next) => {
-    if (getConfig(envKey) !== "true") return next();
+    if (!options.alwaysOn && getConfig(envKey) !== "true") return next();
 
     const identifier = deriveKey(options.keyFrom, ctx.request, ctx.tokenId);
     const result = await checkRateLimit(identifier, {
       scope: options.scope,
       limit: options.limit,
+      windowSeconds: options.windowSeconds,
     });
     if (!result.allowed) {
       return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {

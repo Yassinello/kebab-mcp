@@ -21,7 +21,16 @@ interface DeviceRow {
   skillTags?: string[] | null;
   /** Kebab House — profile served by my_context. null = default. */
   profile?: string | null;
+  /** Audit 2026-11 — what the device may do with tools that change things. */
+  access?: "read" | "memory" | "full";
 }
+
+/** Audit 2026-11 — access levels, as the owner reads them. */
+const ACCESS_OPTIONS: { value: "read" | "memory" | "full"; label: string }[] = [
+  { value: "read", label: "Read only" },
+  { value: "memory", label: "Read + profile and notes" },
+  { value: "full", label: "Everything" },
+];
 
 /** Minimal connector descriptor the scope picker needs. */
 export interface ScopeConnector {
@@ -202,6 +211,17 @@ export function DevicesTab({
     setScopeEditId(null);
   };
 
+  const saveAccess = async (tokenId: string, access: string) => {
+    setBusy(tokenId);
+    await mutate({
+      url: "/api/admin/devices",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "set-access", tokenId, access }),
+    });
+    setBusy(null);
+  };
+
   const scopeSummary = (r: DeviceRow): string => {
     const conn =
       r.connectors === null
@@ -261,6 +281,20 @@ export function DevicesTab({
         >
           {scopeSummary(r)}
         </button>
+        <select
+          aria-label={`What ${r.label} can do`}
+          title="What this device can do"
+          value={r.access ?? "full"}
+          disabled={busy === r.tokenId}
+          onChange={(e) => void saveAccess(r.tokenId, e.target.value)}
+          className="mt-1 block bg-bg-muted border border-border rounded px-1.5 py-0.5 text-[11px]"
+        >
+          {ACCESS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </td>
       <td className="px-3 py-2">{fmtRelative(r.lastSeenAt)}</td>
       <td className="px-3 py-2">{fmtDate(r.createdAt)}</td>

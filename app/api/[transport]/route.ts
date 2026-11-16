@@ -20,7 +20,10 @@ import {
   runWithCallerMeta,
   getCallerMeta,
 } from "@/core/token-scope";
-import { recordToolCall } from "@/core/usage";
+import { isToolAllowedForAccess } from "@/core/tool-access";
+import type { AccessLevel } from "@/core/devices";
+import { addsNote, isFailedResult, recordToolCall, skillForUsage } from "@/core/usage";
+import { noteAdminTokenMcpUse } from "@/core/admin-token-use";
 import {
   composeRequestPipeline,
   rehydrateStep,
@@ -112,18 +115,18 @@ async function primeDynamicCaches(
 }
 
 /**
- * Skill name a tool call counts for (USE-01): `skill_load` carries it in
- * `name`; legacy per-skill tools are named `skill_<id>`.
+ * Audit 2026-11 — the refusal a device gets when it calls a tool its access
+ * level does not allow (the same tools are absent from its tools/list).
  */
-function skillNameForUsage(toolName: string, params: unknown): string | null {
-  if (toolName === "skill_load") {
-    const name = (params as { name?: unknown } | null)?.name;
-    return typeof name === "string" ? name : null;
+function accessRefusalText(toolName: string, adminOnly: boolean, access: AccessLevel): string {
+  if (adminOnly) {
+    return `Tool "${toolName}" is an owner tool and this client does not have full access. The owner can change this in Kebab House → Devices.`;
   }
-  if (toolName.startsWith("skill_") && toolName !== "skill_read_file") {
-    return toolName.slice("skill_".length);
-  }
-  return null;
+  const can =
+    access === "memory"
+      ? "can read and save to your profile, notes and skills only"
+      : "can only read";
+  return `Tool "${toolName}" changes things and this client ${can}. The owner can change this in Kebab House → Devices.`;
 }
 
 /** Test-only: reset the prime cache. */
@@ -188,8 +191,9 @@ async function buildHandler(
   // env.changed which already invalidates the cache below.
   await primeDynamicCaches(enabledPacks);
 
-  // TRU-05: read-only OAuth clients (resolved once per request).
-  const writeAllowed = getCallerMeta()?.writeAllowed ?? true;
+  // TRU-05 / audit 2026-11: the caller's access level (resolved once per
+  // request). No caller meta (loopback, tests) = full access.
+  const accessLevel: AccessLevel = getCallerMeta()?.access ?? "full";
 
   return createMcpHandler(
     (server) => {
@@ -200,9 +204,9 @@ async function buildHandler(
         if (!isConnectorAllowed(connectorScope, pack.manifest.id)) continue;
 
         for (const tool of pack.manifest.tools) {
-          // TRU-05: an OAuth client without write access never sees
-          // destructive tools (and is refused below if it calls one).
-          if (tool.destructive && !writeAllowed) continue;
+          // TRU-05 / audit 2026-11: a device only sees the tools its access
+          // level allows (and is refused below if it calls another one).
+          if (!isToolAllowedForAccess(tool, accessLevel)) continue;
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
             : tool.description;
@@ -247,13 +251,16 @@ async function buildHandler(
                   isError: true,
                 };
               }
-              if (tool.destructive && !writeAllowed) {
+              // Defense in depth (same request, same ambient caller meta):
+              // re-read the level at invocation like the connector scope.
+              const callAccess: AccessLevel = getCallerMeta()?.access ?? accessLevel;
+              if (!isToolAllowedForAccess(tool, callAccess)) {
                 return {
                   content: [
                     {
                       type: "text" as const,
                       text: JSON.stringify({
-                        error: `Tool "${tool.name}" changes things and this client is read-only. Allow writes for it in Kebab House → Settings → Devices.`,
+                        error: accessRefusalText(tool.name, tool.adminOnly === true, callAccess),
                       }),
                     },
                   ],
@@ -274,19 +281,21 @@ async function buildHandler(
               // SEC-05: expose the caller's connector scope to code that
               // invokes other tools on its behalf (Custom Tools runner).
               // TRU-02: third-party content is framed as untrusted data.
-              const result = frameUntrustedResult(
-                tool.name,
-                await runWithToolAccess({ connectorScope }, () => tool.handler(params)),
-                { externalContent: tool.externalContent }
-              );
+              const raw = await runWithToolAccess({ connectorScope }, () => tool.handler(params));
+              const result = frameUntrustedResult(tool.name, raw, {
+                externalContent: tool.externalContent,
+              });
               // Kebab House phase 0 (USE-01): weekly usage counters —
-              // names only, recorded after the response is sent.
-              if (!result.isError) {
+              // names only, recorded after the response is sent. Audit
+              // 2026-11 (A6): failures (isError or a JSON `error` body) are
+              // not counted; skills and notes are counted from the result.
+              if (!isFailedResult(raw)) {
                 const meta = getCallerMeta();
                 recordToolCall({
                   tool: tool.name,
                   client: meta?.label || meta?.tokenId || callerTokenId || "local",
-                  skill: skillNameForUsage(tool.name, params),
+                  skill: skillForUsage(tool.name, pack.manifest.id, raw),
+                  note: addsNote(tool.name, raw),
                 });
               }
               return result;
@@ -445,6 +454,9 @@ async function transportHandler(ctx: PipelineContext): Promise<Response> {
     res.headers.set("x-request-id", ctx.requestId);
     return res;
   }
+  // Audit 2026-11 (contract 2): remember (throttled, after the response)
+  // that an AI client uses the key that also opens the dashboard.
+  noteAdminTokenMcpUse(ctx.tokenId);
   // Skills v2 §6: resolve the token's skill tag scope once, and keep it
   // ambient for the whole request (tools getter, tool handlers, prompts,
   // resources and the instructions block all read it).
