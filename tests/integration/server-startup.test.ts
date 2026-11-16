@@ -15,7 +15,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomInt } from "node:crypto";
 
 const AUTH_TOKEN = "test-token-integration";
-const PORT = 3100 + randomInt(900); // random port in 3100-3999
+// Random port in 3100-3999, skipping the ports fetch() refuses to connect to
+// (the WHATWG "bad port" list: 3659 is the only one in this range). CI hit it
+// once: "fetch failed — bad port".
+const FETCH_BAD_PORTS = new Set([3659]);
+let PORT = 3100 + randomInt(900);
+while (FETCH_BAD_PORTS.has(PORT)) PORT = 3100 + randomInt(900);
 const BASE = `http://localhost:${PORT}`;
 const STARTUP_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 500;
