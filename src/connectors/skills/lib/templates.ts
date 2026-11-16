@@ -21,7 +21,14 @@ import { SKILL_TEMPLATE_SOURCES } from "./templates.generated";
 export const RITUALS_TAG = "rituals";
 
 /** Display order; templates not listed here follow alphabetically. */
-const ORDER = ["remember", "morning-brief", "meeting-prep", "weekly-review", "read-later"];
+const ORDER = [
+  "remember",
+  "morning-brief",
+  "meeting-prep",
+  "weekly-review",
+  "read-later",
+  "handoff",
+];
 
 export interface SkillTemplate {
   /** Agent Skills name (`morning-brief`). */
@@ -30,6 +37,10 @@ export interface SkillTemplate {
   id: string;
   title: string;
   description: string;
+  /** One benefit sentence for humans (`metadata.summary`); the description is for the model. */
+  summary: string;
+  /** What the user says to start it (`metadata.example`), e.g. "Morning brief". */
+  example: string;
   icon: string;
   tags: string[];
   /** Instructions (SKILL.md body without frontmatter). */
@@ -38,11 +49,11 @@ export interface SkillTemplate {
   skillMd: string;
 }
 
-function iconOf(skillMd: string): string {
+/** A string field of the SKILL.md `metadata` block (trimmed), else `fallback`. */
+function metaString(skillMd: string, key: string, fallback: string): string {
   const meta = parseFrontmatter(skillMd).meta.metadata;
-  const icon =
-    meta && typeof meta === "object" ? (meta as Record<string, unknown>).icon : undefined;
-  return typeof icon === "string" && icon.trim() ? icon.trim() : "✨";
+  const v = meta && typeof meta === "object" ? (meta as Record<string, unknown>)[key] : undefined;
+  return typeof v === "string" && v.trim() ? v.trim() : fallback;
 }
 
 function loadTemplates(): SkillTemplate[] {
@@ -55,7 +66,9 @@ function loadTemplates(): SkillTemplate[] {
       id: toKebabId(name),
       title: parsed.title ?? name,
       description: parsed.description,
-      icon: iconOf(src.skillMd),
+      summary: metaString(src.skillMd, "summary", parsed.description),
+      example: metaString(src.skillMd, "example", parsed.title ?? name),
+      icon: metaString(src.skillMd, "icon", "✨"),
       tags,
       body: parsed.body,
       skillMd: src.skillMd,
@@ -106,7 +119,12 @@ export interface TemplateCatalogEntry {
   name: string;
   skillId: string;
   title: string;
+  /** For the model (when to use it). Show `summary` and `example` to humans instead. */
   description: string;
+  /** One benefit sentence for humans. */
+  summary: string;
+  /** What the user says to start it, e.g. "Morning brief". */
+  example: string;
   icon: string;
   tags: string[];
   status: TemplateStatus;
@@ -130,6 +148,8 @@ export async function templateCatalog(): Promise<TemplateCatalogEntry[]> {
       skillId: t.id,
       title: t.title,
       description: t.description,
+      summary: t.summary,
+      example: t.example,
       icon: t.icon,
       tags: t.tags,
       status,

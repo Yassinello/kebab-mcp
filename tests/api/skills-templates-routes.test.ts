@@ -36,7 +36,14 @@ import * as templates from "../../app/api/config/skills/templates/route";
 import * as relay from "../../app/api/config/skills/relay-master/route";
 
 type AdminHandler = (ctx: { request: Request }) => Promise<Response>;
-const EXPECTED = ["remember", "morning-brief", "meeting-prep", "weekly-review", "read-later"];
+const EXPECTED = [
+  "remember",
+  "morning-brief",
+  "meeting-prep",
+  "weekly-review",
+  "read-later",
+  "handoff",
+];
 
 let tmpDir = "";
 beforeEach(async () => {
@@ -74,6 +81,8 @@ describe("/api/welcome/starter-skills", () => {
       expect(typeof s.name).toBe("string");
       expect(typeof s.description).toBe("string");
       expect(typeof s.icon).toBe("string");
+      expect(typeof s.summary).toBe("string");
+      expect(typeof s.example).toBe("string");
       expect(s.installed).toBe(false);
     }
   });

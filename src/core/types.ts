@@ -107,6 +107,8 @@ export interface ToolDefinition {
    *   mutation — same bucket, same future work.
    */
   destructive: boolean;
+  /** Writes only the user's own profile, notes or skills (allowed for "memory" access). */
+  memoryWrite?: boolean;
 }
 
 /**
@@ -123,6 +125,8 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   example?: string;
   deprecated?: string;
   destructive: boolean;
+  /** Writes only the user's own profile, notes or skills (allowed for "memory" access). */
+  memoryWrite?: boolean;
   openWorld?: boolean;
   /**
    * Kebab House phase 3 (APP-02): tool `_meta`, e.g. the MCP Apps view

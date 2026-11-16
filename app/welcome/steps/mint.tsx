@@ -194,8 +194,9 @@ export function MintStep({
   const downloadToken = useCallback(() => {
     if (!state.token) return;
     const content = [
-      `# ${PRODUCT.name} auth token — save this in a password manager`,
-      "# and paste it into your MCP client's Authorization header.",
+      `# ${PRODUCT.name} admin key: it opens your dashboard. Keep it in a password manager.`,
+      "# Paste the line below into your hosting's environment variables if you want",
+      "# a second copy there (optional on durable storage).",
       `MCP_AUTH_TOKEN=${state.token}`,
       "",
     ].join("\n");
@@ -203,7 +204,7 @@ export function MintStep({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "kebab-mcp-token.env";
+    a.download = "kebab-house-admin-key.env";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -216,21 +217,21 @@ export function MintStep({
   const busy = mint.busy;
   const error = state.error;
 
-  // No token yet → show the "Generate" call-to-action.
+  // No key yet → show the "Create" call-to-action.
   if (!state.token) {
     return (
       <section>
         <StepHeader
-          title="Generate your auth token"
-          subtitle="Your AI client uses this token as a bearer credential on every request. It's the only way to authenticate against this instance."
+          title="Create your admin key"
+          subtitle={`The admin key opens your ${PRODUCT.name} dashboard. Your AI clients do not use it: they sign in on their own.`}
         />
 
-        <TokenGenerateExplainer storageMode={storageMode} storageEphemeral={storageEphemeral} />
+        <AdminKeyExplainer durableBackend={durableBackend} />
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
             {error === "already_minted"
-              ? "Another browser already minted this instance — paste the token you saved instead."
+              ? "This instance already has an admin key, created in another browser. Use the key you saved there."
               : error}
           </div>
         )}
@@ -238,7 +239,7 @@ export function MintStep({
         <StepFooter
           secondary={onBack ? { label: "← Storage", onClick: onBack } : undefined}
           primary={{
-            label: busy ? "Generating…" : "Generate my token",
+            label: busy ? "Creating…" : "Create my admin key",
             enabled: !busy && !recoveryResetActive,
             onClick: () => void onGenerate(),
           }}
@@ -247,7 +248,7 @@ export function MintStep({
     );
   }
 
-  // Token minted → save UX.
+  // Key created → save UX.
   const autoMagicSuccess =
     state.autoMagic?.autoMagic && state.autoMagic.envWritten && state.autoMagic.redeployTriggered;
   const autoMagicPartial =
@@ -257,24 +258,26 @@ export function MintStep({
   return (
     <section>
       <StepHeader
-        title="Save your auth token"
-        subtitle="You'll see this token once. Copy it to a password manager and confirm below."
+        title="Save your admin key"
+        subtitle="This key opens your dashboard. Copy it into your password manager now: it is only shown here."
       />
 
-      <TokenDisplayPanel
-        token={state.token}
-        copied={copied}
-        onCopy={copyToken}
-        onDownload={downloadToken}
-      />
+      <TokenDisplayPanel token={state.token} copied={copied} onCopy={copyToken} />
 
       <TokenSaveChecklist
         tokenSaved={state.tokenSaved}
         onChange={(v) => dispatch({ type: "TOKEN_SAVED_SET", tokenSaved: v })}
-        durableBackend={durableBackend}
       />
 
-      <TokenPersistencePanel
+      {!durableBackend && !autoMagicSuccess && (
+        <div className="mb-4 rounded-lg border border-amber-800 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90 leading-relaxed">
+          {state.permanent
+            ? "Your hosting now keeps the key. You can continue."
+            : "Your storage forgets data when the server restarts. One more step keeps your key: see Advanced below."}
+        </div>
+      )}
+
+      <AdvancedPanel
         autoMagicSuccess={Boolean(autoMagicSuccess)}
         autoMagicPartial={Boolean(autoMagicPartial)}
         autoMagicError={state.autoMagic?.redeployError}
@@ -282,15 +285,16 @@ export function MintStep({
         permanent={state.permanent}
         vercelEnvUrl={VERCEL_ENV_URL}
         vercelDeployUrl={VERCEL_DEPLOY_URL}
+        onDownload={downloadToken}
       />
 
       <StepFooter
         secondary={onBack ? { label: "← Storage", onClick: onBack } : undefined}
         primary={{
           label: !state.tokenSaved
-            ? "Confirm you saved the token"
+            ? "Confirm you saved the key"
             : !persistenceReady
-              ? "Waiting for Vercel redeploy…"
+              ? "Waiting for the redeploy…"
               : "Continue → Connect",
           enabled: state.tokenSaved && persistenceReady,
           onClick: onContinue,
@@ -349,90 +353,69 @@ function StepFooter({
 
 // ── Mint-step panels ──────────────────────────────────────────────────
 
-/** Pre-mint explainer: what the token is for, how it's persisted. */
-function TokenGenerateExplainer({
-  storageMode,
-  storageEphemeral,
-}: {
-  storageMode: StorageMode | null;
-  storageEphemeral: boolean;
-}) {
-  const durable = storageMode === "kv" || (storageMode === "file" && !storageEphemeral);
+/** Before the key exists: what it is, when you need it, where to keep it. */
+function AdminKeyExplainer({ durableBackend }: { durableBackend: boolean }) {
   return (
-    <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-5 space-y-3">
-      <p className="text-sm font-semibold text-white">What happens when you click Generate</p>
-      <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside leading-relaxed">
-        <li>
-          We mint a 64-char random token and return it to your browser{" "}
-          <strong className="text-slate-300">once</strong>.
-        </li>
-        {durable ? (
-          <li>
-            Because your storage is durable ({storageMode === "kv" ? "Upstash" : "local disk"}), the
-            token is also written to your backend — it survives cold starts without any manual step.
-          </li>
-        ) : (
-          <li>
-            Because you&apos;re on ephemeral storage, the token lives in the serverless{" "}
-            <code className="font-mono">/tmp</code> only. You&apos;ll need to paste it into your
-            Vercel env vars to keep the instance alive across restarts.
-          </li>
-        )}
-        <li>Next screen shows the token — you MUST copy it to a password manager.</li>
-      </ul>
+    <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+      <dl className="text-xs text-slate-400 space-y-2 leading-relaxed">
+        <div>
+          <dt className="font-semibold text-slate-200">What it is</dt>
+          <dd>A long password for your dashboard, made for you.</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-slate-200">When you need it</dt>
+          <dd>To open your dashboard in a new browser or on another device.</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-slate-200">Where to keep it</dt>
+          <dd>
+            In your password manager. You will see it once, on the next screen.
+            {durableBackend
+              ? ""
+              : " Your storage forgets data on restart, so there is one more step after that."}
+          </dd>
+        </div>
+      </dl>
     </div>
   );
 }
 
-/** Token display: big monospace + copy + download. */
+/** The key + copy button. */
 function TokenDisplayPanel({
   token,
   copied,
   onCopy,
-  onDownload,
 }: {
   token: string;
   copied: boolean;
   onCopy: () => void;
-  onDownload: () => void;
 }) {
   return (
     <div className="mb-6 rounded-lg border border-blue-800/70 bg-blue-950/20 p-5 space-y-4">
       <p className="text-[11px] uppercase tracking-wider text-blue-300 font-semibold">
-        Your permanent token · shown once
+        Your admin key
       </p>
       <code className="block break-all text-sm text-blue-200 font-mono bg-slate-950/50 border border-slate-800 rounded-md px-3 py-2.5 leading-relaxed">
         {token}
       </code>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-4 py-1.5 rounded-md text-xs font-semibold"
-        >
-          {copied ? "Copied ✓" : "Copy to clipboard"}
-        </button>
-        <button
-          type="button"
-          onClick={onDownload}
-          className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-md text-xs font-semibold border border-slate-700"
-        >
-          Download .env fragment
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="inline-flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-4 py-1.5 rounded-md text-xs font-semibold"
+      >
+        {copied ? "Copied ✓" : "Copy"}
+      </button>
     </div>
   );
 }
 
-/** Forced "I saved it" acknowledgment before the Continue button unlocks. */
+/** "I saved it" confirmation: the key is the only way into the dashboard. */
 function TokenSaveChecklist({
   tokenSaved,
   onChange,
-  durableBackend,
 }: {
   tokenSaved: boolean;
   onChange: (v: boolean) => void;
-  durableBackend: boolean;
 }) {
   return (
     <div
@@ -449,12 +432,11 @@ function TokenSaveChecklist({
         />
         <div className="text-xs leading-relaxed">
           <p className={`font-semibold ${tokenSaved ? "text-emerald-200" : "text-amber-200"}`}>
-            I saved this token in a password manager
+            I saved my admin key
           </p>
           <p className="text-slate-400 mt-1">
-            {durableBackend
-              ? "Good options: 1Password, Bitwarden, Apple Keychain, KeePass. The instance keeps a copy, but your MCP clients still need one."
-              : "Good options: 1Password, Bitwarden, Apple Keychain, KeePass. This is your ONLY copy — the instance forgets it on restart unless you paste it into Vercel env vars below."}
+            It is the only way to open your dashboard. A password manager (1Password, Bitwarden,
+            Apple Passwords…) is the right place.
           </p>
         </div>
       </label>
@@ -462,8 +444,11 @@ function TokenSaveChecklist({
   );
 }
 
-/** Persistence status panel: auto-magic outcome + manual fallback steps. */
-function TokenPersistencePanel({
+/**
+ * Advanced (collapsed): hosting environment variables, the .env file and
+ * the automatic redeploy status. Needed only on storage that forgets data.
+ */
+function AdvancedPanel({
   autoMagicSuccess,
   autoMagicPartial,
   autoMagicError,
@@ -471,6 +456,7 @@ function TokenPersistencePanel({
   permanent,
   vercelEnvUrl,
   vercelDeployUrl,
+  onDownload,
 }: {
   autoMagicSuccess: boolean;
   autoMagicPartial: boolean;
@@ -479,115 +465,81 @@ function TokenPersistencePanel({
   permanent: boolean;
   vercelEnvUrl: string;
   vercelDeployUrl: string;
+  onDownload: () => void;
 }) {
-  if (autoMagicSuccess) {
-    return (
-      <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 p-4">
-        <p className="text-sm font-semibold text-emerald-300 mb-2">
-          ✓ Token deployed automatically
-        </p>
-        <ul className="text-xs text-emerald-200/90 space-y-1">
-          <li>✓ Generated and saved</li>
-          <li>✓ Written to your Vercel env vars</li>
-          <li>
-            {permanent
-              ? "✓ Redeploy complete — instance is live"
-              : "⏳ Vercel is redeploying (~60s)…"}
-          </li>
-        </ul>
-      </div>
-    );
-  }
-
-  if (durableBackend) {
-    return (
-      <details className="mb-6 rounded-lg border border-slate-800 bg-slate-900/20 group">
-        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between">
-          <span>
-            Also paste into Vercel env vars <span className="text-slate-600">· optional</span>
-          </span>
-          <span className="text-[10px] text-slate-600 group-open:hidden">expand</span>
-        </summary>
-        <div className="border-t border-slate-800 px-4 py-4 text-xs text-slate-400 space-y-2 leading-relaxed">
-          <p>
-            Because your storage is durable, the token survives cold starts automatically — no
-            manual step required. Pasting it into Vercel env vars adds a second layer (useful if you
-            ever clear the KV store). Entirely optional.
-          </p>
-          <ol className="space-y-1 list-decimal list-inside">
-            <li>
-              Add <code className="font-mono text-slate-300">MCP_AUTH_TOKEN</code> →{" "}
-              <a
-                href={vercelEnvUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
-                Open Vercel
-              </a>
-            </li>
-            <li>
-              Redeploy →{" "}
-              <a
-                href={vercelDeployUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
-                Open Vercel
-              </a>
-            </li>
-          </ol>
-        </div>
-      </details>
-    );
-  }
-
-  // Ephemeral / static — the user MUST paste into Vercel env vars.
   return (
-    <div className="mb-6 rounded-lg border border-amber-800 bg-amber-950/20 p-4 space-y-3">
-      {autoMagicPartial && (
-        <div className="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
-          Auto-deploy partially failed{autoMagicError ? ` (${autoMagicError})` : ""}. Use the manual
-          steps below.
-        </div>
-      )}
-      <p className="text-sm font-semibold text-amber-200">
-        ⚠ Paste this token into Vercel env vars
-      </p>
-      <p className="text-xs text-amber-100/80 leading-relaxed">
-        Your storage is ephemeral — the token lives in <code className="font-mono">/tmp</code> and
-        will vanish on the next cold start unless you persist it as an env var.
-      </p>
-      <ol className="space-y-1.5 text-xs text-slate-300 list-decimal list-inside">
-        <li>
-          Add this token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
-          <a
-            href={vercelEnvUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline"
-          >
-            Open Vercel
-          </a>
-        </li>
-        <li>
-          Trigger a redeploy from the Deployments tab →{" "}
-          <a
-            href={vercelDeployUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline"
-          >
-            Open Vercel
-          </a>
-        </li>
-        <li>
-          {permanent
-            ? "✓ Redeploy detected — your instance is now live"
-            : "Wait ~60s. We'll detect when it's live."}
-        </li>
-      </ol>
-    </div>
+    <details className="mb-6 rounded-lg border border-slate-800 bg-slate-900/20 group">
+      <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between">
+        <span>
+          Advanced{" "}
+          <span className="text-slate-600">
+            · hosting settings{durableBackend ? ", optional" : ""}
+          </span>
+        </span>
+        <span className="text-[10px] text-slate-600 group-open:hidden">expand</span>
+      </summary>
+      <div className="border-t border-slate-800 px-4 py-4 text-xs text-slate-400 space-y-3 leading-relaxed">
+        {autoMagicSuccess ? (
+          <ul className="space-y-1 text-emerald-200/90">
+            <li>✓ Saved as MCP_AUTH_TOKEN in your Vercel environment variables</li>
+            <li>
+              {permanent ? "✓ Redeploy complete" : "⏳ Vercel is redeploying (about a minute)…"}
+            </li>
+          </ul>
+        ) : (
+          <>
+            {autoMagicPartial && (
+              <p className="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-amber-200">
+                The automatic setup did not finish{autoMagicError ? ` (${autoMagicError})` : ""}.
+                Use the steps below.
+              </p>
+            )}
+            <p>
+              {durableBackend
+                ? "Your storage already keeps the key. Adding it to your hosting's environment variables gives you a second copy. This is optional."
+                : "Your storage keeps data in a temporary folder that is wiped on restart. Add the key to your hosting's environment variables so it survives."}
+            </p>
+            <ol className="space-y-1.5 list-decimal list-inside">
+              <li>
+                Add the key as <code className="font-mono text-slate-300">MCP_AUTH_TOKEN</code> →{" "}
+                <a
+                  href={vercelEnvUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Open Vercel
+                </a>
+              </li>
+              <li>
+                Redeploy from the Deployments tab →{" "}
+                <a
+                  href={vercelDeployUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Open Vercel
+                </a>
+              </li>
+              {!durableBackend && (
+                <li>
+                  {permanent
+                    ? "✓ Redeploy detected. You can continue."
+                    : "Wait about a minute. This page notices when it is done."}
+                </li>
+              )}
+            </ol>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onDownload}
+          className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-700"
+        >
+          Download .env fragment
+        </button>
+      </div>
+    </details>
   );
 }

@@ -53,12 +53,11 @@ export function AlreadyInitializedPanel({
     <section aria-label="Already initialized" className="max-w-xl">
       <h1 className="text-2xl font-bold text-white mb-2">Already initialized</h1>
       <p className="text-slate-400 mb-6 leading-relaxed">
-        This instance has a durable token — setup is done. Paste your saved token OR the full MCP
-        URL below to unlock the dashboard. We&apos;ll set the cookie and strip the token from the
-        URL on the next hop so nothing leaks into your browser history.
+        Setup is done. Paste the admin key you saved to open your dashboard. It is removed from the
+        address bar right away, so it does not stay in your browser history.
       </p>
       <label className="block mb-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-        Your auth token (or full MCP URL)
+        Your admin key
       </label>
       <input
         type="password"
@@ -97,13 +96,12 @@ export function AlreadyInitializedPanel({
         Open dashboard →
       </a>
       <details className="mt-8 text-xs text-slate-500">
-        <summary className="cursor-pointer hover:text-slate-300">Lost your token?</summary>
+        <summary className="cursor-pointer hover:text-slate-300">Lost your admin key?</summary>
         <p className="mt-2 leading-relaxed">
-          Check the password manager where you saved it during /welcome, or look for{" "}
-          <code className="font-mono">MCP_AUTH_TOKEN</code> in your Vercel project env vars if
-          auto-magic wrote it. If it&apos;s truly gone, use the Recover-access flow below to wipe
-          state and mint a new one — just remember any MCP clients still using the old token will
-          need to be updated.
+          Check the password manager where you saved it during setup, or look for{" "}
+          <code className="font-mono">MCP_AUTH_TOKEN</code> in your hosting&apos;s environment
+          variables. If it is truly gone, use &apos;Locked out? Recover access&apos; below to start
+          over with a new key.
         </p>
       </details>
     </section>

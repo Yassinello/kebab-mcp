@@ -59,7 +59,7 @@ export function WizardStepper({
 }) {
   const steps: { n: WizardStep; label: string; done: boolean }[] = [
     { n: 1, label: "Storage", done: storageReady },
-    { n: 2, label: "Auth token", done: tokenSavedConfirmed },
+    { n: 2, label: "Admin key", done: tokenSavedConfirmed },
     { n: 3, label: "Connect", done: testOk },
   ];
   return (

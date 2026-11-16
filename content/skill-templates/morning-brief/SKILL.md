@@ -7,6 +7,8 @@ description: >-
   those tools exist) and their recent notes, ending with the top priorities for the day.
 metadata:
   title: Morning brief
+  summary: "Starts your day in two minutes: today's meetings, what needs you, and your top 3."
+  example: "Morning brief"
   icon: "☀️"
   tags: [rituals]
 ---
