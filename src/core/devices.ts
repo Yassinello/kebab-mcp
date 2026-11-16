@@ -355,13 +355,16 @@ async function scanRateLimitKeysForToken(hash16: string): Promise<string[]> {
 }
 
 /**
- * Enumerate current devices: one row per token in `MCP_AUTH_TOKEN`.
- * KV-missing entries surface as `{ label: "unnamed", createdAt: "unknown" }`.
+ * Enumerate current devices: one row per token in `MCP_AUTH_TOKEN`, then the
+ * clients that signed in with OAuth. KV-missing entries surface as
+ * `{ label: "unnamed", createdAt: "unknown" }`.
+ *
+ * Audit 2026-11: an instance set up through /welcome has no token in
+ * MCP_AUTH_TOKEN; its OAuth clients (Claude…) must still be listed.
  */
 export async function listDevices(): Promise<DeviceRow[]> {
   const envValue = getConfig("MCP_AUTH_TOKEN");
   const tokens = parseTokens(envValue);
-  if (tokens.length === 0) return [];
 
   const kv = getContextKVStore();
   const rows: DeviceRow[] = [];

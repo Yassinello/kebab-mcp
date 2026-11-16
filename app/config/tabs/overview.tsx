@@ -127,7 +127,7 @@ export function OverviewTab({
   totalTools,
   enabledCount,
   connectorCount,
-  logs,
+  logs: initialLogs,
   version,
   commitSha,
   tenantId,
@@ -142,6 +142,31 @@ export function OverviewTab({
   tenantId?: string | null | undefined;
 }) {
   const [tokenRevealed, setTokenRevealed] = useState(false);
+  // The server-rendered list comes from this page's own in-memory buffer,
+  // which is not the one the MCP route writes to: read the same API as the
+  // Logs page instead (audit 2026-11: Overview said "No tool invocations
+  // yet" while Logs listed them).
+  const [logs, setLogs] = useState<ToolLog[]>(initialLogs);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/config/logs", { credentials: "include" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { logs?: ToolLog[] };
+        if (!cancelled && Array.isArray(data.logs)) setLogs(data.logs);
+      } catch {
+        // keep the server-rendered list
+      }
+    };
+    // fire-and-forget OK: client-side refresh; errors keep the server-rendered list
+    void load();
+    const id = setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
   const [copied, setCopied] = useState<string | null>(null);
   const [update, setUpdate] = useState<UpdateStatus>({ state: "loading" });
   const [result, setResult] = useState<UpdateResult>({ state: "idle" });

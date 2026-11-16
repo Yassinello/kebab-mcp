@@ -173,3 +173,49 @@ describe("FilesystemKV write coalescing", () => {
     expect(await kv.get("usage:y")).toBe("1");
   });
 });
+
+// Next.js loads kv-store once per route bundle: two FilesystemKV instances on
+// one file in the same process (found live: an OAuth client registered by one
+// route was "unknown" to the consent page for 200 ms).
+describe("FilesystemKV — several module instances on one file", () => {
+  async function secondInstance() {
+    vi.resetModules();
+    const mod = await import("./kv-store");
+    return mod.getKVStore();
+  }
+
+  it("a value set with a TTL is visible to another instance immediately", async () => {
+    const a = getKVStore();
+    const b = await secondInstance();
+    await b.get("warm"); // b has loaded the file
+    await a.set("oauth:client:x", "{}", 86_400);
+    expect(await b.get("oauth:client:x")).toBe("{}");
+  });
+
+  it("a deferred counter write does not erase keys written by another instance", async () => {
+    const a = getKVStore();
+    const b = await secondInstance();
+    await a.get("warm");
+    await b.get("warm");
+    await a.incr!("usage:w:total"); // deferred in a
+    await b.set("profile", "mine"); // durable in b, written meanwhile
+    await flushKVWrites(); // flush a (this module's instances)
+    await new Promise((r) => setTimeout(r, 300)); // and any timer
+    const file = await readFile();
+    expect(file["profile"]).toBe("mine");
+    expect(file["usage:w:total"]).toBe("1");
+    expect(await b.get("usage:w:total")).toBe("1");
+  });
+
+  it("a delete in one instance is not undone by the other's later write", async () => {
+    const a = getKVStore();
+    await a.set("k", "v");
+    const b = await secondInstance();
+    await b.get("k");
+    await a.delete("k");
+    await b.set("other", "1");
+    const file = await readFile();
+    expect(file["k"]).toBeUndefined();
+    expect(file["other"]).toBe("1");
+  });
+});

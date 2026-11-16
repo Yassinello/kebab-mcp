@@ -18,7 +18,7 @@
  * - Else → FilesystemKV at ./data/kv.json
  */
 
-import { promises as fs, renameSync, writeFileSync } from "node:fs";
+import { promises as fs, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { withTenantPrefix } from "./tenant";
@@ -207,6 +207,13 @@ class FilesystemKV implements KVStore {
   private loading: Promise<Record<string, StoredValue>> | null = null;
   /** In-memory changes not yet on disk. */
   private dirty = false;
+  /**
+   * Keys changed (set or deleted) since the last write. Next.js loads this
+   * module once per route bundle, so several FilesystemKV instances can share
+   * one file in the same process: a write merges only these keys into the
+   * current file instead of overwriting what the other instances wrote.
+   */
+  private dirtyKeys = new Set<string>();
   private writing = false;
   private reloadRequested = false;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -344,7 +351,10 @@ class FilesystemKV implements KVStore {
 
   private sweep(map: Record<string, StoredValue>, now: number): void {
     for (const k of Object.keys(map)) {
-      if (!isLive(map[k], now)) delete map[k];
+      if (!isLive(map[k], now)) {
+        delete map[k];
+        this.dirtyKeys.add(k);
+      }
     }
   }
 
@@ -359,10 +369,26 @@ class FilesystemKV implements KVStore {
       this.sweep(this.data, now);
       this.lastSweep = now;
     }
+    this.writing = true;
+    // Another instance wrote the file since we last read it: merge our
+    // changed keys into its current content rather than overwrite it.
+    try {
+      const st = await fs.stat(this.filePath);
+      if (
+        !this.diskStamp ||
+        st.mtimeMs !== this.diskStamp.mtimeMs ||
+        st.size !== this.diskStamp.size
+      ) {
+        this.data = this.mergeInto(await fs.readFile(this.filePath, "utf-8"));
+      }
+    } catch {
+      // silent-swallow-ok: no file yet (or unreadable) — our copy is the content.
+    }
     // Serialised synchronously: the snapshot holds every change made so far.
     const json = JSON.stringify(this.data, null, 2);
     this.dirty = false;
-    this.writing = true;
+    const written = new Set(this.dirtyKeys);
+    this.dirtyKeys.clear();
     try {
       await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
@@ -372,11 +398,31 @@ class FilesystemKV implements KVStore {
       this.diskStamp = { mtimeMs: st.mtimeMs, size: st.size };
     } catch (err) {
       this.dirty = true;
+      for (const k of written) this.dirtyKeys.add(k);
       throw err;
     } finally {
       this.writing = false;
       if (!this.dirty) pendingStores.delete(this);
     }
+  }
+
+  /** The file's current content with this instance's changed keys applied. */
+  private mergeInto(raw: string): Record<string, StoredValue> {
+    let disk: Record<string, StoredValue> = {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        disk = parsed as Record<string, StoredValue>;
+      }
+    } catch {
+      return this.data ?? {};
+    }
+    const mine = this.data ?? {};
+    for (const k of this.dirtyKeys) {
+      if (k in mine) disk[k] = mine[k] as StoredValue;
+      else delete disk[k];
+    }
+    return disk;
   }
 
   /** Synchronous flush (process exit, test reset). Never creates the folder. */
@@ -388,10 +434,16 @@ class FilesystemKV implements KVStore {
     pendingStores.delete(this);
     if (!this.dirty || !this.data) return;
     try {
+      try {
+        this.data = this.mergeInto(readFileSync(this.filePath, "utf-8"));
+      } catch {
+        // silent-swallow-ok: no file yet — our copy is the content.
+      }
       const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
       writeFileSync(tmp, JSON.stringify(this.data, null, 2), "utf-8");
       renameSync(tmp, this.filePath);
       this.dirty = false;
+      this.dirtyKeys.clear();
     } catch {
       // silent-swallow-ok: best effort — the process is going away (or the test folder is gone).
     }
@@ -404,12 +456,14 @@ class FilesystemKV implements KVStore {
     return liveValue(map[key], Date.now());
   }
 
+  // Durable even with a TTL: other route bundles (separate instances on the
+  // same file) must see e.g. a just-registered OAuth client on the next request.
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    const ephemeral = !!ttlSeconds && ttlSeconds > 0;
     await this.mutate((map, now) => {
       map[key] = withTtl(value, ttlSeconds, now);
+      this.dirtyKeys.add(key);
       return { result: undefined, changed: true };
-    }, !ephemeral);
+    }, true);
   }
 
   /**
@@ -427,6 +481,7 @@ class FilesystemKV implements KVStore {
       const current = liveValue(map[key], now);
       if (current !== null) return { result: { ok: false, existing: current }, changed: false };
       map[key] = withTtl(value, opts?.ttlSeconds, now);
+      this.dirtyKeys.add(key);
       return { result: { ok: true }, changed: true };
     }, true);
   }
@@ -435,6 +490,7 @@ class FilesystemKV implements KVStore {
     await this.mutate((map) => {
       if (!(key in map)) return { result: undefined, changed: false };
       delete map[key];
+      this.dirtyKeys.add(key);
       return { result: undefined, changed: true };
     }, true);
   }
@@ -505,6 +561,7 @@ class FilesystemKV implements KVStore {
       } else {
         map[key] = String(next);
       }
+      this.dirtyKeys.add(key);
 
       if (opts?.ttlSeconds && opts.ttlSeconds > 0) {
         const windowMs = 60_000; // rate limiter uses 1-minute buckets
@@ -518,6 +575,7 @@ class FilesystemKV implements KVStore {
           const bucket = parseInt(bucketStr, 10);
           if (Number.isFinite(bucket) && bucket < staleBefore) {
             delete map[k];
+            this.dirtyKeys.add(k);
           }
         }
       }

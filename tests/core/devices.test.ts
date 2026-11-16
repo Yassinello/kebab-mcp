@@ -112,6 +112,27 @@ describe("listDevices", () => {
     expect(rows).toEqual([]);
   });
 
+  it("lists OAuth clients even when MCP_AUTH_TOKEN is unset (instance set up via /welcome)", async () => {
+    await createOAuthDevice({
+      id: "0a1b2c3d",
+      label: "Claude",
+      clientId: "kc_test",
+      clientName: "Claude",
+      connectors: null,
+      skillTags: null,
+      profile: null,
+      access: "memory",
+    });
+    const rows = await listDevices();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      tokenId: "0a1b2c3d",
+      label: "Claude",
+      kind: "oauth",
+      access: "memory",
+    });
+  });
+
   it("returns one row per token; tokenId matches auth.tokenId()", async () => {
     envVars.MCP_AUTH_TOKEN = `${TOKEN_A},${TOKEN_B}`;
     const rows = await listDevices();

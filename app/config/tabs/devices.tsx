@@ -323,9 +323,9 @@ export function DevicesTab({
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-text-dim">
-          Each row is a token in <code className="text-xs">MCP_AUTH_TOKEN</code>. Add, rotate,
-          revoke, or scope a token to a subset of connectors and skill tags — without hand-editing
-          env vars.
+          Every AI client that can reach your hub: the ones that signed in (Claude, ChatGPT,
+          Cursor…) and the device tokens you created. Choose what each one may do, which profile it
+          uses and which skills it sees, or revoke it.
         </p>
         <button
           type="button"
@@ -343,7 +343,9 @@ export function DevicesTab({
       {!rows && !error && <p className="text-xs text-text-muted">Loading devices…</p>}
       {rows && rows.length === 0 && (
         <div className="rounded border border-border bg-bg-muted p-6 text-sm text-text-dim">
-          No devices yet. Run the welcome flow, then use <strong>Add device</strong> to invite more.
+          No AI client yet. Connect one from your client (Claude: Settings → Connectors → Add custom
+          connector, with your Kebab House URL), or use <strong>Add device</strong> to create a
+          token for a client that cannot sign in.
         </div>
       )}
       {rows && rows.length > 0 && (

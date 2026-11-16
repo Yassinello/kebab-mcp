@@ -9,7 +9,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { resetKVStoreCache } from "@/core/kv-store";
+import { flushKVWrites, resetKVStoreCache } from "@/core/kv-store";
 import { kvVaultBackend } from "@/connectors/vault/lib/kv-backend";
 import { GET, DELETE } from "../../app/api/config/memory/route";
 
@@ -45,8 +45,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllEnvs();
+  // Let deferred counter writes land before the folder goes away.
+  await flushKVWrites();
   resetKVStoreCache();
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 describe("/api/config/memory — auth", () => {
