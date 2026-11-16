@@ -20,7 +20,13 @@ vi.mock("@/core/config", async () => {
   return { ...actual, getInstanceConfigAsync: async () => ({ contextPath }) };
 });
 
-import { handleMyContext, handleMyContextUpdate } from "@/connectors/context/tools/my-context";
+import {
+  handleMyContext,
+  handleMyContextUpdate,
+  readActiveProfile,
+} from "@/connectors/context/tools/my-context";
+import { handleKebabSetup } from "@/connectors/context/tools/setup";
+import { handleKebabStatus } from "@/connectors/house/tools/house-tools";
 import { KV_CONTEXT_MODE } from "@/core/profiles";
 import { kvVaultBackend } from "@/connectors/vault/lib/kv-backend";
 
@@ -77,5 +83,40 @@ describe("my_context in vault mode on the KV backend", () => {
     const r = await handleMyContextUpdate({ content: "yyyy" });
     expect(r.isError).toBe(true);
     expect((await kvVaultBackend.read("Me/profile.md")).content).toHaveLength(64 * 1024 - 2);
+  });
+});
+
+describe("readActiveProfile — one resolver for my_context, kebab_setup, kebab_status", () => {
+  it("returns the vault note in vault mode, and flags a missing note", async () => {
+    expect(await readActiveProfile()).toEqual({
+      name: "default",
+      mode: "vault",
+      content: "",
+      path: "Me/profile.md",
+      missing: true,
+    });
+    await kvVaultBackend.write("Me/profile.md", "# Me\nI build things.");
+    expect(await readActiveProfile()).toMatchObject({
+      mode: "vault",
+      content: "# Me\nI build things.",
+    });
+  });
+
+  it("kebab_setup sees a vault-mode profile instead of reporting it missing", async () => {
+    await kvVaultBackend.write("Me/profile.md", "# Me\nI build things.");
+    await handleKebabSetup({ action: "goto", step: "profile" });
+    const text = textOf(await handleKebabSetup({}));
+    expect(text).toMatch(/A profile already exists \(stored as the note "Me\/profile.md"/);
+    expect(text).not.toMatch(/No profile exists yet/);
+  });
+
+  it("kebab_status previews the vault-mode profile", async () => {
+    await kvVaultBackend.write("Me/profile.md", "# Me\nI build things.");
+    const status = await handleKebabStatus();
+    expect(textOf(status)).toContain("Profile: **default**");
+    expect(textOf(status)).not.toContain("(empty");
+    expect(status.structuredContent).toMatchObject({
+      profile: { preview: "# Me\nI build things." },
+    });
   });
 });

@@ -45,6 +45,9 @@ const BRIDGE_JS = `
   const notify = (method, params) => post({ jsonrpc: "2.0", method, params: params || {} });
   const listeners = [];
   window.addEventListener("message", (e) => {
+    // Only the host (our parent frame) speaks the protocol: ignore messages
+    // from any other window (another frame, a popup).
+    if (e.source !== window.parent) return;
     const m = e.data;
     if (!m || m.jsonrpc !== "2.0") return;
     if (m.id !== undefined && pending.has(m.id) && !m.method) {

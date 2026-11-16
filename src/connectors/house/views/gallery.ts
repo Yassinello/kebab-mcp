@@ -33,7 +33,12 @@ function render() {
   tplEl.textContent = ""; tplEl.className = "";
   data.templates.forEach((t) => {
     const r = kh.el("div", undefined, "row");
-    r.append(kh.el("span", t.title + " — " + t.status));
+    const info = kh.el("div");
+    info.append(kh.el("strong", t.title));
+    if (t.summary) info.append(kh.el("div", t.summary, "muted"));
+    if (t.example) info.append(kh.el("div", "Say: “" + t.example + "”", "muted"));
+    r.append(info);
+    if (t.status === "installed") r.append(kh.el("span", "Installed", "muted"));
     if (t.status !== "installed") {
       const b = kh.el("button", t.status === "modified" ? "Update" : "Install");
       b.onclick = async () => {

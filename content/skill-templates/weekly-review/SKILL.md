@@ -7,6 +7,8 @@ description: >-
   user's priorities, and ends with next week's top priorities and a saved review note.
 metadata:
   title: Weekly review
+  summary: "A 10-minute look back at your week and a short plan for the next one, saved to your notes."
+  example: "Weekly review"
   icon: "🗓️"
   tags: [rituals]
 ---
@@ -18,7 +20,7 @@ A 10-minute guided review: look back, compare with what matters, decide next wee
 ## 1. Look back (skip sources that are not available)
 
 - `my_context`: the user's priorities and active projects, the yardstick for the review.
-- **Recap**: if a `kebab_weekly_recap` tool is available, call it for the past week and use it as the backbone. Otherwise call `vault_recent` with `since` set to 7 days ago (up to 30 notes), then `vault_read` the notes that matter (meeting notes, journal, project notes).
+- **Recap**: if a `kebab_weekly_recap` tool is available, call it without a week (from Friday to Sunday it covers the current week, otherwise the last complete one; it says which) and use it as the backbone. Otherwise call `vault_recent` with `since` set to 7 days ago (up to 30 notes), then `vault_read` the notes that matter (meeting notes, journal, project notes).
 - If a calendar tool is available: the meetings of the past week and those of next week.
 - The previous review, if any (`vault_search` for "Weekly review"): what was planned, to check what happened.
 

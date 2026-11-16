@@ -14,7 +14,9 @@ kh.onResult((res) => {
   if (!d) { root.textContent = "No data."; return; }
   const top = kh.el("div", undefined, "grid");
   const stat = (value, label) => { const c = kh.el("div", undefined, "card"); c.append(kh.el("div", value, "big"), kh.el("div", label, "muted")); return c; };
-  top.append(stat(d.week.total, "tool calls this week"), stat(d.week.notes, "notes added"), stat(d.skills.count, "skills"), stat(d.connectors.length, "connectors"));
+  top.append(stat(d.week.total, d.scope === "own" ? "tool calls by this client" : "tool calls this week"));
+  if (d.notes && d.notes.length) top.append(stat(d.week.notes, "notes added"));
+  top.append(stat(d.skills.count, "skills"), stat(d.connectors.length, "connectors"));
   root.append(top);
   root.append(kh.el("h2", "Profile · " + d.profile.name));
   root.append(kh.el("pre", d.profile.preview || "No profile yet — say “Set up my Kebab House”."));
