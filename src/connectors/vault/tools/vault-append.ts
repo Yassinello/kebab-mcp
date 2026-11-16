@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { getVaultBackend } from "../lib/select";
+import { readFirstExisting } from "../lib/backend";
+import { withMarkdownExtension } from "../lib/paths";
 import { ensureProvenance, noteProvenance } from "../lib/provenance";
 
 export const vaultAppendSchema = {
@@ -18,9 +20,13 @@ export async function handleVaultAppend(params: {
 }) {
   const separator = params.separator ?? "\n\n";
 
-  // Read existing file (get content + SHA in one call)
+  // Read existing file (get content + SHA in one call). B1: a path without
+  // extension names `<path>.md` (what vault_write saves); a legacy note
+  // stored without extension is still found and appended in place.
   const vault = getVaultBackend();
-  const file = await vault.read(params.path);
+  const md = withMarkdownExtension(params.path);
+  const file = await readFirstExisting(vault, md.added ? [md.path, params.path] : [params.path]);
+  const path = file.path;
 
   // Append content. TRU-03: the note now holds model-written text, so it is
   // tagged `provenance: assistant` unless it already declares a provenance
@@ -28,8 +34,8 @@ export async function handleVaultAppend(params: {
   const newContent = ensureProvenance(file.content + separator + params.content, "assistant");
 
   // Write back with known SHA (skips extra GET)
-  const result = await vault.write(params.path, newContent, {
-    message: `Append to ${params.path} via Kebab MCP`,
+  const result = await vault.write(path, newContent, {
+    message: `Append to ${path} via Kebab MCP`,
     expectedVersion: file.sha,
   });
 
@@ -44,6 +50,9 @@ export async function handleVaultAppend(params: {
             sha: result.sha,
             appendedLength: params.content.length,
             provenance: noteProvenance(newContent),
+            ...(path !== params.path
+              ? { note: `Appended to ${path} (notes use the .md extension).` }
+              : {}),
           },
           null,
           2

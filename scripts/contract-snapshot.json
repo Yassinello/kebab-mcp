@@ -1755,6 +1755,7 @@
     "schemaKeys": [
       "from",
       "message",
+      "overwrite",
       "to"
     ],
     "destructive": true,

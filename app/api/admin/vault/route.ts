@@ -3,10 +3,12 @@
  *
  * GET  → which vault backend is in use and why, whether GitHub is
  *        configured, and the size of the KV vault.
- * POST → `{ action: "import-github" }` copies the GitHub vault's Markdown
- *        files into the KV backend and returns a report (copied, unchanged,
- *        skipped, too large, failed; `incomplete` when the time budget ran
- *        out — run it again to resume).
+ * POST → `{ action: "import-github", overwrite?: boolean }` copies the
+ *        GitHub vault's Markdown files into the KV backend and returns a
+ *        report (copied, overwritten, kept, unchanged, skipped, too large,
+ *        failed; `incomplete` when the time budget ran out — run it again to
+ *        resume). Notes present in both with different content are kept as
+ *        they are in the KV unless `overwrite: true` (B2, 2026-11 audit).
  *        `{ action: "rebuild-index" }` rebuilds the KV vault index from the
  *        stored notes.
  *
@@ -61,9 +63,11 @@ async function getHandler(): Promise<Response> {
 
 async function postHandler(ctx: PipelineContext): Promise<Response> {
   let action = "";
+  let overwrite = false;
   try {
-    const body = (await ctx.request.json()) as { action?: unknown };
+    const body = (await ctx.request.json()) as { action?: unknown; overwrite?: unknown };
     action = typeof body.action === "string" ? body.action : "";
+    overwrite = body.overwrite === true;
   } catch {
     // fall through to the 400 below
   }
@@ -79,7 +83,7 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
 
   if (action === "import-github") {
     try {
-      const report = await importGithubVaultToKv();
+      const report = await importGithubVaultToKv({ overwrite });
       const choice = resolveVaultBackendKind();
       return Response.json(
         { ok: true, action, backend: choice.kind, report },
