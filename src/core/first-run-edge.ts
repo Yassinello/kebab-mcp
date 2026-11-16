@@ -57,11 +57,6 @@ export function getEdgeBootstrapAuthToken(): string | null {
   return edgeBootstrapAuthTokenCache;
 }
 
-/** Test helper: forget the cached token (module state survives between tests). */
-export function __resetEdgeBootstrapCacheForTests(): void {
-  edgeBootstrapAuthTokenCache = null;
-}
-
 /** The token of a persisted bootstrap payload (a JSON string), or null when unusable. */
 function tokenFromPayload(raw: string | null | undefined, maxAgeMs?: number): string | null {
   if (!raw) return null;
