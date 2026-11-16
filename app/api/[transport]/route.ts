@@ -377,6 +377,17 @@ async function buildHandler(
         name: PRODUCT.name,
         version: VERSION,
       },
+      // Each request builds its own server and nothing pushes list-change
+      // notifications across serverless instances. Advertising listChanged
+      // made 2026-era clients hold a `subscriptions/listen` stream open until
+      // the 90 s function limit, then reconnect, in a loop (kebab-mcp-yass,
+      // 16 Nov 2026). Without it the SDK acknowledges and closes the stream
+      // at once; clients re-list on reconnect as before.
+      capabilities: {
+        tools: { listChanged: false },
+        prompts: { listChanged: false },
+        resources: { listChanged: false },
+      },
       // Skills v2 (spec §5): connectors may contribute to the MCP server
       // instructions (the skills connector publishes the caller's catalogue
       // so any client knows when to call skill_load). Out-of-scope
