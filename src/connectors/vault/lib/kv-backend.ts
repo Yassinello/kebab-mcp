@@ -43,6 +43,7 @@ import { kvScanAll, type KVStore } from "@/core/kv-store";
 import { VaultConflictError, VaultLimitError, VaultNotFoundError } from "@/core/connector-errors";
 import { BRAND, PRODUCT } from "@/core/constants/brand";
 import { toMsg } from "@/core/error-utils";
+import { runAfterResponse } from "@/core/after-response";
 import { parseNoteFrontmatter, provenanceOf, type Provenance } from "./provenance";
 import {
   baseName,
@@ -297,8 +298,19 @@ function needsClaims(kv: KVStore): boolean {
   return kv.kind === "upstash" && typeof kv.setIfNotExists === "function";
 }
 
+/** The scan for note keys ran past its time budget: the repair is skipped. */
+class ScanBudgetExceeded extends Error {}
+
+/**
+ * Time budget for the background index repair. A Redis SCAN walks the whole
+ * keyspace, one HTTP round trip per page on Upstash: on a large instance a
+ * full scan can take longer than the function itself may run.
+ */
+export const HEAL_SCAN_BUDGET_MS = 8_000;
+
 /** Every stored note key (deduplicated: a Redis SCAN may repeat keys). */
-async function noteKeys(kv: KVStore): Promise<string[]> {
+async function noteKeys(kv: KVStore, budgetMs?: number): Promise<string[]> {
+  const deadline = budgetMs ? Date.now() + budgetMs : Infinity;
   if (typeof kv.scan !== "function") {
     return (await kvScanAll(kv, `${NOTE_PREFIX}*`)).filter((k) => k.startsWith(NOTE_PREFIX));
   }
@@ -310,6 +322,7 @@ async function noteKeys(kv: KVStore): Promise<string[]> {
     for (const k of page.keys) if (k.startsWith(NOTE_PREFIX)) out.add(k);
     cursor = page.cursor;
     guard++;
+    if (cursor !== "0" && Date.now() > deadline) throw new ScanBudgetExceeded();
   } while (cursor !== "0" && guard < 100_000);
   return [...out];
 }
@@ -456,9 +469,10 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
    */
   async function heal(
     kv: KVStore,
-    index: VaultIndex
+    index: VaultIndex,
+    budgetMs?: number
   ): Promise<{ index: VaultIndex; added: number; removed: number }> {
-    const stored = new Set((await noteKeys(kv)).map((k) => k.slice(NOTE_PREFIX.length)));
+    const stored = new Set((await noteKeys(kv, budgetMs)).map((k) => k.slice(NOTE_PREFIX.length)));
     const missing = [...stored].filter((p) => !index.notes[p]);
     const stale = Object.keys(index.notes).filter((p) => !stored.has(p));
     if (missing.length === 0 && stale.length === 0) return { index, added: 0, removed: 0 };
@@ -486,13 +500,27 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
     });
   }
 
-  /** The index for a read, repaired from the note keys every few minutes. */
+  /**
+   * The index for a read. Every few minutes the index is also repaired from
+   * the note keys — after the response and within a time budget, never
+   * inline: on Upstash the scan walks the whole keyspace, and a large
+   * instance made every first read of a fresh function run into the 90 s
+   * limit (kebab-mcp-yass, 16 Nov 2026).
+   */
   async function readIndex(kv: KVStore): Promise<VaultIndex> {
     const index = await loadIndex(kv);
     const now = Date.now();
     if (now - lastHealAt < HEAL_INTERVAL_MS) return index;
     lastHealAt = now;
-    return (await heal(kv, index)).index;
+    // fire-and-forget OK: best-effort repair of the note index; the read uses the stored index
+    runAfterResponse(async () => {
+      try {
+        await heal(kv, index, HEAL_SCAN_BUDGET_MS);
+      } catch (err) {
+        if (!(err instanceof ScanBudgetExceeded)) throw err;
+      }
+    }, "vault.index.heal");
+    return index;
   }
 
   async function readStored(kv: KVStore, path: string): Promise<StoredNote | null> {

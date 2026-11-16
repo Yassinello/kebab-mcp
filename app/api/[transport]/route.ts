@@ -432,7 +432,36 @@ async function resolveTransportSegment(ctx: PipelineContext): Promise<string | n
  * credentials snapshot carries them through AsyncLocalStorage. See
  * credential-store.ts SEC-02 for the resolution order.
  */
+/**
+ * One log line per MCP request: the JSON-RPC method(s) and tool name, never
+ * the arguments. Without it a request that runs into the 90 s limit leaves
+ * no trace of what it was (kebab-mcp-yass, 16 Nov 2026).
+ */
+async function logRpcCall(request: Request, requestId: string): Promise<void> {
+  if (request.method !== "POST") return;
+  try {
+    const body: unknown = JSON.parse(await request.clone().text());
+    const calls = (Array.isArray(body) ? body : [body]) as {
+      method?: unknown;
+      params?: { name?: unknown };
+    }[];
+    const parts = calls
+      .map((c) =>
+        typeof c?.method === "string"
+          ? c.method === "tools/call" && typeof c.params?.name === "string"
+            ? `tools/call ${c.params.name.slice(0, 80)}`
+            : c.method.slice(0, 80)
+          : null
+      )
+      .filter(Boolean);
+    if (parts.length) console.info(`[Kebab MCP] rpc ${parts.join(", ")} (${requestId})`);
+  } catch {
+    // not JSON — mcp-handler answers the parse error itself
+  }
+}
+
 async function transportHandler(ctx: PipelineContext): Promise<Response> {
+  await logRpcCall(ctx.request, ctx.requestId);
   // Contract 5 (2026-11 audit): tool handlers that hand the model an
   // absolute link (dashboard, approval page) read this instance's origin.
   return runWithRequestOrigin(publicOrigin(ctx.request), () => serveTransport(ctx));

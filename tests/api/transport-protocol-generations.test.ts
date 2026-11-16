@@ -289,6 +289,21 @@ describe("PRO-02 — 2025-era client (initialize, stateless Streamable HTTP)", (
     expectAnnotatedTools((msg.result as { tools: ListedTool[] }).tools);
   });
 
+  it("logs the JSON-RPC method and tool name of each request, never the arguments", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      await readRpc(
+        await legacy(30, "tools/call", { name: "echo_text", arguments: { text: "secret-arg" } })
+      );
+      const lines = info.mock.calls.map((c) => String(c[0]));
+      const rpc = lines.find((l) => l.includes("[Kebab MCP] rpc "));
+      expect(rpc).toMatch(/rpc tools\/call echo_text \(/);
+      expect(lines.join("\n")).not.toContain("secret-arg");
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("tools/call runs the tool (and structuredContent survives)", async () => {
     const msg = await readRpc(
       await legacy(3, "tools/call", { name: "echo_text", arguments: { text: "hi" } })

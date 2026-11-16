@@ -2,7 +2,7 @@
  * 2026-11 audit, workstream B — vault safety (B2) and search quality (B3) on
  * the KV backend, against an in-memory KV.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KVStore } from "@/core/kv-store";
 import {
   INDEX_CLAIM_PREFIX,
@@ -116,10 +116,12 @@ describe("B2 — index robust to two instances writing at once", () => {
       createKvVaultBackend(() => view).write("from-b.md", "B"),
     ]);
     expect(indexedPaths(kv)).toHaveLength(2); // one entry lost
-    // A fresh instance (or the periodic check) compares note keys and index.
+    // A fresh instance (or the periodic check) compares note keys and index
+    // after the response, so the read itself never waits for the scan.
     const reader = createKvVaultBackend(() => kv);
+    await reader.list();
+    await vi.waitFor(() => expect(indexedPaths(kv)).toEqual(["from-a.md", "from-b.md", "seed.md"]));
     expect((await reader.list()).map((e) => e.path)).toEqual(["from-a.md", "from-b.md", "seed.md"]);
-    expect(indexedPaths(kv)).toEqual(["from-a.md", "from-b.md", "seed.md"]);
   });
 
   it("a claim left by a writer that died is outlived (rebuild from the notes)", async () => {
@@ -275,5 +277,27 @@ describe("B1 — note paths without extension", () => {
     await vault.write("Inbox/x.txt", "not a note");
     expect((await vault.recent(10)).map((n) => n.path)).toEqual(["Inbox/2026-11-15"]);
     expect((await vault.stats()).totalNotes).toBe(1);
+  });
+});
+
+describe("index repair never blocks a read (kebab-mcp-yass, 16 Nov 2026)", () => {
+  it("a scan that would take minutes does not delay list()", async () => {
+    const kv = makeMemoryKV();
+    await createKvVaultBackend(() => kv).write("a.md", "a");
+    let stop = false;
+    let pages = 0;
+    // A huge keyspace: every page takes a while and the cursor never ends.
+    kv.scan = async () => {
+      pages++;
+      await new Promise((r) => setTimeout(r, 20));
+      return { cursor: stop ? "0" : String(pages), keys: [] };
+    };
+    const reader = createKvVaultBackend(() => kv);
+    const t0 = Date.now();
+    const list = await reader.list();
+    expect(Date.now() - t0).toBeLessThan(500);
+    expect(list.map((e) => e.path)).toEqual(["a.md"]);
+    stop = true; // end the background repair
+    await vi.waitFor(() => expect(pages).toBeGreaterThan(0));
   });
 });
