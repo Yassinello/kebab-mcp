@@ -23,9 +23,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   getDeviceAccess,
+  getDeviceAccessLevelFrom,
   getDeviceMetaFrom,
   getDeviceSkillTagsFrom,
-  getDeviceWriteAllowedFrom,
+  mostRestrictiveAccess,
+  type AccessLevel,
 } from "./devices";
 import { getKVStore, getTenantKVStore } from "./kv-store";
 import { getCurrentTenantId } from "./request-context";
@@ -199,9 +201,14 @@ export interface CallerMeta {
   /** Profile bound to the token. `null` = default profile. */
   profile: string | null;
   /**
-   * Kebab House phase 1 (TRU-05): false for OAuth clients that were not
-   * granted write access — destructive tools are then hidden and refused.
-   * Static tokens are always true.
+   * Audit 2026-11: the device's access level ("read" | "memory" | "full").
+   * Static tokens and dashboard-minted devices are "full" unless the owner
+   * lowered them; OAuth clients get what the owner chose on the consent page.
+   */
+  access: AccessLevel;
+  /**
+   * Kebab House phase 1 (TRU-05), kept for existing callers: true only when
+   * `access` is "full".
    */
   writeAllowed: boolean;
 }
@@ -219,6 +226,7 @@ export async function resolveCallerMeta(
     tokenId: callerTokenId ?? null,
     label: null,
     profile: null,
+    access: "full",
     writeAllowed: true,
   };
   if (!callerTokenId) return empty;
@@ -227,8 +235,8 @@ export async function resolveCallerMeta(
     const namespaces = [getKVStore()];
     if (tenantId) namespaces.push(getTenantKVStore(tenantId));
     const metas = await Promise.all(namespaces.map((kv) => getDeviceMetaFrom(callerTokenId, kv)));
-    const writes = await Promise.all(
-      namespaces.map((kv) => getDeviceWriteAllowedFrom(callerTokenId, kv))
+    const levels = await Promise.all(
+      namespaces.map((kv) => getDeviceAccessLevelFrom(callerTokenId, kv))
     );
     let label: string | null = null;
     let profile: string | null = null;
@@ -237,10 +245,11 @@ export async function resolveCallerMeta(
       if (m.profile) profile = m.profile;
     }
     // Most restrictive answer wins (a tenant header can't grant writes).
-    return { tokenId: callerTokenId, label, profile, writeAllowed: writes.every(Boolean) };
+    const access = mostRestrictiveAccess(levels);
+    return { tokenId: callerTokenId, label, profile, access, writeAllowed: access === "full" };
   } catch {
     // Fail closed on writes: a KV error never grants write access.
-    return { ...empty, writeAllowed: false };
+    return { ...empty, access: "read", writeAllowed: false };
   }
 }
 

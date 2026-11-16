@@ -3,7 +3,9 @@
  *
  * GET    → list devices (root-scope only); each device carries its
  *          optional connector allowlist (`connectors: string[] | null`).
- * POST   → { action: "rotate" | "rename" | "set-connectors" | "set-skill-tags" | "invite", ... }
+ * POST   → { action: "rotate" | "rename" | "set-connectors" | "set-skill-tags" | "set-profile"
+ *            | "set-access" | "set-write-allowed" | "invite", ... }
+ *          set-access: { tokenId, access: "read" | "memory" | "full" } (audit 2026-11).
  *          set-connectors: { tokenId, connectors: string[] | null } — pin or
  *          clear a token's per-connector scope (v0.20). null = full access.
  * DELETE → ?tokenId=XXXXXXXX revoke a device
@@ -47,6 +49,8 @@ import {
   isOAuthDevice,
   revokeOAuthDevice,
   setDeviceWriteAllowed,
+  setDeviceAccessLevel,
+  isAccessLevel,
 } from "@/core/devices";
 import { mintDeviceInvite } from "@/core/device-invite";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
@@ -87,6 +91,26 @@ interface PostBody {
   skillTags?: string[] | null;
   profile?: string | null;
   writeAllowed?: boolean;
+  access?: string;
+}
+
+async function handleSetAccess(body: PostBody): Promise<Response> {
+  const targetId = body.tokenId;
+  if (!targetId || typeof targetId !== "string") {
+    return NextResponse.json({ error: "missing_tokenId" }, { status: 400 });
+  }
+  if (!isAccessLevel(body.access)) {
+    return NextResponse.json({ error: "invalid_access" }, { status: 400 });
+  }
+  if (!(await isKnownDevice(targetId))) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  try {
+    await setDeviceAccessLevel(targetId, body.access);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: "set_access_failed", message: toMsg(err) }, { status: 500 });
+  }
 }
 
 async function handleSetWriteAllowed(body: PostBody): Promise<Response> {
@@ -275,6 +299,8 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
       return handleSetProfile(body);
     case "set-write-allowed":
       return handleSetWriteAllowed(body);
+    case "set-access":
+      return handleSetAccess(body);
     case "invite":
       return handleInvite(body);
     default:

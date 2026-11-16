@@ -32,6 +32,9 @@
  */
 export const REPO_URL = "https://github.com/Yassinello/kebab-mcp";
 
+/** The public showcase (marketing landing). Pages other than the landing link back to it. */
+export const SHOWCASE_URL = "https://kebab-mcp.vercel.app";
+
 export const UPSTREAM_OWNER = REPO_URL.split("/").at(-2)!; // "Yassinello"
 export const UPSTREAM_REPO_SLUG = REPO_URL.split("/").at(-1)!; // "kebab-mcp"
 

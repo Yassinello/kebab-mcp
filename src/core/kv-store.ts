@@ -4,7 +4,8 @@
  * Two implementations:
  * - FilesystemKV: writes to `./data/kv.json` (or `/tmp/mymcp-kv.json` on Vercel
  *   when Upstash is not configured). Atomic write via tmp + rename. All keys
- *   live in a single JSON map for simplicity.
+ *   live in a single JSON map for simplicity. TTLs are honoured and
+ *   ephemeral writes are coalesced (see the class comment).
  * - UpstashKV: optional production backend using Upstash Redis REST API.
  *   Activates when Upstash credentials are available via `getUpstashCreds()`
  *   (DUR-06). Supports both UPSTASH_REDIS_REST_* (manual setup) and
@@ -17,12 +18,13 @@
  * - Else → FilesystemKV at ./data/kv.json
  */
 
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { withTenantPrefix } from "./tenant";
 import { getUpstashCreds, hasUpstashCreds } from "./upstash-env";
 import { withSpan, isTracingActive } from "./tracing";
+import { toMsg } from "./error-utils";
 
 // ── OBS-02: in-process KV latency ring buffer ───────────────────────
 //
@@ -61,10 +63,9 @@ export interface KVStore {
   get(key: string): Promise<string | null>;
   /**
    * Set a key/value pair. Optional `ttlSeconds` is honored on Upstash
-   * (via `SET key value EX ttl`) and best-effort ignored on the
-   * filesystem backend (dev-only; explicit TTL eviction is a v0.11
-   * concern there). Callers should feature-check or treat TTL as a
-   * hint.
+   * (via `SET key value EX ttl`) and on the filesystem backend (lazy
+   * expiry on read + periodic sweep). A set without TTL clears any
+   * previous expiry, as on Redis.
    */
   set(key: string, value: string, ttlSeconds?: number | undefined): Promise<void>;
   delete(key: string): Promise<void>;
@@ -75,8 +76,8 @@ export interface KVStore {
    *
    * Upstash path is genuinely atomic (pipelined INCR + EXPIRE). The
    * filesystem path is read-modify-write under the existing write queue
-   * — single-process dev only, racy across processes but fine for the
-   * in-repo dev loop.
+   * (in memory, written behind) — single-process only, racy across
+   * processes sharing the same file.
    *
    * Used by the rate limiter to avoid the classic get-then-set race
    * (two concurrent callers both reading `N` and both writing `N+1`).
@@ -88,10 +89,9 @@ export interface KVStore {
    * holds a value (which is returned alongside).
    *
    * Upstash path uses `SET key value NX EX ttl` — genuinely atomic.
-   * FilesystemKV emulates via `fs.open(<sentinel>, 'wx')` (fails with
-   * EEXIST if the sentinel exists). Single-process dev only; the
-   * production race path is Upstash. MemoryKV uses a simple Map.has
-   * guard.
+   * FilesystemKV checks and writes under its write queue (atomic within
+   * one process; an expired key counts as absent). The production race
+   * path is Upstash. MemoryKV uses a simple Map.has guard.
    *
    * Phase 45 UX-04: used by `flushBootstrapToKvIfAbsent()` to close
    * the T11 welcome-init mint race — two browsers sharing a claim
@@ -139,56 +139,157 @@ export interface KVStore {
 }
 
 // ── FilesystemKV ────────────────────────────────────────────────────
+//
+// On disk: one JSON object. A value is either a plain string (no expiry —
+// the historical format, so files written by older versions load as-is) or
+// `{ "v": "<value>", "exp": <epoch ms> }` when it was written with a TTL.
+//
+// B4 (2026-11 audit):
+//   - TTLs are honoured: an expired key reads as absent (lazy expiry) and
+//     expired keys are swept from the file at most once a minute, when the
+//     file is written anyway. Before, expired OAuth tokens, registered
+//     clients and approval previews stayed in data/kv.json forever.
+//   - The parsed file stays in memory and is re-read only when another
+//     process changed it (mtime/size check), instead of re-parsing the whole
+//     file every 500 ms.
+//   - Durable writes (`set` without TTL, `delete`, `setIfNotExists`) resolve
+//     once the file is on disk; concurrent ones share a single write.
+//     Ephemeral writes (`incr`, `set` with a TTL: counters, rate-limit
+//     buckets, short-lived tokens) are written behind, within
+//     `DEFERRED_FLUSH_MS`, and flushed when the process exits. A crash can
+//     lose at most that window of ephemeral data.
+
+type StoredValue = string | { v: string; exp: number };
+
+function isLive(sv: StoredValue | undefined, now: number): sv is StoredValue {
+  if (sv === undefined) return false;
+  return typeof sv === "string" || !(typeof sv.exp === "number" && sv.exp <= now);
+}
+
+function liveValue(sv: StoredValue | undefined, now: number): string | null {
+  if (!isLive(sv, now)) return null;
+  if (typeof sv === "string") return sv;
+  return typeof sv.v === "string" ? sv.v : null;
+}
+
+function withTtl(value: string, ttlSeconds: number | undefined, now: number): StoredValue {
+  return ttlSeconds && ttlSeconds > 0
+    ? { v: value, exp: now + Math.ceil(ttlSeconds * 1000) }
+    : value;
+}
+
+/** Ephemeral writes reach the disk within this delay. */
+const DEFERRED_FLUSH_MS = 200;
+/** Expired keys are removed from the file at most this often. */
+const SWEEP_INTERVAL_MS = 60_000;
+
+/** Stores holding unflushed ephemeral writes — flushed synchronously on exit. */
+const pendingStores = new Set<FilesystemKV>();
+let exitHookInstalled = false;
+
+function installExitHook(): void {
+  if (exitHookInstalled) return;
+  if (typeof process === "undefined" || typeof process.once !== "function") return;
+  exitHookInstalled = true;
+  process.once("exit", () => {
+    for (const store of pendingStores) store.flushSync();
+  });
+}
 
 class FilesystemKV implements KVStore {
   kind = "filesystem" as const;
   private filePath: string;
   private writeQueue: Promise<void> = Promise.resolve();
-  // In-memory read cache. Dashboard page renders trigger ~10 get() calls
-  // per render and each one was re-parsing the full JSON map. 500ms TTL
-  // is aggressive enough to serve a single render tree but short enough
-  // that concurrent processes (dev + npm scripts sharing data/kv.json)
-  // still see each other's writes within a second. Invalidated on every
-  // local write.
-  private cache: { at: number; map: Record<string, string> } | null = null;
-  private static readonly CACHE_TTL_MS = 500;
+  /** Authoritative in-memory copy of the file once loaded. */
+  private data: Record<string, StoredValue> | null = null;
+  /** mtime/size of the file as last read or written: detects other writers. */
+  private diskStamp: { mtimeMs: number; size: number } | null = null;
+  private loading: Promise<Record<string, StoredValue>> | null = null;
+  /** In-memory changes not yet on disk. */
+  private dirty = false;
+  /**
+   * Keys changed (set or deleted) since the last write. Next.js loads this
+   * module once per route bundle, so several FilesystemKV instances can share
+   * one file in the same process: a write merges only these keys into the
+   * current file instead of overwriting what the other instances wrote.
+   */
+  private dirtyKeys = new Set<string>();
+  private writing = false;
+  private reloadRequested = false;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushChain: Promise<void> = Promise.resolve();
+  private flushPending: Promise<void> | null = null;
+  private lastSweep = 0;
 
   constructor(filePath: string) {
     this.filePath = filePath;
   }
 
-  private async readAll(): Promise<Record<string, string>> {
-    const now = Date.now();
-    if (this.cache && now - this.cache.at < FilesystemKV.CACHE_TTL_MS) {
-      return this.cache.map;
-    }
-    try {
-      const buf = await fs.readFile(this.filePath, "utf-8");
-      const parsed = JSON.parse(buf);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        const map = parsed as Record<string, string>;
-        this.cache = { at: now, map };
-        return map;
-      }
-      this.cache = { at: now, map: {} };
-      return {};
-    } catch (err: unknown) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        this.cache = { at: now, map: {} };
-        return {};
-      }
-      return {};
-    }
+  /**
+   * Compat with `clearKVReadCache()` (duck-typed `cache = null`): forces the
+   * next read to go to disk. Pending writes are flushed first, never dropped.
+   */
+  get cache(): unknown {
+    return this.data;
+  }
+  set cache(v: unknown) {
+    if (v === null) this.reloadRequested = true;
   }
 
-  private async writeAll(map: Record<string, string>): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(map, null, 2), "utf-8");
-    await fs.rename(tmp, this.filePath);
-    // Refresh the in-memory cache after a local write so subsequent reads
-    // within the TTL window don't serve stale data.
-    this.cache = { at: Date.now(), map: { ...map } };
+  private async load(): Promise<Record<string, StoredValue>> {
+    if (this.reloadRequested) {
+      this.reloadRequested = false;
+      if (this.dirty) await this.flush();
+      if (!this.dirty && !this.writing) {
+        this.data = null;
+        this.diskStamp = null;
+      }
+    }
+    // Unflushed changes, or a write in flight: memory is the truth.
+    if (this.data && (this.dirty || this.writing)) return this.data;
+    if (this.loading) return this.loading;
+    this.loading = this.loadFromDisk().finally(() => {
+      this.loading = null;
+    });
+    return this.loading;
+  }
+
+  private async loadFromDisk(): Promise<Record<string, StoredValue>> {
+    let stamp: { mtimeMs: number; size: number };
+    try {
+      const st = await fs.stat(this.filePath);
+      stamp = { mtimeMs: st.mtimeMs, size: st.size };
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        if (this.data && (this.dirty || this.writing)) return this.data;
+        this.data = {};
+        this.diskStamp = null;
+        return this.data;
+      }
+      return this.data ?? {};
+    }
+    if (
+      this.data &&
+      this.diskStamp &&
+      this.diskStamp.mtimeMs === stamp.mtimeMs &&
+      this.diskStamp.size === stamp.size
+    ) {
+      return this.data;
+    }
+    let map: Record<string, StoredValue> = {};
+    try {
+      const parsed: unknown = JSON.parse(await fs.readFile(this.filePath, "utf-8"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        map = parsed as Record<string, StoredValue>;
+      }
+    } catch {
+      // silent-swallow-ok: unreadable file — same as before, behave as empty.
+    }
+    // A mutation may have landed while we were reading: keep it.
+    if (this.data && (this.dirty || this.writing)) return this.data;
+    this.data = map;
+    this.diskStamp = stamp;
+    return map;
   }
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -200,78 +301,209 @@ class FilesystemKV implements KVStore {
     return next;
   }
 
-  async get(key: string): Promise<string | null> {
-    // Drain any in-flight writes before reading so the caller always
-    // sees the latest state. Matters for tests and for race-prone
-    // sequences like resetCredentialHydration() → immediate rehydrate.
-    await this.writeQueue;
-    const map = await this.readAll();
-    return map[key] ?? null;
+  /**
+   * Apply `fn` to the in-memory map under the write queue, then persist:
+   * awaited for durable writes, written behind for ephemeral ones.
+   */
+  private async mutate<T>(
+    fn: (map: Record<string, StoredValue>, now: number) => { result: T; changed: boolean },
+    durable: boolean
+  ): Promise<T> {
+    const { result, changed } = await this.enqueue(async () => {
+      const map = await this.load();
+      const out = fn(map, Date.now());
+      if (out.changed) this.dirty = true;
+      return out;
+    });
+    if (changed) {
+      if (durable) await this.flush();
+      else this.scheduleFlush();
+    }
+    return result;
   }
 
-  async set(key: string, value: string, _ttlSeconds?: number): Promise<void> {
-    // Filesystem backend ignores TTL — dev-only path. TTL-based
-    // eviction is v0.11 work; documented in the KVStore interface.
-    // Synchronously invalidate the cache so any concurrent reader that
-    // *hasn't yet entered the write queue* forces a fresh read instead
-    // of serving pre-write cached data.
-    this.cache = null;
-    await this.enqueue(async () => {
-      const map = await this.readAll();
-      map[key] = value;
-      await this.writeAll(map);
+  private scheduleFlush(): void {
+    pendingStores.add(this);
+    installExitHook();
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flush().catch((err: unknown) => {
+        console.warn(
+          `[Kebab MCP] KVStore: deferred write to ${this.filePath} failed: ${toMsg(err)}`
+        );
+      });
+    }, DEFERRED_FLUSH_MS);
+    this.flushTimer.unref?.();
+  }
+
+  /** Write the in-memory state to disk. Callers arriving together share one write. */
+  flush(): Promise<void> {
+    if (this.flushPending) return this.flushPending;
+    const run = this.flushChain.then(() => {
+      this.flushPending = null;
+      return this.writeNow();
     });
+    this.flushPending = run;
+    this.flushChain = run.catch(() => undefined);
+    return run;
+  }
+
+  private sweep(map: Record<string, StoredValue>, now: number): void {
+    for (const k of Object.keys(map)) {
+      if (!isLive(map[k], now)) {
+        delete map[k];
+        this.dirtyKeys.add(k);
+      }
+    }
+  }
+
+  private async writeNow(): Promise<void> {
+    if (!this.dirty || !this.data) return;
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    const now = Date.now();
+    if (now - this.lastSweep >= SWEEP_INTERVAL_MS) {
+      this.sweep(this.data, now);
+      this.lastSweep = now;
+    }
+    this.writing = true;
+    // Another instance wrote the file since we last read it: merge our
+    // changed keys into its current content rather than overwrite it.
+    try {
+      const st = await fs.stat(this.filePath);
+      if (
+        !this.diskStamp ||
+        st.mtimeMs !== this.diskStamp.mtimeMs ||
+        st.size !== this.diskStamp.size
+      ) {
+        this.data = this.mergeInto(await fs.readFile(this.filePath, "utf-8"));
+      }
+    } catch {
+      // silent-swallow-ok: no file yet (or unreadable) — our copy is the content.
+    }
+    // Serialised synchronously: the snapshot holds every change made so far.
+    const json = JSON.stringify(this.data, null, 2);
+    this.dirty = false;
+    const written = new Set(this.dirtyKeys);
+    this.dirtyKeys.clear();
+    try {
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+      const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
+      await fs.writeFile(tmp, json, "utf-8");
+      await fs.rename(tmp, this.filePath);
+      const st = await fs.stat(this.filePath);
+      this.diskStamp = { mtimeMs: st.mtimeMs, size: st.size };
+    } catch (err) {
+      this.dirty = true;
+      for (const k of written) this.dirtyKeys.add(k);
+      throw err;
+    } finally {
+      this.writing = false;
+      if (!this.dirty) pendingStores.delete(this);
+    }
+  }
+
+  /** The file's current content with this instance's changed keys applied. */
+  private mergeInto(raw: string): Record<string, StoredValue> {
+    let disk: Record<string, StoredValue> = {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        disk = parsed as Record<string, StoredValue>;
+      }
+    } catch {
+      return this.data ?? {};
+    }
+    const mine = this.data ?? {};
+    for (const k of this.dirtyKeys) {
+      if (k in mine) disk[k] = mine[k] as StoredValue;
+      else delete disk[k];
+    }
+    return disk;
+  }
+
+  /** Synchronous flush (process exit, test reset). Never creates the folder. */
+  flushSync(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    pendingStores.delete(this);
+    if (!this.dirty || !this.data) return;
+    try {
+      try {
+        this.data = this.mergeInto(readFileSync(this.filePath, "utf-8"));
+      } catch {
+        // silent-swallow-ok: no file yet — our copy is the content.
+      }
+      const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
+      writeFileSync(tmp, JSON.stringify(this.data, null, 2), "utf-8");
+      renameSync(tmp, this.filePath);
+      this.dirty = false;
+      this.dirtyKeys.clear();
+    } catch {
+      // silent-swallow-ok: best effort — the process is going away (or the test folder is gone).
+    }
+  }
+
+  async get(key: string): Promise<string | null> {
+    // Drain any queued mutation so the caller sees the latest state.
+    await this.writeQueue;
+    const map = await this.load();
+    return liveValue(map[key], Date.now());
+  }
+
+  // Durable even with a TTL: other route bundles (separate instances on the
+  // same file) must see e.g. a just-registered OAuth client on the next request.
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    await this.mutate((map, now) => {
+      map[key] = withTtl(value, ttlSeconds, now);
+      this.dirtyKeys.add(key);
+      return { result: undefined, changed: true };
+    }, true);
   }
 
   /**
-   * SETNX emulation for the single-JSON-map filesystem backend.
-   *
-   * Phase 45 UX-04: used by `flushBootstrapToKvIfAbsent()` to block
-   * double-mint when two browsers share a claim cookie. The filesystem
-   * path is single-process dev mode — the production race is the
-   * Upstash path, which uses native `SET NX EX`. Still, we emulate
-   * atomic NX here so unit/integration tests can exercise the contract
-   * against the filesystem backend without spinning up Upstash.
-   *
-   * Implementation: read under the write queue (serializing vs other
-   * writes in the same process), return early if the key exists, else
-   * write. TTL is ignored — same as `set()` above. Cross-process races
-   * across multiple Node processes sharing the same JSON file remain
-   * unresolved because the filesystem JSON map isn't designed for that;
-   * production deployments run through UpstashKV.
+   * SETNX for the single-JSON-map filesystem backend: checked and written
+   * under the write queue (atomic within this process). An expired key
+   * counts as absent. Cross-process races on the same file stay possible —
+   * production deployments that need them run on Upstash.
    */
   async setIfNotExists(
     key: string,
     value: string,
-    _opts?: { ttlSeconds?: number | undefined }
+    opts?: { ttlSeconds?: number | undefined }
   ): Promise<{ ok: true } | { ok: false; existing: string }> {
-    this.cache = null;
-    return this.enqueue(async () => {
-      const map = await this.readAll();
-      if (key in map) {
-        return { ok: false as const, existing: map[key] ?? "" };
-      }
-      map[key] = value;
-      await this.writeAll(map);
-      return { ok: true as const };
-    });
+    return this.mutate<{ ok: true } | { ok: false; existing: string }>((map, now) => {
+      const current = liveValue(map[key], now);
+      if (current !== null) return { result: { ok: false, existing: current }, changed: false };
+      map[key] = withTtl(value, opts?.ttlSeconds, now);
+      this.dirtyKeys.add(key);
+      return { result: { ok: true }, changed: true };
+    }, true);
   }
 
   async delete(key: string): Promise<void> {
-    this.cache = null;
-    await this.enqueue(async () => {
-      const map = await this.readAll();
-      if (key in map) {
-        delete map[key];
-        await this.writeAll(map);
-      }
-    });
+    await this.mutate((map) => {
+      if (!(key in map)) return { result: undefined, changed: false };
+      delete map[key];
+      this.dirtyKeys.add(key);
+      return { result: undefined, changed: true };
+    }, true);
+  }
+
+  private async liveKeys(): Promise<string[]> {
+    await this.writeQueue;
+    const map = await this.load();
+    const now = Date.now();
+    return Object.keys(map).filter((k) => isLive(map[k], now));
   }
 
   async list(prefix?: string): Promise<string[]> {
-    await this.writeQueue;
-    const map = await this.readAll();
-    const keys = Object.keys(map);
+    const keys = await this.liveKeys();
     return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
   }
 
@@ -279,9 +511,7 @@ class FilesystemKV implements KVStore {
     cursor: string,
     opts?: { match?: string; count?: number }
   ): Promise<{ cursor: string; keys: string[] }> {
-    await this.writeQueue;
-    const map = await this.readAll();
-    const allKeys = Object.keys(map);
+    const allKeys = await this.liveKeys();
 
     // Filter by glob-like match pattern (supports only trailing *)
     let filtered = allKeys;
@@ -307,31 +537,35 @@ class FilesystemKV implements KVStore {
 
   async mget(keys: string[]): Promise<(string | null)[]> {
     await this.writeQueue;
-    const map = await this.readAll();
-    return keys.map((k) => map[k] ?? null);
+    const map = await this.load();
+    const now = Date.now();
+    return keys.map((k) => liveValue(map[k], now));
   }
 
-  // Read-modify-write under the write queue. TTL is not enforced on the
-  // filesystem backend — dev-only path, and the rate limiter treats TTL
-  // as a best-effort hint anyway. Callers relying on eviction should
-  // prefer Upstash in prod.
+  // Read-modify-write under the write queue, written behind (counters are
+  // ephemeral). Same semantics as Redis INCR (+ EXPIRE when a TTL is given):
+  // an expired counter restarts at 1, a counter without a new TTL keeps its
+  // current expiry.
   //
-  // TECH-06 lazy prune: after incrementing, scan for `ratelimit:*` keys
-  // whose bucket timestamp is older than 2× ttlSeconds ago. This runs
-  // inside the write queue so it's serialized. O(keys) but fine for dev.
+  // TECH-06 lazy prune: after incrementing, drop `ratelimit:*` buckets whose
+  // timestamp is older than 2× ttlSeconds ago.
   async incr(key: string, opts?: { ttlSeconds?: number | undefined }): Promise<number> {
-    this.cache = null;
-    return this.enqueue(async () => {
-      const map = await this.readAll();
-      const prev = parseInt(map[key] ?? "0", 10);
+    return this.mutate((map, now) => {
+      const current = map[key];
+      const prev = parseInt(liveValue(current, now) ?? "0", 10);
       const next = Number.isFinite(prev) ? prev + 1 : 1;
-      map[key] = String(next);
-
-      // Lazy prune stale ratelimit buckets
       if (opts?.ttlSeconds && opts.ttlSeconds > 0) {
-        const nowMs = Date.now();
+        map[key] = withTtl(String(next), opts.ttlSeconds, now);
+      } else if (current !== undefined && typeof current !== "string" && isLive(current, now)) {
+        map[key] = { v: String(next), exp: current.exp };
+      } else {
+        map[key] = String(next);
+      }
+      this.dirtyKeys.add(key);
+
+      if (opts?.ttlSeconds && opts.ttlSeconds > 0) {
         const windowMs = 60_000; // rate limiter uses 1-minute buckets
-        const currentBucket = Math.floor(nowMs / windowMs);
+        const currentBucket = Math.floor(now / windowMs);
         // A bucket is stale if its timestamp is older than 2× the TTL window
         const staleBefore = currentBucket - Math.ceil((opts.ttlSeconds * 1000) / windowMs);
         for (const k of Object.keys(map)) {
@@ -341,13 +575,12 @@ class FilesystemKV implements KVStore {
           const bucket = parseInt(bucketStr, 10);
           if (Number.isFinite(bucket) && bucket < staleBefore) {
             delete map[k];
+            this.dirtyKeys.add(k);
           }
         }
       }
-
-      await this.writeAll(map);
-      return next;
-    });
+      return { result: next, changed: true };
+    }, false);
   }
 }
 
@@ -580,6 +813,8 @@ class UpstashKV implements KVStore {
 // ── Factory ──────────────────────────────────────────────────────────
 
 let cached: KVStore | null = null;
+/** The unwrapped store behind `cached` (the tracing wrapper hides its class). */
+let cachedBase: KVStore | null = null;
 
 // OBS-04 + Phase 50 / BRAND-03: wrap the underlying store so every
 // set/setNx/delete emits a `kebab.kv.write` span with op + key_prefix
@@ -661,13 +896,24 @@ function buildKVStore(): KVStore {
 export function getKVStore(): KVStore {
   if (cached) return cached;
   const base = buildKVStore();
+  cachedBase = base;
   cached = isTracingActive() ? wrapWithTracing(base) : base;
   return cached;
 }
 
-/** Reset the cached instance. Test-only. */
+/** Reset the cached instance (pending filesystem writes are flushed first). Test-only. */
 export function resetKVStoreCache(): void {
+  if (cachedBase instanceof FilesystemKV) cachedBase.flushSync();
   cached = null;
+  cachedBase = null;
+}
+
+/**
+ * Write any pending (written-behind) filesystem KV changes to disk now.
+ * No-op on Upstash. Useful before a planned shutdown or in tests.
+ */
+export async function flushKVWrites(): Promise<void> {
+  if (cachedBase instanceof FilesystemKV) await cachedBase.flush();
 }
 
 /**
@@ -676,10 +922,12 @@ export function resetKVStoreCache(): void {
  * goes to disk. For UpstashKV this is a no-op (no local cache).
  */
 export function clearKVReadCache(): void {
-  if (!cached) return;
-  // FilesystemKV stashes a `cache` field; UpstashKV does not.
+  const store = cachedBase ?? cached;
+  if (!store) return;
+  // FilesystemKV exposes a `cache` accessor (assigning null forces a re-read
+  // from disk, after flushing pending writes); UpstashKV does not.
   // Use a duck-type check to avoid coupling to class internals.
-  const fs = cached as unknown as { cache: unknown };
+  const fs = store as unknown as { cache: unknown };
   if ("cache" in fs) {
     fs.cache = null;
   }

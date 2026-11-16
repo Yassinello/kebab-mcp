@@ -7,6 +7,8 @@ description: >-
   matters to them, and can resurface saved articles by topic.
 metadata:
   title: Read later
+  summary: "Saves links to a reading list in your notes, with tags and why they matter, and finds them again."
+  example: "Save this for later"
   icon: "📚"
   tags: [rituals]
 ---

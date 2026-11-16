@@ -1,4 +1,11 @@
 import { defineTool, type ConnectorManifest } from "@/core/types";
+import { uiToolMeta } from "@/connectors/house/views/bridge";
+import {
+  OUTGOING_APPROVAL_HINT,
+  gateOutgoingSend,
+  previewIdSchemaField,
+} from "@/core/approval-gate";
+import { chatSendApproval, gmailReplyApproval, gmailSendApproval } from "./lib/send-approval";
 import { getGoogleAccessToken } from "./lib/google-auth";
 import { resolveGoogleTokens } from "./lib/resolve-account";
 import { hasConfiguredAccountSync } from "@/core/connector-accounts";
@@ -24,6 +31,9 @@ import { chatListSpacesSchema, handleChatListSpaces } from "./tools/chat-list-sp
 import { chatListMessagesSchema, handleChatListMessages } from "./tools/chat-list-messages";
 import { chatSendMessageSchema, handleChatSendMessage } from "./tools/chat-send-message";
 
+/** Audit 2026-11 (A4): previews of outgoing messages render in the review view. */
+const APPROVE_VIEW_META = uiToolMeta("approve");
+
 export const googleConnector: ConnectorManifest = {
   id: "google",
   label: "Google Workspace",
@@ -38,7 +48,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
 2. Enable these APIs: **Gmail**, **Google Calendar**, **People**, **Google Drive**, **Google Chat**
 3. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**, type **Desktop app**
 4. Copy the client ID into \`GOOGLE_CLIENT_ID\` and the secret into \`GOOGLE_CLIENT_SECRET\`
-5. Open **/config → Connectors** in your Kebab MCP dashboard, expand Google Workspace, and enter your credentials. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
+5. Open **/config → Connectors** in your Kebab House dashboard, expand Google Workspace, and enter your credentials. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
 
 ### Troubleshooting
 - _invalid_grant_: the refresh token was revoked (password change, 6 months idle, or too many tokens) — re-run the credential flow from /config.
@@ -177,18 +187,27 @@ A Google account and a Google Cloud project where you can create an OAuth client
     }),
     defineTool({
       name: "gmail_send",
+      meta: APPROVE_VIEW_META,
       description:
-        "Send a new email. Supports To, CC, BCC. Plain text body. Always show the draft to the user for approval before calling this tool.",
-      schema: gmailSendSchema,
-      handler: async (args) => handleGmailSend(args),
+        "Send a new email. Supports To, CC, BCC. Plain text body. " + OUTGOING_APPROVAL_HINT,
+      schema: { ...gmailSendSchema, preview_id: previewIdSchemaField },
+      handler: async (args) =>
+        gateOutgoingSend(gmailSendApproval, args, (a) =>
+          handleGmailSend(a as Parameters<typeof handleGmailSend>[0])
+        ),
       destructive: true,
     }),
     defineTool({
       name: "gmail_reply",
+      meta: APPROVE_VIEW_META,
       description:
-        "Reply to an existing email thread. Automatically sets In-Reply-To, References, and thread ID. Always show the reply to the user for approval before calling this tool.",
-      schema: gmailReplySchema,
-      handler: async (args) => handleGmailReply(args),
+        "Reply to an existing email thread. Automatically sets In-Reply-To, References, and thread ID. " +
+        OUTGOING_APPROVAL_HINT,
+      schema: { ...gmailReplySchema, preview_id: previewIdSchemaField },
+      handler: async (args) =>
+        gateOutgoingSend(gmailReplyApproval, args, (a) =>
+          handleGmailReply(a as Parameters<typeof handleGmailReply>[0])
+        ),
       destructive: true,
     }),
     defineTool({
@@ -318,9 +337,14 @@ A Google account and a Google Cloud project where you can create an OAuth client
     }),
     defineTool({
       name: "google_chat_send_message",
-      description: "Send a message to a Google Chat space / channel / DM.",
-      schema: chatSendMessageSchema,
-      handler: async (args) => handleChatSendMessage(args),
+      meta: APPROVE_VIEW_META,
+      description:
+        "Send a message to a Google Chat space / channel / DM. " + OUTGOING_APPROVAL_HINT,
+      schema: { ...chatSendMessageSchema, preview_id: previewIdSchemaField },
+      handler: async (args) =>
+        gateOutgoingSend(chatSendApproval, args, (a) =>
+          handleChatSendMessage(a as Parameters<typeof handleChatSendMessage>[0])
+        ),
       destructive: true,
     }),
   ],

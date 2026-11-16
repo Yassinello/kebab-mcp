@@ -41,7 +41,16 @@ vi.mock("@/core/after-response", () => ({
   },
 }));
 
-import { isoWeek, recentWeeks, recordToolCall, readWeekUsage, usageKeysFor } from "@/core/usage";
+import {
+  addsNote,
+  isFailedResult,
+  isoWeek,
+  recentWeeks,
+  recordToolCall,
+  readWeekUsage,
+  skillForUsage,
+  usageKeysFor,
+} from "@/core/usage";
 
 async function flush() {
   await Promise.all(pending.splice(0));
@@ -101,5 +110,56 @@ describe("recordToolCall", () => {
     const keys = usageKeysFor({ tool: "a:b", client: "my laptop:1" }, "2026-W46");
     expect(keys).toContain("usage:2026-W46:tool:a_b");
     expect(keys).toContain("usage:2026-W46:client:my_laptop_1");
+  });
+});
+
+describe("what counts (audit 2026-11, A6)", () => {
+  const text = (t: string, isError?: boolean) => ({
+    content: [{ type: "text" as const, text: t }],
+    ...(isError ? { isError } : {}),
+  });
+
+  it("an error result is never a success (isError, or a JSON body with a top-level error)", () => {
+    expect(isFailedResult(text("boom", true))).toBe(true);
+    expect(isFailedResult(text(JSON.stringify({ error: "skill_not_found", name: "x" })))).toBe(
+      true
+    );
+    expect(isFailedResult(text(JSON.stringify({ success: true, action: "created" })))).toBe(false);
+    expect(isFailedResult(text("# Skill: meeting-prep\n\nbody"))).toBe(false);
+    // A nested "error" field is data, not a failure.
+    expect(isFailedResult(text(JSON.stringify({ results: [{ error: "x" }] })))).toBe(false);
+  });
+
+  it("skill usage: skill_load with the canonical library name, legacy skill tools; nothing else", () => {
+    const loaded = text("# Skill: meeting-prep\n> Prepare a meeting\n\nSteps…");
+    expect(skillForUsage("skill_load", "skills", loaded)).toBe("meeting-prep");
+    // The loaded skill's own name is used, whatever the model typed.
+    expect(skillForUsage("skill_load", "skills", text("no header"))).toBeNull();
+    expect(skillForUsage("skill_weekly_review", "skills", text("rendered"))).toBe("weekly-review");
+    // Library and template tools are not skills.
+    expect(skillForUsage("skill_read_file", "skills", text("file"))).toBeNull();
+    expect(skillForUsage("skills_list", "skills", text("{}"))).toBeNull();
+    expect(skillForUsage("skill_template_install", "context", text("{}"))).toBeNull();
+    expect(skillForUsage("skill_templates_list", "context", text("{}"))).toBeNull();
+  });
+
+  it("notes: vault_write only when it created a note, vault_append, save_article", () => {
+    const created = text(JSON.stringify({ success: true, action: "created", path: "a.md" }));
+    const updated = text(JSON.stringify({ success: true, action: "updated", path: "a.md" }));
+    expect(addsNote("vault_write", created)).toBe(true);
+    expect(addsNote("vault_write", updated)).toBe(false);
+    expect(addsNote("vault_append", text("ok"))).toBe(true);
+    expect(addsNote("save_article", text("ok"))).toBe(true);
+    expect(addsNote("my_context_update", text("ok"))).toBe(false);
+    expect(addsNote("vault_delete", text("ok"))).toBe(false);
+    expect(usageKeysFor({ tool: "my_context_update", client: "c" }, "2026-W46")).not.toContain(
+      "usage:2026-W46:notes"
+    );
+    expect(usageKeysFor({ tool: "vault_write", client: "c" }, "2026-W46")).not.toContain(
+      "usage:2026-W46:notes"
+    );
+    expect(usageKeysFor({ tool: "vault_write", client: "c", note: true }, "2026-W46")).toContain(
+      "usage:2026-W46:notes"
+    );
   });
 });

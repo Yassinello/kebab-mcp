@@ -7,6 +7,8 @@ description: >-
   produces a one-page prep with objectives, context, questions and a proposed agenda.
 metadata:
   title: Meeting prep
+  summary: "A one-page brief before any meeting: who you meet, the context, questions to ask and an agenda."
+  example: "Prep my next meeting"
   icon: "🤝"
   tags: [rituals]
 ---

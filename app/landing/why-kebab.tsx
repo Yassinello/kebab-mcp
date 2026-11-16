@@ -10,52 +10,52 @@ const CARDS = [
   {
     title: "Skills",
     description:
-      "One Agent Skills library (SKILL.md) loaded on demand by every client. Start from ritual templates — morning brief, meeting prep, weekly review — or write your own.",
+      "One library of Agent Skills, loaded on demand by every client. Start from ritual templates (morning brief, meeting prep, handoff) or write your own.",
     icon: <ThreeSkewersIcon />,
   },
   {
     title: "Profile",
     description:
-      "Who you are, what you work on, how you like answers. One profile per hat (work, home, side project), bound to the client that wears it.",
+      "Who you are, what you work on, how you like answers. One profile per hat (work, home), bound to the client that uses it.",
     icon: <RecipeCardIcon />,
   },
   {
     title: "Memory",
     description:
-      "A notes vault every client can read and write: built in, or your Obsidian repo on GitHub. “Remember this” works from anywhere.",
+      "Notes every client can read and write: built in, or your Obsidian repo on GitHub. “Remember this” in one client, find it in the next.",
     icon: <NotebookIcon />,
   },
   {
     title: "Tools",
     description:
-      "What native connectors lack: LinkedIn and WhatsApp, a real browser, paywalled articles, scrapers, any HTTP API as a tool. Gmail or Slack? Use your client's own.",
+      "Only what your clients' own connectors lack: LinkedIn, WhatsApp, a real browser, paywalled articles, any HTTP API as a tool.",
     icon: <ChefHatIcon />,
   },
   {
     title: "Guardrails",
     description:
-      "Outside content is labelled as data, messages are sent only after you approve them, and new clients start read-only.",
+      "Outside content is labelled as data, messages wait for your approval, and each client gets only the access you choose.",
     icon: <ShieldIcon />,
   },
 ];
 
 export default function WhyKebab() {
   return (
-    <section id="ingredients" className="py-20 px-6 border-t border-slate-800">
+    <section id="ingredients" className="py-10 sm:py-12 px-6 border-t border-slate-800">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
+        <div className="text-center mb-6 sm:mb-8">
           <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">
             The ingredients
           </p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Five ingredients, cooked once in {PRODUCT.name}.
+          <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">
+            Five ingredients, kept in one place.
           </h2>
-          <p className="text-slate-400 text-base mt-3 max-w-2xl mx-auto leading-relaxed">
-            Say “Set up my Kebab House” in your AI client: a short interview writes your profile,
-            then suggests the rituals that fit your week.
+          <p className="hidden sm:block text-slate-400 text-base mt-3 max-w-2xl mx-auto leading-relaxed">
+            {PRODUCT.name} is a hub, not an agent: your AI clients do the thinking, and every one of
+            them gets the same five things.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {CARDS.map((card) => (
             <FeatureCard key={card.title} {...card} />
           ))}

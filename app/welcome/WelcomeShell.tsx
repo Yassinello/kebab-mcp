@@ -195,11 +195,12 @@ function WelcomeShellBody({
   if (claim === "claimed-by-other") {
     return (
       <Shell>
-        <h1 className="text-2xl font-bold text-white mb-2">Instance locked</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Setup in progress</h1>
         <p className="text-slate-400">
-          Another browser is currently initializing this instance. Wait for them to finish, or
-          contact the operator who deployed it.
+          Setup is in progress in another browser. Finish it there, or use &apos;Locked out? Recover
+          access&apos;.
         </p>
+        <RecoveryFooter />
       </Shell>
     );
   }

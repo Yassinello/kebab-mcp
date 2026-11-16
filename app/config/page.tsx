@@ -9,14 +9,26 @@ import { getDisabledTools } from "@/core/tool-toggles";
 import { ConfigTabs } from "./tabs";
 import { DryRunBanner } from "./dry-run-banner";
 import { DestructiveVarsBanner } from "./banner";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import packageJson from "../../package.json";
 import { getConfig } from "@/core/config-facade";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  overview: { title: "Overview", subtitle: "Live status of your MCP server." },
+  overview: {
+    title: "Overview",
+    subtitle: "Your skills, profile and memory, shared by every AI client.",
+  },
+  profile: {
+    title: "Profile",
+    subtitle: "What every AI client knows about you, so you never have to repeat it.",
+  },
+  memory: {
+    title: "Memory",
+    subtitle: "The notes your AI clients saved for you. Browse, search, read and clean up.",
+  },
   connectors: { title: "Connectors", subtitle: "Enable, configure, and test your connectors." },
   tools: { title: "Tools", subtitle: "Browse and run any registered tool." },
   skills: {
@@ -40,17 +52,49 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   },
   devices: {
     title: "Devices",
-    subtitle: "Manage per-client tokens: add, rename, rotate, revoke.",
+    subtitle: "The AI clients that can reach your hub: add, rename, rotate, revoke.",
   },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };
 
+/**
+ * C1.1: public origin of this instance, for the MCP endpoint shown in the
+ * dashboard. KEBAB_PUBLIC_URL wins; otherwise the host the browser used
+ * (so a server on port 4800, behind a proxy or on a custom domain shows
+ * its real address), then VERCEL_URL, then the dev default.
+ */
+async function requestBaseUrl(): Promise<string> {
+  const override = getConfig("KEBAB_PUBLIC_URL")?.trim();
+  if (override) {
+    try {
+      return new URL(override).origin;
+    } catch {
+      // fall through to the request host
+    }
+  }
+  const h = await headers();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim();
+  if (host && /^[a-z0-9.\-:[\]]+$/i.test(host)) {
+    const fwdProto = (h.get("x-forwarded-proto") ?? "").split(",")[0]?.trim();
+    const local = /^(localhost|127\.|\[::1\])/i.test(host);
+    const proto = fwdProto === "http" || fwdProto === "https" ? fwdProto : local ? "http" : "https";
+    return `${proto}://${host}`;
+  }
+  const vercelUrl = getConfig("VERCEL_URL");
+  return vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
+}
+
 export default async function ConfigPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; tenant?: string }>;
+  searchParams: Promise<{ tab?: string; tenant?: string; sub?: string }>;
 }) {
   const params = await searchParams;
+  // C1.5: Devices and Storage moved out of Settings into their own pages.
+  // Old Settings sub-tab links keep working.
+  if (params.tab === "settings" && (params.sub === "devices" || params.sub === "storage")) {
+    redirect(`/config?tab=${params.sub}`);
+  }
   const tab = params.tab || "overview";
   const meta = PAGE_META[tab] || PAGE_META.overview || { title: "Dashboard", subtitle: "" };
   const config = await getInstanceConfigAsync();
@@ -81,8 +125,7 @@ export default async function ConfigPage({
   const enabled = registry.filter((p) => p.enabled);
   const totalTools = enabled.reduce((s, p) => s + p.manifest.tools.length, 0);
 
-  const vercelUrl = getConfig("VERCEL_URL");
-  const baseUrl = vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
+  const baseUrl = await requestBaseUrl();
 
   const connectorSummaries = registry.map((p) => ({
     id: p.manifest.id,
@@ -140,7 +183,7 @@ export default async function ConfigPage({
 
   // Wide content area for tabs that benefit from it: documentation needs
   // room for the TOC + reading column; tools is dense with banners.
-  const wide = tab === "documentation" || tab === "tools";
+  const wide = tab === "documentation" || tab === "tools" || tab === "memory";
 
   return (
     <AppShell

@@ -12,8 +12,8 @@
  *      never arguments supplied by the model on that call — exactly once.
  *
  * This module is the transport-agnostic store + link signer. The tool-side
- * gate lives with each connector (see `src/connectors/unipile/lib/approval-gate.ts`);
- * the same records can later be rendered by an MCP App.
+ * gate is `src/core/approval-gate.ts` (Gmail, Google Chat, Slack), with the
+ * Unipile wrappers in `src/connectors/unipile/lib/approval-gate.ts`.
  *
  * Record lifecycle:  pending ──approve──▶ approved ──consume──▶ consumed
  *                       └─────reject (deleted)──┘

@@ -21,3 +21,4 @@ export { rateLimitStep, type RateLimitKeyFrom, type RateLimitStepOptions } from 
 export { hydrateCredentialsStep } from "./credentials-step";
 export { bodyParseStep, type BodyParseOptions } from "./body-parse-step";
 export { csrfStep } from "./csrf-step";
+export { browserSessionStep, isSameOriginBrowserRequest } from "./browser-session-step";

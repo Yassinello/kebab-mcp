@@ -7,12 +7,12 @@ export const webhookConnector: ConnectorManifest = {
   id: "webhook",
   label: "Webhook Receiver",
   description: "Receive and store external webhook payloads for retrieval via MCP tools",
-  guide: `Expose your Kebab MCP instance as a webhook target so external services (Stripe, GitHub, Zapier, Make, n8n, your own apps) can POST events that you later replay through MCP tools.
+  guide: `Expose your Kebab House instance as a webhook target so external services (Stripe, GitHub, Zapier, Make, n8n, your own apps) can POST events that you later replay through MCP tools.
 
 Unlike the other connectors, there's no third-party account to set up — you publish endpoints under your own deployment.
 
 ### Prerequisites
-- A publicly reachable URL for this Kebab MCP instance (Vercel, Cloudflare, your own host). Localhost works too if your sender can reach it (e.g. via a tunnel like \`ngrok http 3000\`).
+- A publicly reachable URL for this Kebab House instance (Vercel, Cloudflare, your own host). Localhost works too if your sender can reach it (e.g. via a tunnel like \`ngrok http 3000\`).
 - Persistent storage configured (Upstash KV in production), otherwise stored payloads vanish on cold starts.
 
 ### How to set it up

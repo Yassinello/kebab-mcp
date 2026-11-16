@@ -32,7 +32,6 @@ function defaultProps() {
     enabledCount: 0,
     connectorCount: 0,
     logs: [],
-    config: { displayName: "Test", timezone: "UTC", locale: "en-US" } as never,
     version: "0.15.0",
     commitSha: undefined,
     tenantId: null,

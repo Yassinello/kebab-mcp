@@ -35,7 +35,14 @@ import {
 import { SKILL_TEMPLATE_SOURCES } from "./lib/templates.generated";
 
 const TEMPLATES_DIR = path.resolve(__dirname, "../../../content/skill-templates");
-const EXPECTED = ["remember", "morning-brief", "meeting-prep", "weekly-review", "read-later"];
+const EXPECTED = [
+  "remember",
+  "morning-brief",
+  "meeting-prep",
+  "weekly-review",
+  "read-later",
+  "handoff",
+];
 
 /** Tools a template may reference (spec RIT-01) — anything else must be optional. */
 const GENERIC_TOOLS = new Set([
@@ -77,7 +84,7 @@ afterEach(async () => {
 });
 
 describe("template loader (RIT-01/02)", () => {
-  it("finds the 5 ritual templates, in display order", () => {
+  it("finds the 6 ritual templates, in display order", () => {
     expect(listSkillTemplates().map((t) => t.name)).toEqual(EXPECTED);
   });
 
@@ -105,6 +112,13 @@ describe("template loader (RIT-01/02)", () => {
     expect(parsed.tags).toEqual([RITUALS_TAG]);
     expect(parsed.arguments).toEqual([]);
     expect(t.icon).not.toBe("");
+    // Humans see a benefit sentence and a phrase to say, not the model-facing description.
+    expect(t.summary).not.toBe(t.description);
+    expect(t.summary.length).toBeGreaterThan(20);
+    expect(t.summary.length).toBeLessThanOrEqual(140);
+    expect(t.summary).not.toMatch(/^Use when/);
+    expect(t.example.length).toBeGreaterThan(3);
+    expect(t.example).not.toBe(t.name);
   });
 
   it.each(EXPECTED)("%s parses through the importer without warnings", async (name) => {
@@ -215,7 +229,15 @@ describe("template install (RIT-02/03/04)", () => {
     for (const name of EXPECTED) await installSkillTemplate(name);
     expect(JSON.stringify(await getSkill(legacy.id))).toBe(before);
     expect((await listSkills()).map((s) => s.id).sort()).toEqual(
-      [legacy.id, "meeting_prep", "morning_brief", "read_later", "remember", "weekly_review"].sort()
+      [
+        legacy.id,
+        "handoff",
+        "meeting_prep",
+        "morning_brief",
+        "read_later",
+        "remember",
+        "weekly_review",
+      ].sort()
     );
   });
 

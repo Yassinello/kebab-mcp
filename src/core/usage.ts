@@ -19,18 +19,77 @@ import { getContextKVStore } from "./request-context";
 import { kvScanAll } from "./kv-store";
 import { getConfig } from "./config-facade";
 import { runAfterResponse } from "./after-response";
+import type { ToolResult } from "./types";
 
 const PREFIX = "usage:";
 /** ~4 months: enough for a 12-week view plus margin. */
 export const USAGE_TTL_SECONDS = 120 * 24 * 60 * 60;
 
-/** Tools whose successful call adds a note to the user's memory. */
-const NOTE_TOOLS: ReadonlySet<string> = new Set([
-  "vault_write",
-  "vault_append",
-  "save_article",
-  "my_context_update",
+/**
+ * Tools whose successful call always adds to the user's notes. `vault_write`
+ * counts only when it created a note (see `addsNote`); profile edits
+ * (`my_context_update`) are not notes.
+ */
+const NOTE_TOOLS: ReadonlySet<string> = new Set(["vault_append", "save_article"]);
+
+/** The skills library tools that are not themselves a skill. */
+const SKILL_LIBRARY_TOOLS: ReadonlySet<string> = new Set([
+  "skills_list",
+  "skill_load",
+  "skill_read_file",
 ]);
+
+/** First text item of a result parsed as a JSON object, else null. */
+function jsonBody(result: ToolResult): Record<string, unknown> | null {
+  const first = Array.isArray(result.content) ? result.content[0] : undefined;
+  if (!first || first.type !== "text" || typeof first.text !== "string") return null;
+  const text = first.text.trim();
+  if (!text.startsWith("{")) return null;
+  try {
+    const v = JSON.parse(text) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Audit 2026-11 (A6): a result is a failure when it is flagged `isError`, or
+ * its JSON body carries a top-level `error` (many tools report failures that
+ * way without the flag).
+ */
+export function isFailedResult(result: ToolResult): boolean {
+  if (result.isError) return true;
+  const body = jsonBody(result);
+  return body !== null && body.error !== undefined && body.error !== null && body.error !== false;
+}
+
+/**
+ * Audit 2026-11 (A6): the skill a successful call counts for.
+ *   - `skill_load`: the canonical library name, read from the loaded skill's
+ *     header (`# Skill: <name>`); an unknown name loads nothing and is
+ *     not counted.
+ *   - legacy per-skill tools `skill_<id>` of the skills connector (only real
+ *     skills are registered there).
+ * Never for skills_list / skill_read_file or the template tools.
+ */
+export function skillForUsage(toolName: string, packId: string, result: ToolResult): string | null {
+  if (packId !== "skills") return null;
+  if (toolName === "skill_load") {
+    const first = Array.isArray(result.content) ? result.content[0] : undefined;
+    const text = first && first.type === "text" ? first.text : "";
+    const m = /^# Skill: ([a-z0-9][a-z0-9_-]{0,99})\s*$/m.exec(text.split("\n", 1)[0] ?? "");
+    return m ? m[1]! : null;
+  }
+  if (SKILL_LIBRARY_TOOLS.has(toolName) || !toolName.startsWith("skill_")) return null;
+  return toolName.slice("skill_".length).replace(/_/g, "-") || null;
+}
+
+/** Audit 2026-11 (A6): whether a successful call added a note to the user's notes. */
+export function addsNote(toolName: string, result: ToolResult): boolean {
+  if (toolName === "vault_write") return jsonBody(result)?.action === "created";
+  return NOTE_TOOLS.has(toolName);
+}
 
 export function usageCountersEnabled(): boolean {
   const v = (getConfig("KEBAB_USAGE_COUNTERS") ?? "").trim().toLowerCase();
@@ -68,6 +127,11 @@ export interface ToolCallUsage {
   client: string;
   /** Skill name for skill_load / legacy skill_<id> tools. */
   skill?: string | null | undefined;
+  /**
+   * Whether the call added a note (see `addsNote`). When omitted, only the
+   * tools that always add one (vault_append, save_article) count.
+   */
+  note?: boolean | undefined;
 }
 
 /** Keys to increment for one successful tool call. */
@@ -75,7 +139,7 @@ export function usageKeysFor(u: ToolCallUsage, week: string = isoWeek()): string
   const base = `${PREFIX}${week}:`;
   const keys = [`${base}total`, `${base}tool:${seg(u.tool)}`, `${base}client:${seg(u.client)}`];
   if (u.skill) keys.push(`${base}skill:${seg(u.skill)}`);
-  if (NOTE_TOOLS.has(u.tool)) keys.push(`${base}notes`);
+  if (u.note ?? NOTE_TOOLS.has(u.tool)) keys.push(`${base}notes`);
   return keys;
 }
 

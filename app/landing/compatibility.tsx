@@ -9,22 +9,22 @@ const COMPATIBLE = ["Windsurf", "VS Code", "n8n", "Any MCP client"];
 
 export default function Compatibility() {
   return (
-    <section id="clients" className="py-20 px-6 border-t border-slate-800">
+    <section id="clients" className="py-10 sm:py-12 px-6 border-t border-slate-800">
       <div className="max-w-4xl mx-auto text-center">
         <p className="text-xs font-mono text-blue-400 mb-3 tracking-widest uppercase">
           Eat it everywhere
         </p>
-        <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
-          One kitchen. Many AI clients.
+        <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight mb-4">
+          Works in the AI clients you already use.
         </h2>
-        <p className="text-slate-400 text-base max-w-xl mx-auto mb-10 leading-relaxed">
-          Point an MCP client at your instance URL with its own token. Here is what you get in each,
-          honestly.
+        <p className="text-slate-400 text-base max-w-2xl mx-auto mb-8 leading-relaxed">
+          Claude, ChatGPT, Cursor and Claude Code connect by signing in: paste your instance URL and
+          approve. Other clients use a device token you create in the dashboard.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-4 mb-10 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-4 mb-8 text-center">
           <div>
-            <p className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-4">Full</p>
+            <p className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-3">Full</p>
             <div className="flex flex-wrap justify-center gap-2">
               {FULL.map((client) => (
                 <span
@@ -36,12 +36,12 @@ export default function Compatibility() {
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-              Skills, profile, vault and write actions.
+              Skills, profile, notes and write actions.
             </p>
           </div>
 
           <div>
-            <p className="text-xs font-mono text-slate-300 uppercase tracking-widest mb-4">
+            <p className="text-xs font-mono text-slate-300 uppercase tracking-widest mb-3">
               Partial
             </p>
             <div className="flex flex-wrap justify-center gap-2">
@@ -56,7 +56,7 @@ export default function Compatibility() {
           </div>
 
           <div>
-            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-4">
+            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-3">
               Compatible
             </p>
             <div className="flex flex-wrap justify-center gap-2">
@@ -75,15 +75,15 @@ export default function Compatibility() {
           </div>
         </div>
 
-        <div className="inline-flex flex-wrap justify-center items-center gap-x-3 gap-y-1 bg-slate-900 border border-blue-500/30 rounded-lg px-5 py-3 max-w-full">
+        <div className="hidden sm:inline-flex flex-wrap justify-center items-center gap-x-3 gap-y-1 bg-slate-900 border border-blue-500/30 rounded-lg px-5 py-3 max-w-full">
           <span className="text-slate-500 text-xs font-mono">Endpoint</span>
           <code className="text-blue-300 font-mono text-sm tracking-tight break-all">
             https://your-instance.vercel.app/api/mcp
           </code>
         </div>
-        <p className="text-xs text-slate-500 mt-6 max-w-xl mx-auto leading-relaxed">
-          Interactive cards (hub status, skills gallery, send approval) render in Claude, ChatGPT,
-          Cursor and VS Code; other clients get the same content as text.{" "}
+        <p className="text-xs text-slate-500 mt-5 max-w-xl mx-auto leading-relaxed">
+          Interactive cards render in Claude, ChatGPT, Cursor and VS Code; other clients get the
+          same content as text.{" "}
           <a
             href={`${REPO_URL}/blob/main/docs/CLIENTS.md`}
             target="_blank"

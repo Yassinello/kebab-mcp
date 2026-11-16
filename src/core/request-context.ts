@@ -135,3 +135,23 @@ export function runWithTenant<T>(tenantId: string, fn: () => T | Promise<T>): T 
   };
   return requestContext.run(next, fn);
 }
+
+// ── Public origin of the incoming request (contract 5) ───────────────
+//
+// Tool handlers do not see the HTTP request, but some must hand the model
+// an absolute link to this instance (the dashboard, the approval page).
+// The transport runs each MCP request under `runWithRequestOrigin` with
+// the origin it derived from the request (`publicOrigin(request)`); a
+// separate store so the credential/tenant re-entries above never drop it.
+
+const requestOriginStore = new AsyncLocalStorage<string>();
+
+/** Run `fn` with the public origin of the incoming request ambient. */
+export function runWithRequestOrigin<T>(origin: string, fn: () => T): T {
+  return requestOriginStore.run(origin, fn);
+}
+
+/** Origin (`https://host`) of the current request, `null` outside one. */
+export function getRequestOrigin(): string | null {
+  return requestOriginStore.getStore() ?? null;
+}

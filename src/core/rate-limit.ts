@@ -92,13 +92,21 @@ let warnedNonSharedStore = false;
 
 export async function checkRateLimit(
   identifier: string,
-  options: { scope?: string | undefined; limit?: number | undefined } = {}
+  options: {
+    scope?: string | undefined;
+    limit?: number | undefined;
+    /**
+     * Audit 2026-11: window length in seconds (default 60). Longer windows
+     * (e.g. 3600 for "10 per hour") use their own fixed buckets.
+     */
+    windowSeconds?: number | undefined;
+  } = {}
 ): Promise<RateLimitResult> {
   const scope = options.scope || "mcp";
   const defaultLimit = Math.max(1, getConfigInt("KEBAB_RATE_LIMIT_RPM", 60));
   const limit = options.limit ?? defaultLimit;
   const now = Date.now();
-  const windowMs = 60_000;
+  const windowMs = Math.max(1, Math.floor(options.windowSeconds ?? 60)) * 1000;
   const minuteBucket = Math.floor(now / windowMs);
   const resetAt = (minuteBucket + 1) * windowMs;
   const idHash = hashToken(identifier);

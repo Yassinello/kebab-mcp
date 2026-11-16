@@ -47,6 +47,13 @@ describe("useClaimStatus", () => {
     await waitFor(() => expect(result.current.claim).toBe("already-initialized"));
   });
 
+  it("treats 423 claimed-by-other as a state, not a connection error", async () => {
+    mockClaimResponse("claimed-by-other", false, 423);
+    const { result } = renderHook(() => useClaimStatus());
+    await waitFor(() => expect(result.current.claim).toBe("claimed-by-other"));
+    expect(result.current.error).toBeNull();
+  });
+
   it("surfaces error state on network failure", async () => {
     vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error("boom"));
     const { result } = renderHook(() => useClaimStatus());

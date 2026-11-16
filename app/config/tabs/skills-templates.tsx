@@ -13,6 +13,10 @@ interface TemplateEntry {
   name: string;
   title: string;
   description: string;
+  /** One benefit sentence for humans (falls back to description). */
+  summary?: string;
+  /** What to say to run it, e.g. "Morning brief". */
+  example?: string;
   icon: string;
   tags: string[];
   status: "available" | "installed" | "modified";
@@ -144,8 +148,11 @@ export function SkillTemplatesSection({
                     {t.title} <code className="text-[11px] text-text-muted">{t.name}</code>
                   </p>
                   <p className="text-xs text-text-dim mt-0.5 line-clamp-2" title={t.description}>
-                    {t.description}
+                    {t.summary ?? t.description}
                   </p>
+                  {t.example ? (
+                    <p className="text-xs text-text-muted mt-0.5">Say: “{t.example}”</p>
+                  ) : null}
                 </div>
                 <button
                   type="button"

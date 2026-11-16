@@ -316,8 +316,8 @@ export const ALLOWED_DIRECT_ENV_READS: ReadonlyArray<AllowedDirectEnvRead> = Obj
   },
   {
     file: "src/core/first-run-edge.ts",
-    vars: ["MCP_AUTH_TOKEN"],
-    reason: "edge runtime bootstrap — facade import graph not available",
+    vars: ["MCP_AUTH_TOKEN", "VERCEL", "MYMCP_KV_PATH"],
+    reason: "proxy bootstrap (Upstash or local KV file) — facade import graph not available",
   },
   {
     file: "src/core/first-run.ts",

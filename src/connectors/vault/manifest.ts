@@ -80,10 +80,11 @@ export const vaultConnector: ConnectorManifest = {
     defineTool({
       name: "vault_write",
       description:
-        "Create or update a note in the vault (Markdown, optional YAML frontmatter). Pass 'sha' from a previous vault_read to refuse the write if the note changed since.",
+        "Create or update a note in the vault (Markdown, optional YAML frontmatter). A path without an extension gets '.md' added. Pass 'sha' from a previous vault_read to refuse the write if the note changed since.",
       schema: vaultWriteSchema,
       handler: async (args) => handleVaultWrite(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "vault_read",
@@ -119,10 +120,11 @@ export const vaultConnector: ConnectorManifest = {
     defineTool({
       name: "vault_move",
       description:
-        "Move or rename a note. Reads source, writes to new path, deletes original. Reports partial failures if delete fails after successful write.",
+        "Move or rename a note. Reads source, writes to new path, deletes original. Refuses when a note already exists at the destination, unless overwrite is true. Reports partial failures if delete fails after successful write.",
       schema: vaultMoveSchema,
       handler: async (args) => handleVaultMove(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "save_article",
@@ -131,6 +133,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: saveArticleSchema,
       handler: async (args) => handleSaveArticle(args),
       destructive: true,
+      memoryWrite: true,
       // TRU-01: fetches an arbitrary URL — open world, unlike the rest of the vault.
       openWorld: true,
     }),
@@ -141,6 +144,7 @@ export const vaultConnector: ConnectorManifest = {
       schema: vaultAppendSchema,
       handler: async (args) => handleVaultAppend(args),
       destructive: true,
+      memoryWrite: true,
     }),
     defineTool({
       name: "vault_batch_read",

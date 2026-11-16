@@ -7,7 +7,10 @@
  * - Says where the notes live (KV or GitHub) and why.
  * - "Import GitHub vault into KV": copies the GitHub repo's Markdown files
  *   into the KV backend (POST /api/admin/vault) and shows the report.
- *   Switching backend afterwards stays an explicit choice (env var).
+ *   Notes that exist in both with different content are kept unless the
+ *   "Overwrite notes that exist in both" box is ticked (confirmed in a
+ *   dialog) — B2, 2026-11 audit. Switching backend afterwards stays an
+ *   explicit choice (env var).
  * - "Rebuild index": rebuilds the KV vault index from the stored notes.
  */
 
@@ -24,6 +27,9 @@ interface VaultStatus {
 interface ImportReport {
   totalFiles: number;
   copied: number;
+  overwritten?: number;
+  keptCount?: number;
+  kept?: string[];
   unchanged: number;
   skippedCount: number;
   tooLargeCount: number;
@@ -51,6 +57,7 @@ export function VaultBackendPanel() {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [overwrite, setOverwrite] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +75,16 @@ export function VaultBackendPanel() {
   }, [load]);
 
   async function post(action: "import-github" | "rebuild-index") {
+    if (
+      action === "import-github" &&
+      overwrite &&
+      !window.confirm(
+        "Notes that exist both on GitHub and here will be replaced by the GitHub version. " +
+          "Changes made here since the last import will be lost. Continue?"
+      )
+    ) {
+      return;
+    }
     setBusy(action === "import-github" ? "import" : "reindex");
     setError(null);
     setInfo(null);
@@ -77,7 +94,7 @@ export function VaultBackendPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(action === "import-github" ? { action, overwrite } : { action }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
@@ -113,6 +130,17 @@ export function VaultBackendPanel() {
       <p className="text-xs text-text-dim">
         KV vault: {kvNotes} note{kvNotes === 1 ? "" : "s"}, {kvKB} KB.
       </p>
+      {status.githubConfigured && (
+        <label className="flex items-center gap-2 text-xs text-text-dim">
+          <input
+            type="checkbox"
+            checked={overwrite}
+            onChange={(e) => setOverwrite(e.target.checked)}
+            disabled={busy !== null}
+          />
+          Overwrite notes that exist in both (otherwise they are kept as they are here)
+        </label>
+      )}
       <div className="flex items-center gap-2 flex-wrap pt-1">
         {status.githubConfigured && (
           <button
@@ -134,11 +162,19 @@ export function VaultBackendPanel() {
       {report && (
         <div className="text-xs space-y-1">
           <p>
-            Import: {report.copied} copied, {report.unchanged} unchanged, {report.skippedCount}{" "}
-            skipped (not Markdown or reserved path), {report.tooLargeCount} too large (over 256 KB)
+            Import: {report.copied} imported, {report.overwritten ?? 0} overwritten,{" "}
+            {report.keptCount ?? 0} kept (different here), {report.unchanged} unchanged,{" "}
+            {report.skippedCount} skipped (not Markdown or reserved path), {report.tooLargeCount}{" "}
+            too large (over 256 KB)
             {report.failedCount > 0 ? `, ${report.failedCount} failed` : ""} — {report.totalFiles}{" "}
             files in the repository.
           </p>
+          {(report.keptCount ?? 0) > 0 && (
+            <p className="text-text-dim">
+              Kept as they are here: {(report.kept ?? []).join(", ")}. Tick &quot;Overwrite notes
+              that exist in both&quot; to replace them with the GitHub version.
+            </p>
+          )}
           {report.incomplete && (
             <p className="text-orange">
               Stopped by the time limit: {report.remaining} notes left. Click Import again to

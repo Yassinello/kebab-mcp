@@ -5,16 +5,26 @@ export const vaultMoveSchema = {
   from: z.string().describe("Current path, e.g. Inbox/note.md"),
   to: z.string().describe("New path, e.g. Veille/note.md"),
   message: z.string().optional().describe("Change message (the Git commit message on GitHub)"),
+  overwrite: z
+    .boolean()
+    .optional()
+    .describe(
+      "Replace the note already at the destination (default false: the move is refused when the destination exists)"
+    ),
 };
 
 export async function handleVaultMove(params: {
   from: string;
   to: string;
   message?: string | undefined;
+  overwrite?: boolean | undefined;
 }) {
   const commitMsg = params.message || `Move ${params.from} → ${params.to} via Kebab MCP`;
 
-  const result = await getVaultBackend().move(params.from, params.to, { message: commitMsg });
+  const result = await getVaultBackend().move(params.from, params.to, {
+    message: commitMsg,
+    overwrite: params.overwrite === true,
+  });
 
   if (result.deleteError !== undefined) {
     const msg = result.deleteError;

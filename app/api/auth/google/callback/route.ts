@@ -109,7 +109,7 @@ function tokenPage(error: string | null, token: string | null): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kebab MCP — Google OAuth</title>
+  <title>Kebab House — Google OAuth</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #e5e5e5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -128,7 +128,7 @@ function tokenPage(error: string | null, token: string | null): string {
 </head>
 <body>
   <div class="card">
-    <h1>Kebab MCP — Google OAuth</h1>
+    <h1>Kebab House — Google OAuth</h1>
     ${
       error
         ? `<div class="error">${safeError}</div>`
@@ -145,12 +145,12 @@ function tokenPage(error: string | null, token: string | null): string {
       <div class="steps">
         <strong>Next steps:</strong><br>
         1. Copy the token above<br>
-        2. Open your Kebab MCP dashboard → <code style="background:#1e1e1e;padding:2px 6px;border-radius:3px;">/config</code> → Connectors → Google Workspace<br>
+        2. Open your Kebab House dashboard → <code style="background:#1e1e1e;padding:2px 6px;border-radius:3px;">/config</code> → Connectors → Google Workspace<br>
         3. Click <strong>Add account</strong> and paste this refresh token (plus your Client ID & Secret)<br>
         4. The account activates immediately — connect more Google accounts the same way, no redeploy needed
       </div>
       <div class="warning">
-        This token is shown once and is not stored by Kebab MCP. Save it now.
+        This token is shown once and is not stored by Kebab House. Save it now.
       </div>
       <script>
         function reveal() { document.getElementById('token').classList.remove('token-hidden'); }

@@ -12,6 +12,7 @@ import {
   applyReleaseSync,
   compareVersions,
   computeDeploymentUpdateStatus,
+  detectSyncBase,
   planReleaseSync,
   releaseTagFor,
   resolveReleaseCommit,
@@ -52,6 +53,7 @@ const V1_1: Record<string, string> = {
 let gh: FakeGitHub;
 let upV1: string;
 let upV11: string;
+let upMid: string;
 
 function seed(userFiles: Record<string, string> = { ...V1, "notes/mine.md": "my notes\n" }) {
   gh = new FakeGitHub();
@@ -59,6 +61,7 @@ function seed(userFiles: Record<string, string> = { ...V1, "notes/mine.md": "my 
   gh.addRepo(ME);
   upV1 = gh.commit(UP, V1, "chore(main): release 1.0.0");
   const mid = gh.commit(UP, { ...V1, "src/a.ts": "export const a = 1.5;\n" }, "feat: wip", upV1);
+  upMid = mid;
   upV11 = gh.commit(UP, V1_1, "chore(main): release 1.1.0", mid);
   gh.setRef(UP, "heads/main", upV11);
   gh.setRef(UP, "tags/v1.0.0", upV1);
@@ -349,5 +352,99 @@ describe("mode selection (UPD-04)", () => {
     seed({ ...V1, "package.json": pkg("1.0.5") });
     const res = await computeDeploymentUpdateStatus(TOKEN, "me", "kebab-house");
     expect(res.ok === false && res.kind).toBe("unknown-version");
+  });
+});
+
+describe("sync base detection (D3, 2026-11 audit)", () => {
+  /** Upstream files of the commit between v1.0.0 and v1.1.0 (package.json still says 1.0.0). */
+  const MID = { ...V1, "src/a.ts": "export const a = 1.5;\n" };
+
+  it("clone of main after a tag: base is the cloned commit, not the tag, so no false conflict", async () => {
+    // The Deploy Button cloned main at `mid`: past v1.0.0, still declaring 1.0.0.
+    seed({ ...MID });
+    const base = await detectSyncBase(TOKEN, ME, "main", "1.0.0");
+    expect(base).toMatchObject({ source: "root-tree", commitSha: upMid });
+
+    const status = await computeDeploymentUpdateStatus(TOKEN, "me", "kebab-house");
+    expect(status.ok && status.payload).toMatchObject({ available: true, behind_by: 1 });
+
+    const res = await applyReleaseSync(TOKEN, REPO);
+    if (!res.ok || res.upToDate) throw new Error(`expected a sync, got ${JSON.stringify(res)}`);
+    // src/a.ts differs from v1.0.0 but is untouched since the clone: updated, not a conflict.
+    expect(res.modified).toContain("src/a.ts");
+    expect(gh.files(ME, res.commitSha)["src/a.ts"]).toBe(V1_1["src/a.ts"]);
+    expect(gh.commitInfo(ME, res.commitSha)!.message).toContain(`Kebab-Upstream-Commit: ${upV11}`);
+  });
+
+  it("the same clone with the tag-only fallback reports the false conflict (scenario guard)", async () => {
+    seed({ ...MID });
+    gh.onRequest = (call) =>
+      call.path.includes("/commits?")
+        ? new Response(JSON.stringify({ message: "Not Found" }), { status: 404 })
+        : undefined;
+    const res = await applyReleaseSync(TOKEN, REPO);
+    expect(res.ok === false && res.reason === "conflict" && res.conflicts).toEqual(["src/a.ts"]);
+  });
+
+  it("a clone newer than the latest release is up to date, never downgraded", async () => {
+    // main moved past v1.1.0; the clone's package.json lags behind (1.0.0).
+    const post = { ...V1_1, "package.json": pkg("1.0.0"), "src/d.ts": "export const d = 1;\n" };
+    seed({ ...post });
+    gh.setRef(UP, "heads/main", gh.commit(UP, post, "feat: after the release", upV11));
+
+    const status = await computeDeploymentUpdateStatus(TOKEN, "me", "kebab-house");
+    expect(status.ok && status.payload).toMatchObject({ available: false, status: "identical" });
+
+    const res = await applyReleaseSync(TOKEN, REPO);
+    expect(res).toEqual({ ok: true, upToDate: true, version: "1.0.0" });
+    expect(gh.writes()).toHaveLength(0);
+  });
+
+  it("clone at a tag: the root tree matches the release commit", async () => {
+    seed({ ...V1 });
+    expect(await detectSyncBase(TOKEN, ME, "main", "1.0.0")).toMatchObject({
+      source: "root-tree",
+      commitSha: upV1,
+    });
+    const res = await applyReleaseSync(TOKEN, REPO);
+    expect(res.ok && !res.upToDate).toBe(true);
+  });
+
+  it("previously synced: the trailer of the last sync is the base, not the root commit", async () => {
+    seed({ ...V1 });
+    const first = await applyReleaseSync(TOKEN, REPO);
+    if (!first.ok || first.upToDate) throw new Error("expected a first sync");
+
+    // Upstream ships v1.2.0, changing src/a.ts again.
+    const V1_2 = { ...V1_1, "package.json": pkg("1.2.0"), "src/a.ts": "export const a = 3;\n" };
+    const upV12 = gh.commit(UP, V1_2, "chore(main): release 1.2.0", upV11);
+    gh.setRef(UP, "heads/main", upV12);
+    gh.setRef(UP, "tags/v1.2.0", upV12);
+    gh.setLatestRelease(UP, "v1.2.0");
+
+    expect(await detectSyncBase(TOKEN, ME, "main", "1.1.0")).toMatchObject({
+      source: "trailer",
+      commitSha: upV11,
+    });
+    const second = await applyReleaseSync(TOKEN, REPO);
+    if (!second.ok || second.upToDate)
+      throw new Error(`expected a sync: ${JSON.stringify(second)}`);
+    expect(second.fromVersion).toBe("1.1.0");
+    expect(second.modified.sort()).toEqual(["package.json", "src/a.ts"]);
+  });
+
+  it("a legacy sync commit without trailer means its release tag", async () => {
+    const files = { ...V1_1, "notes/mine.md": "x\n" };
+    const head = seed(files);
+    gh.setRef(
+      ME,
+      "heads/main",
+      gh.commit(ME, files, "chore: sync Kebab House v1.1.0\n\nbody", head)
+    );
+    expect(await detectSyncBase(TOKEN, ME, "main", "0.0.1")).toMatchObject({
+      source: "tag",
+      commitSha: upV11,
+      label: "v1.1.0",
+    });
   });
 });

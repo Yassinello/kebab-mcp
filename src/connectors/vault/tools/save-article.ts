@@ -1,6 +1,7 @@
 import { z } from "zod";
 import yaml from "js-yaml";
 import { getVaultBackend } from "../lib/select";
+import { withMarkdownExtension } from "../lib/paths";
 import { getConfig } from "@/core/config-facade";
 
 const MAX_ARTICLE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -134,7 +135,8 @@ export async function handleSaveArticle(params: {
     .slice(0, 80);
 
   const folder = params.folder?.replace(/\/$/, "") || "Veille";
-  const path = `${folder}/${slug}.md`;
+  // Always a `.md` note (B1), even when the title leaves an empty slug.
+  const path = withMarkdownExtension(`${folder}/${slug || "article"}`).path;
   const date = new Date().toISOString().split("T")[0];
 
   // Build frontmatter with js-yaml

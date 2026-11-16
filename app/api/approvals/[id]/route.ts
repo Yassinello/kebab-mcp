@@ -2,14 +2,22 @@
  * TRU-04 — POST /api/approvals/<id>: record the user's decision on a pending
  * outgoing action (approve = unlock it once, reject = delete it).
  *
- * Admin auth + Origin CSRF check via `withAdminAuth`. The body must also
- * carry the link signature: the decision is bound to the exact preview id
- * and tenant the server signed, so a guessed or swapped id is refused even
- * for an authenticated admin.
+ * Admin auth + Origin CSRF check. Audit 2026-11 (A2): only the dashboard
+ * cookie session of a same-origin browser request is accepted — never an
+ * Authorization header — so an AI client holding the admin key cannot
+ * approve its own sends (browserSessionStep). The body must also carry the
+ * link signature: the decision is bound to the exact preview id and tenant
+ * the server signed, so a guessed or swapped id is refused even for an
+ * authenticated admin.
  */
 import { NextResponse } from "next/server";
-import { withAdminAuth } from "@/core/with-admin-auth";
-import type { PipelineContext } from "@/core/pipeline";
+import {
+  authStep,
+  browserSessionStep,
+  composeRequestPipeline,
+  rehydrateStep,
+  type PipelineContext,
+} from "@/core/pipeline";
 import { decide, isApprovalId, verifyApprovalSignature } from "@/core/approvals";
 import { runWithTenant } from "@/core/request-context";
 
@@ -54,4 +62,7 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
   });
 }
 
-export const POST = withAdminAuth(postHandler);
+export const POST = composeRequestPipeline(
+  [rehydrateStep, browserSessionStep, authStep("admin")],
+  postHandler
+);

@@ -11,7 +11,7 @@ export const VAULT_GUIDE = `Read, write, search, and link Markdown notes — you
 - **Explicit choice** — \`KEBAB_VAULT_BACKEND=kv\` or \`KEBAB_VAULT_BACKEND=github\` overrides the detection (for example \`kv\` after importing a GitHub vault, while keeping the token for other uses).
 
 ### Move a GitHub vault into the KV
-Open this card and click **Import GitHub vault into KV**: Markdown files are copied (other files are skipped, notes over 256 KB are reported as too large). The import never switches backend by itself — set \`KEBAB_VAULT_BACKEND=kv\` (or remove the GitHub credentials) when you are ready, then redeploy.
+Open this card and click **Import GitHub vault into KV**: Markdown files are copied (other files are skipped, notes over 256 KB are reported as too large). A note that exists in both with different content is kept as it is here, unless you tick **Overwrite notes that exist in both**. The import never switches backend by itself — set \`KEBAB_VAULT_BACKEND=kv\` (or remove the GitHub credentials) when you are ready, then redeploy.
 
 ### GitHub credentials (optional)
 1. Go to [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens/new) and create a **fine-grained** personal access token
@@ -25,4 +25,4 @@ Open this card and click **Import GitHub vault into KV**: Markdown files are cop
 - _404 on the repo_: the token wasn't granted access to that specific repo — edit it and add it.
 - _409 conflict on write_: the note changed between your read and write; read it again and retry with the new \`sha\`.
 - _Search returns nothing fresh (GitHub)_: GitHub's search index lags by 1–2 minutes after a commit; that's normal.
-- _A note is missing from listings (KV)_: click **Rebuild index** on this card; notes themselves are never lost.`;
+- _A note is missing from listings (KV)_: it comes back on its own within a few minutes; to fix it now, click **Rebuild index** on this card. Notes themselves are never lost.`;

@@ -61,7 +61,9 @@ export function useClaimStatus(initialClaim: ClaimStatus = "loading"): UseClaimS
         if (cancelled) return;
         const data = (await res.json()) as { status?: ClaimStatus; error?: string };
         if (cancelled) return;
-        if (res.ok && data.status) {
+        // 423 Locked + "claimed-by-other": another browser is running the
+        // setup. That is a state to explain, not a connection error.
+        if ((res.ok || data.status === "claimed-by-other") && data.status) {
           setClaim(data.status);
           setError(null);
         } else {

@@ -47,36 +47,67 @@ async function vaultBackend() {
   return getVaultBackend();
 }
 
-async function readDefaultFromVault(): Promise<string | null> {
+async function defaultVaultPath(): Promise<string> {
   const cfg = await getInstanceConfigAsync();
-  const path = cfg.contextPath || "System/context.md";
-  try {
-    const file = await (await vaultBackend()).read(path);
-    return file.content;
-  } catch (err) {
-    const msg = toMsg(err);
-    if (/not found/i.test(msg)) {
-      return `Profile file not found at "${path}" in the vault. Create it, or switch the profile to inline in /config → Settings.`;
+  return cfg.contextPath || "System/context.md";
+}
+
+/** The profile served to the current caller, wherever it is stored. */
+export interface ActiveProfile {
+  /** Profile name (`default` or the hat bound to the caller's token). */
+  name: string;
+  /** `vault`: the default profile is a note in the vault; `inline`: stored in KV. */
+  mode: "inline" | "vault";
+  /** Markdown content; empty when there is no profile yet. */
+  content: string;
+  /** Vault path of the profile note (vault mode only). */
+  path?: string;
+  /** Vault mode: the note does not exist yet. */
+  missing?: boolean;
+}
+
+/**
+ * Resolve and read the caller's profile: the bound hat, else the default
+ * profile — inline, or the vault note when the default is in vault mode.
+ * The single source for my_context, kebab_setup and kebab_status, so a
+ * vault-mode profile is never reported missing. Throws on a vault read
+ * error other than "not found" (callers decide how to degrade).
+ */
+export async function readActiveProfile(): Promise<ActiveProfile> {
+  const name = await resolveProfileName();
+  if (name === DEFAULT_PROFILE && (await getDefaultProfileMode()) === "vault") {
+    const path = await defaultVaultPath();
+    try {
+      const file = await (await vaultBackend()).read(path);
+      return { name, mode: "vault", content: file.content, path };
+    } catch (err) {
+      if (/not found/i.test(toMsg(err))) {
+        return { name, mode: "vault", content: "", path, missing: true };
+      }
+      throw err;
     }
-    throw err;
   }
+  return { name, mode: "inline", content: (await getProfileContent(name)) ?? "" };
 }
 
 export const myContextSchema = {};
 
 export async function handleMyContext(): Promise<ToolResult> {
-  const name = await resolveProfileName();
-  if (name !== DEFAULT_PROFILE) {
-    const content = (await getProfileContent(name)) ?? "";
-    return text(content.trim() ? `<!-- profile: ${name} -->\n${content}` : EMPTY_HELP);
+  const profile = await readActiveProfile();
+  if (profile.mode === "vault") {
+    if (profile.missing) {
+      return text(
+        `Profile file not found at "${profile.path}" in the vault. Create it, or switch the profile to inline in /config → Settings.`
+      );
+    }
+    return text(profile.content);
   }
-  const mode = await getDefaultProfileMode();
-  if (mode === "vault") {
-    const fromVault = await readDefaultFromVault();
-    if (fromVault !== null) return text(fromVault);
-  }
-  const inline = (await getProfileContent(DEFAULT_PROFILE)) ?? "";
-  return text(inline.trim() ? inline : EMPTY_HELP);
+  if (!profile.content.trim()) return text(EMPTY_HELP);
+  return text(
+    profile.name !== DEFAULT_PROFILE
+      ? `<!-- profile: ${profile.name} -->\n${profile.content}`
+      : profile.content
+  );
 }
 
 export const myContextUpdateSchema = {
@@ -107,8 +138,7 @@ export async function handleMyContextUpdate(args: {
   // The default profile may live in the vault: update the file there instead
   // of silently switching the profile back to inline mode.
   if (name === DEFAULT_PROFILE && (await getDefaultProfileMode()) === "vault") {
-    const cfg = await getInstanceConfigAsync();
-    const path = cfg.contextPath || "System/context.md";
+    const path = await defaultVaultPath();
     const vault = await vaultBackend();
     let current = "";
     let sha: string | undefined;

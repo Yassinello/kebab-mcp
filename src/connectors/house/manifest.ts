@@ -3,7 +3,9 @@ import type { ResourceProvider, ResourceSpec } from "@/core/resources";
 import { UI_MIME_TYPE, UI_SCHEME, UI_URI_PREFIX, uiToolMeta } from "./views/bridge";
 import { STATUS_VIEW } from "./views/status";
 import { GALLERY_VIEW } from "./views/gallery";
-import { APPROVE_VIEW } from "./views/approve";
+import { approveView } from "./views/approve";
+import { getRequestOrigin } from "@/core/request-context";
+import { getPublicOrigin } from "@/core/approvals";
 import {
   handleKebabStatus,
   handleSkillsGallery,
@@ -21,21 +23,26 @@ import {
  * Markdown text of every result.
  */
 
-const VIEWS: Record<string, { name: string; description: string; html: string }> = {
+/** Origins an approval link may point to: this request's, and the one approval links are built with. */
+function instanceOrigins(): string[] {
+  return [getRequestOrigin(), getPublicOrigin()].filter((o): o is string => Boolean(o));
+}
+
+const VIEWS: Record<string, { name: string; description: string; html: () => string }> = {
   status: {
     name: "Kebab House status",
     description: "Profile, skills, connectors and this week's usage.",
-    html: STATUS_VIEW,
+    html: () => STATUS_VIEW,
   },
   gallery: {
     name: "Skills gallery",
     description: "Your skills and the ritual templates.",
-    html: GALLERY_VIEW,
+    html: () => GALLERY_VIEW,
   },
   approve: {
     name: "Review before sending",
     description: "Preview of an outgoing message, with the approval link.",
-    html: APPROVE_VIEW,
+    html: () => approveView(instanceOrigins()),
   },
 };
 
@@ -53,7 +60,7 @@ export const uiResources: ResourceProvider = {
     const id = uri.startsWith(UI_URI_PREFIX) ? uri.slice(UI_URI_PREFIX.length) : "";
     const view = VIEWS[id];
     if (!view) throw new Error(`unknown view: ${uri}`);
-    return { uri, mimeType: UI_MIME_TYPE, text: view.html };
+    return { uri, mimeType: UI_MIME_TYPE, text: view.html() };
   },
 };
 
@@ -90,7 +97,7 @@ export const houseConnector: ConnectorManifest = {
       name: "kebab_weekly_recap",
       title: "Weekly recap",
       description:
-        "Recap of one week of Kebab House use: tool calls, skills used, clients, notes added and changed, compared with the week before. Default: the last complete week.",
+        "Recap of one week of Kebab House use: tool calls, skills used, clients, notes added and changed, compared with the week before. Default: the current week from Friday to Sunday, else the last complete week (the text says which).",
       schema: weeklyRecapSchema,
       handler: async (args) => handleWeeklyRecap(args),
       destructive: false,

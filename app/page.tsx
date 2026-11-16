@@ -25,7 +25,7 @@ export default async function HomePage() {
   // Routing rules for `/`:
   //   - Token present → user has finished setup → /config dashboard.
   //   - Explicit `INSTANCE_MODE=showcase` → marketing landing (e.g. the
-  //     public mymcp-home demo).
+  //     public showcase at kebab-mcp.vercel.app).
   //   - Anything else (real deployments, including fresh forks) → /welcome
   //     to mint the token. The previous logic gated this on
   //     `INSTANCE_MODE=personal` being explicitly set, but Vercel's

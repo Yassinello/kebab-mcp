@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
-import { withAdminAuth } from "@/core/with-admin-auth";
-import type { PipelineContext } from "@/core/pipeline";
+import {
+  authStep,
+  browserSessionStep,
+  composeRequestPipeline,
+  rehydrateStep,
+  type PipelineContext,
+} from "@/core/pipeline";
 import {
   OAuthError,
   issueCode,
@@ -9,7 +14,7 @@ import {
   readAuthorizeParams,
   validateAuthorize,
 } from "@/core/oauth";
-import { createOAuthDevice } from "@/core/devices";
+import { findOAuthDeviceByClientId, isAccessLevel, type AccessLevel } from "@/core/devices";
 import { getCurrentTenantId } from "@/core/request-context";
 
 interface DecisionBody {
@@ -18,6 +23,9 @@ interface DecisionBody {
   label?: unknown;
   skillTags?: unknown;
   profile?: unknown;
+  /** Audit 2026-11: "read" | "memory" | "full". */
+  access?: unknown;
+  /** Legacy consent form: true = "full". */
   writeAllowed?: unknown;
 }
 
@@ -42,10 +50,21 @@ function normalizeTags(v: unknown): string[] | null {
   return out.length ? out.slice(0, 20) : null;
 }
 
+/** The chosen access level; a body without a valid choice fails closed to "read". */
+function accessFrom(body: DecisionBody): AccessLevel {
+  if (isAccessLevel(body.access)) return body.access;
+  return body.writeAllowed === true ? "full" : "read";
+}
+
 /**
  * Kebab House phase 1 (OAU-06) — the owner's decision on an authorization
- * request. Admin auth + Origin CSRF check (withAdminAuth). Returns the URL
- * the browser must navigate to (code or access_denied, with state + iss).
+ * request. Returns the URL the browser must navigate to (code or
+ * access_denied, with state + iss).
+ *
+ * Audit 2026-11: only the dashboard cookie session of a same-origin browser
+ * request is accepted (browserSessionStep) — a client holding the admin key
+ * cannot approve itself. The device is created (or the client's existing
+ * device reused) when the code is exchanged, not here.
  */
 async function postHandler(ctx: PipelineContext): Promise<Response> {
   if (getCurrentTenantId() !== null) {
@@ -60,7 +79,7 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
   } catch {
     return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
   }
-  if (typeof body.query !== "string") {
+  if (!body || typeof body.query !== "string") {
     return NextResponse.json({ message: "Missing authorization request" }, { status: 400 });
   }
   const origin = publicOrigin(ctx.request);
@@ -83,27 +102,26 @@ async function postHandler(ctx: PipelineContext): Promise<Response> {
     });
   }
 
-  const deviceId = newOAuthDeviceId();
+  const existing = await findOAuthDeviceByClientId(v.client.client_id);
   const label =
     typeof body.label === "string" && body.label.trim() ? body.label : v.client.client_name;
   const profile =
     typeof body.profile === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(body.profile)
       ? body.profile
       : null;
-  await createOAuthDevice({
-    id: deviceId,
+  const code = await issueCode(v, existing?.id ?? newOAuthDeviceId(), {
     label,
-    clientId: v.client.client_id,
     clientName: v.client.client_name,
-    connectors: null,
     skillTags: normalizeTags(body.skillTags),
     profile,
-    writeAllowed: body.writeAllowed === true,
+    access: accessFrom(body),
   });
-  const code = await issueCode(v, deviceId);
   return NextResponse.json({
     redirect: withParams(v.redirect_uri, { code, state: v.state, iss: origin }),
   });
 }
 
-export const POST = withAdminAuth(postHandler);
+export const POST = composeRequestPipeline(
+  [rehydrateStep, browserSessionStep, authStep("admin")],
+  postHandler
+);

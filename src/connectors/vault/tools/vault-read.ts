@@ -1,13 +1,20 @@
 import { z } from "zod";
 import { loadVaultYaml } from "../lib/yaml-safe";
 import { getVaultBackend } from "../lib/select";
+import { readFirstExisting } from "../lib/backend";
+import { withMarkdownExtension } from "../lib/paths";
 
 export const vaultReadSchema = {
   path: z.string().describe("Path in the vault, e.g. Projects/cadens.md"),
 };
 
 export async function handleVaultRead(params: { path: string }) {
-  const file = await getVaultBackend().read(params.path);
+  // A path without extension also finds the note saved as `<path>.md`.
+  const md = withMarkdownExtension(params.path);
+  const file = await readFirstExisting(
+    getVaultBackend(),
+    md.added ? [params.path, md.path] : [params.path]
+  );
 
   // Parse frontmatter with js-yaml
   let frontmatter: Record<string, unknown> | null = null;

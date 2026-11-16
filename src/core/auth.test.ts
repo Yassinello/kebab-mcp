@@ -337,6 +337,40 @@ describe("checkAdminAuth — SEC-A-03 production token isolation", () => {
     expect((result as Response).status).toBe(503);
   });
 
+  it("C1.7: a browser gets a plain-words HTML page explaining what to set and where", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.MCP_AUTH_TOKEN = "mcp-secret-tok";
+    const req = new Request("http://example.com/config", {
+      headers: {
+        "x-forwarded-for": "8.8.8.8",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    const res = (await checkAdminAuth(req)) as Response;
+    expect(res.status).toBe(503);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    const html = await res.text();
+    expect(html).toContain("ADMIN_AUTH_TOKEN=");
+    expect(html).toContain("KEBAB_ADMIN_TOKEN_FALLBACK=1");
+    expect(html).toContain(".env");
+    // Never echoes the configured token.
+    expect(html).not.toContain("mcp-secret-tok");
+  });
+
+  it("C1.7: API clients keep a JSON 503 body", async () => {
+    process.env.VERCEL = "1";
+    process.env.MCP_AUTH_TOKEN = "mcp-secret-tok";
+    const req = new Request("http://example.com/api/config/profiles", {
+      headers: { "x-forwarded-for": "8.8.8.8", accept: "application/json" },
+    });
+    const res = (await checkAdminAuth(req)) as Response;
+    expect(res.status).toBe(503);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("admin_auth_misconfigured");
+    expect(body.message).toMatch(/ADMIN_AUTH_TOKEN is required/);
+  });
+
   it("allows fallback when KEBAB_ADMIN_TOKEN_FALLBACK=1 explicitly opts in", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     process.env.MCP_AUTH_TOKEN = "shared-tok";
@@ -363,5 +397,19 @@ describe("checkAdminAuth — SEC-A-03 production token isolation", () => {
       headers: { "x-forwarded-for": "8.8.8.8", authorization: "Bearer shared-tok" },
     });
     expect(await checkAdminAuth(req)).toBeNull();
+  });
+});
+
+describe("admin misconfiguration page is shared with the proxy (audit C1.7)", () => {
+  it("auth re-exports the dependency-free module", async () => {
+    const auth = await import("./auth");
+    const mod = await import("./admin-misconfigured");
+    expect(auth.adminMisconfiguredResponse).toBe(mod.adminMisconfiguredResponse);
+    const res = mod.adminMisconfiguredResponse(
+      new Request("https://x.example/config", { headers: { accept: "text/html" } })
+    );
+    expect(res.status).toBe(503);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    expect(await res.text()).toMatch(/ADMIN_AUTH_TOKEN/);
   });
 });

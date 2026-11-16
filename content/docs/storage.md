@@ -1,14 +1,14 @@
 ---
 title: Storage modes & data persistence
-summary: Where Kebab MCP keeps your credentials and skills, and how to pick the right backend
+summary: Where Kebab House keeps your credentials and skills, and how to pick the right backend
 order: 25
 ---
 
-## What is storage in Kebab MCP?
+## What is storage in Kebab House?
 
-Kebab MCP keeps three kinds of data alive between requests: **connector credentials** (the API keys you paste into `/config → Connectors`), **skills** (the prompt templates you write or compose), and **runtime settings** (timezone, display name, per-tool toggles). Without a GitHub repository, the **memory vault** lives here too (`vault:note:*` keys and a `vault:index`) — see the Memory Vault section of the connectors guide. Everything else — logs, caches, MCP session state — is in-memory and disposable.
+Kebab House keeps three kinds of data alive between requests: **connector credentials** (the API keys you paste into `/config → Connectors`), **skills** (the prompt templates you write or compose), and **runtime settings** (timezone, display name, per-tool toggles). Without a GitHub repository, the **memory vault** lives here too (`vault:note:*` keys and a `vault:index`) — see the Memory Vault section of the connectors guide. Everything else — logs, caches, MCP session state — is in-memory and disposable.
 
-That data has to live somewhere. Kebab MCP picks one of three backends at boot, based on what's available in your environment. The pick is not a setting — it's a detection. If Upstash Redis is reachable, it uses Upstash. Otherwise it falls back to the local filesystem. Otherwise it runs read-only from env vars only. The current mode is shown in the **Storage** tab as a coloured badge: `Upstash Redis ✓`, `Filesystem ✓`, `Filesystem (temporary) ⚠`, `Static ⚠`, or `KV unreachable ✗`.
+That data has to live somewhere. Kebab House picks one of three backends at boot, based on what's available in your environment. The pick is not a setting — it's a detection. If Upstash Redis is reachable, it uses Upstash. Otherwise it falls back to the local filesystem. Otherwise it runs read-only from env vars only. The current mode is shown in the **Storage** tab as a coloured badge: `Upstash Redis ✓`, `Filesystem ✓`, `Filesystem (temporary) ⚠`, `Static ⚠`, or `KV unreachable ✗`.
 
 Knowing which mode you're in matters because each one has a different durability story. The wrong mode for your deploy means saved credentials silently vanish, skills disappear after a redeploy, or every change requires editing Vercel env vars by hand.
 
@@ -20,19 +20,19 @@ Knowing which mode you're in matters because each one has a different durability
 
 **What works**: every save is instant and survives cold starts, redeploys, and multi-instance scaling. Migration from file mode is one click in the dashboard. Backups via `npm run backup:export` (operator CLI). Free Upstash tier is plenty for a personal instance.
 
-**What breaks**: nothing inherent. If Upstash is misconfigured (wrong token, deleted database, network blocked), Kebab MCP flips to a `kv-degraded` state instead of silently writing to the wrong place — you'll see `KV unreachable ✗` and the dashboard refuses to save.
+**What breaks**: nothing inherent. If Upstash is misconfigured (wrong token, deleted database, network blocked), Kebab House flips to a `kv-degraded` state instead of silently writing to the wrong place — you'll see `KV unreachable ✗` and the dashboard refuses to save.
 
 **When to upgrade**: this is the upgrade target. You don't go beyond KV for a personal instance.
 
 ### File (filesystem)
 
-**When picked**: no Upstash, but the OS gives Kebab MCP a writable directory (`./data` locally, `/tmp` on Vercel, the volume you mounted in Docker).
+**When picked**: no Upstash, but the OS gives Kebab House a writable directory (`./data` locally, `/tmp` on Vercel, the volume you mounted in Docker).
 
 **What works**: instant local saves, no network round-trip, no extra signup. Perfect for `npm run dev` and single-instance Docker with a mounted volume.
 
 **What breaks**:
 
-- **On Vercel**: `/tmp` is wiped on every cold start (typically every 15–30 minutes of inactivity, and on every redeploy). Saves look like they worked, then silently disappear. Kebab MCP detects this case and shows the badge as `Filesystem (temporary) ⚠` — see "The Vercel /tmp trap" below.
+- **On Vercel**: `/tmp` is wiped on every cold start (typically every 15–30 minutes of inactivity, and on every redeploy). Saves look like they worked, then silently disappear. Kebab House detects this case and shows the badge as `Filesystem (temporary) ⚠` — see "The Vercel /tmp trap" below.
 - **Multi-instance**: each replica has its own filesystem, so saves on one don't propagate. Use KV for multi-instance.
 
 **When to upgrade**: moving to Vercel, or scaling Docker beyond one container. Migration is one click from `/config → Storage`.
@@ -51,11 +51,11 @@ Knowing which mode you're in matters because each one has a different durability
 
 This is the failure mode that prompted the v3 storage UX rework, and it's still the single most common gotcha.
 
-When you click "Deploy with Vercel" and skip the Upstash integration, Kebab MCP boots, finds no `UPSTASH_REDIS_REST_URL`, then finds that `/tmp` is writable, then picks **File mode** pointing at `/tmp/mymcp-data/`. The dashboard works. You save your Notion token. The Connectors tab shows ✓. You move on.
+When you click "Deploy with Vercel" and skip the Upstash integration, Kebab House boots, finds no `UPSTASH_REDIS_REST_URL`, then finds that `/tmp` is writable, then picks **File mode** pointing at `/tmp/mymcp-data/`. The dashboard works. You save your Notion token. The Connectors tab shows ✓. You move on.
 
 15 minutes later, the function cold-starts. Vercel wipes `/tmp`. The next dashboard load shows your Notion token gone. There's no error, no warning, no log entry — the data was written successfully, then the storage layer got recycled.
 
-**Kebab MCP v3 detects this case explicitly.** When the runtime is on Vercel and the data dir lives under `/tmp`, the storage layer marks itself `ephemeral: true` and the dashboard shows:
+**Kebab House v3 detects this case explicitly.** When the runtime is on Vercel and the data dir lives under `/tmp`, the storage layer marks itself `ephemeral: true` and the dashboard shows:
 
 - A `Filesystem (temporary) ⚠` badge in the sidebar and on the Storage tab
 - A red `FileEphemeralWarningCard` at the top of the Storage tab with a 3-step Upstash setup
@@ -80,7 +80,7 @@ The dashboard tells you which mode you're in and links to the right upgrade path
 ### File → KV
 
 1. Provision Upstash and add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` to your environment
-2. Restart Kebab MCP (redeploy on Vercel, `docker compose restart` on Docker, ctrl-C + `npm run dev` locally)
+2. Restart Kebab House (redeploy on Vercel, `docker compose restart` on Docker, ctrl-C + `npm run dev` locally)
 3. Open `/config → Storage`. The badge now shows `Upstash Redis ✓` and a "Migrate from file" expand-section appears under "KV is healthy"
 4. Click **Preview & migrate**. The modal shows what will be added/updated/skipped. Existing KV values are preserved unless overwritten by file values.
 5. Confirm. Done.
@@ -103,7 +103,7 @@ Then start the new instance with file storage and run `npm run backup:import bac
 
 ### KV-degraded recovery
 
-If the badge flashes `KV unreachable ✗`, Kebab MCP can reach the env vars but the Upstash ping fails. Common causes:
+If the badge flashes `KV unreachable ✗`, Kebab House can reach the env vars but the Upstash ping fails. Common causes:
 
 - Token rotated in Upstash but not updated in Vercel
 - Upstash database paused (free tier auto-pauses after long inactivity — open the [Upstash console](https://console.upstash.com) and resume)

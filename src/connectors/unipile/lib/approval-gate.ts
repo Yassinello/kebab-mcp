@@ -8,15 +8,12 @@
  *     send_inmail / engage), which had no preview step at all, via
  *     `gateLegacyWrite`.
  *
- * `KEBAB_APPROVAL_MODE=link` (default):
- *   1st call (no preview_id) → preview + `preview_id` + signed `approval_url`;
- *     the exact arguments to execute are stored server-side (core/approvals).
- *   `confirm: true` without an approved preview_id → refused, nothing sent.
- *   call with `preview_id` → if the user approved it at the link, the STORED
- *     arguments are executed once (arguments passed by the model on that call
- *     are ignored and listed back); pending / used / expired → refused.
- *   Attachments are not stored (size): they are pinned by SHA-256 and must be
- *   resent byte-identical with the preview_id, or the call is refused.
+ * Audit 2026-11 (A4): the link flow itself (store the exact payload, signed
+ * approval link, execute the STORED payload once, attachments pinned by
+ * SHA-256) now lives in `src/core/approval-gate.ts` and is shared with the
+ * Gmail, Google Chat and Slack sends. This module keeps the Unipile-specific
+ * parts: its "nothing was sent" envelope, the guarded-preview summary, the
+ * kill switch and the account resolution of the historical tools.
  *
  * `KEBAB_APPROVAL_MODE=confirm`: the handlers are called exactly as before
  * this gate existed (preview_id is ignored).
@@ -25,27 +22,25 @@
  * limit, audit and verify-after-send all still run at execution time.
  */
 
-import { createHash } from "node:crypto";
 import type { ToolResult } from "@/core/types";
+import { getApprovalMode, type ApprovalSummary } from "@/core/approvals";
 import {
-  APPROVAL_TTL_SECONDS,
-  buildApprovalUrl,
-  consume,
-  createPreview,
-  getApprovalMode,
-  getPreview,
-  isApprovalId,
-  type ApprovalRecord,
-  type ApprovalSummary,
-} from "@/core/approvals";
-import { getCallerMeta } from "@/core/token-scope";
+  confirmOnlyRefusal as coreConfirmOnlyRefusal,
+  executeApproved as coreExecuteApproved,
+  gateRefusal,
+  isRecord,
+  offerApproval as coreOfferApproval,
+  readEnvelope,
+  type GateArgs,
+  type GateHandler,
+} from "@/core/approval-gate";
 import { toMsg } from "@/core/error-utils";
 import { resolveAccountId } from "./account";
 import { jsonResult } from "./common-schema";
 import { isWritesDisabled } from "./kill-switch";
 
-type Args = Record<string, unknown>;
-type Handler = (args: Args) => Promise<ToolResult>;
+type Args = GateArgs;
+type Handler = GateHandler;
 
 const LINK_HINT =
   "SAFETY: the first call only previews and returns an approval_url; give that link to the user, and after they approve it call again with preview_id (confirm:true alone is refused).";
@@ -62,232 +57,42 @@ export function approvalHint(opts: { legacy?: boolean } = {}): string {
     : "SAFETY: preview only unless confirm:true — show the preview and set confirm:true only after the user explicitly approves.";
 }
 
-// ── attachments pinning ──────────────────────────────────────────────
-
-interface AttachmentDigest {
-  filename: string;
-  mimetype: string;
-  bytes: number;
-  sha256: string;
-}
-
-function digestAttachments(list: unknown): AttachmentDigest[] {
-  if (!Array.isArray(list)) return [];
-  return list.map((a: { filename?: unknown; mimetype?: unknown; base64?: unknown }) => {
-    const buf = Buffer.from(typeof a.base64 === "string" ? a.base64 : "", "base64");
-    return {
-      filename: String(a.filename ?? ""),
-      mimetype: String(a.mimetype ?? ""),
-      bytes: buf.byteLength,
-      sha256: createHash("sha256").update(buf).digest("hex"),
-    };
-  });
-}
-
-function sameDigests(a: AttachmentDigest[], b: AttachmentDigest[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every(
-      (x, i) =>
-        x.sha256 === b[i]!.sha256 && x.filename === b[i]!.filename && x.mimetype === b[i]!.mimetype
-    )
-  );
-}
-
 // ── envelopes ────────────────────────────────────────────────────────
 
 const NOT_SENT = { executed: false, provider_ok: false, verified: false, dedup_hit: false };
 
 function refusal(error: string, detail: string, extra: Record<string, unknown> = {}): ToolResult {
-  return jsonResult({ ...NOT_SENT, error, detail, ...extra });
-}
-
-function readEnvelope(res: ToolResult): Record<string, unknown> | null {
-  const first = res.content?.[0];
-  if (!first || first.type !== "text") return null;
-  try {
-    const v = JSON.parse(first.text) as unknown;
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
-
-/** Arguments that describe the action (control fields and file bodies removed). */
-function actionArgs(args: Args): Args {
-  const out: Args = {};
-  for (const [k, v] of Object.entries(args)) {
-    if (k === "confirm" || k === "preview_id" || k === "attachments" || v === undefined) continue;
-    out[k] = v;
-  }
-  return out;
+  return gateRefusal(error, detail, extra, NOT_SENT);
 }
 
 function confirmOnlyRefusal(tool: string): ToolResult {
-  return refusal(
-    "error_approval_required",
-    `confirm:true is not accepted on its own: sends need the user's approval outside the conversation. Call ${tool} without confirm to get a preview and an approval_url, give the link to the user, then call again with the preview_id once they approved it.`
-  );
+  return coreConfirmOnlyRefusal(tool, NOT_SENT);
 }
 
-async function offerApproval(opts: {
+function offerApproval(opts: {
   tool: string;
   args: Args;
   accountId: string | undefined;
   summary: ApprovalSummary;
   base: Record<string, unknown>;
 }): Promise<ToolResult> {
-  const stored: Args = {
-    ...actionArgs(opts.args),
-    ...(opts.accountId ? { account_id: opts.accountId } : {}),
-  };
-  const attachments = digestAttachments(opts.args.attachments);
-  const summary: ApprovalSummary = {
-    ...opts.summary,
-    details: {
-      ...opts.summary.details,
-      ...(attachments.length
-        ? {
-            attachments: attachments.map(
-              (a) => `${a.filename} (${a.mimetype}, ${a.bytes} bytes, sha256 ${a.sha256})`
-            ),
-          }
-        : {}),
-    },
-  };
-  const meta = getCallerMeta();
-  let rec: ApprovalRecord;
-  let url: string;
-  try {
-    rec = await createPreview({
-      tool: opts.tool,
-      summary,
-      payload: { args: stored, attachments },
-      requestedBy: meta?.label ?? meta?.tokenId ?? null,
-    });
-    url = await buildApprovalUrl(rec.id);
-  } catch (err) {
-    return refusal(
-      "error_approval_unavailable",
-      `Could not create the approval link (${toMsg(err)}). Nothing was sent. Approval links need durable storage (Upstash KV) and a signing secret; an operator may set KEBAB_APPROVAL_MODE=confirm to fall back to in-conversation confirmation.`
-    );
-  }
-  return jsonResult({
-    ...opts.base,
-    ...NOT_SENT,
-    approval_required: true,
-    preview_id: rec.id,
-    approval_url: url,
-    expires_at: new Date(rec.expiresAt).toISOString(),
-    next_step:
-      `Nothing was sent. Give the user this approval link so they can check the exact recipient and text and approve it: ${url} . ` +
-      `Once the user says they approved it, call ${opts.tool} again with preview_id: "${rec.id}" — the approved payload stored on the server is executed as is (other arguments are ignored). ` +
-      `The link works once and expires in ${APPROVAL_TTL_SECONDS / 60} minutes.`,
+  return coreOfferApproval({
+    tool: opts.tool,
+    args: opts.args,
+    ...(opts.accountId ? { pinned: { account_id: opts.accountId } } : {}),
+    summary: opts.summary,
+    base: opts.base,
+    notSent: NOT_SENT,
   });
 }
 
-/** Keys whose value on the executing call differs from the approved payload. */
-function ignoredArguments(stored: Args, given: Args, pinned: AttachmentDigest[]): string[] {
-  const out: string[] = [];
-  for (const [k, v] of Object.entries(actionArgs(given))) {
-    if (JSON.stringify(v) !== JSON.stringify(stored[k])) out.push(k);
-  }
-  // Files only travel when the approval pinned them (checked above).
-  if (!pinned.length && digestAttachments(given.attachments).length) out.push("attachments");
-  return out.sort();
-}
-
-async function executeApproved(
+function executeApproved(
   tool: string,
   previewId: unknown,
   given: Args,
   run: Handler
 ): Promise<ToolResult> {
-  const restart = `Call ${tool} without preview_id to get a new preview and approval link.`;
-  if (!isApprovalId(previewId)) {
-    return refusal("error_approval_not_found", `Unknown or expired preview_id. ${restart}`);
-  }
-  const rec = await getPreview(previewId);
-  if (!rec) {
-    return refusal("error_approval_not_found", `Unknown or expired preview_id. ${restart}`);
-  }
-  if (rec.tool !== tool) {
-    return refusal(
-      "error_approval_tool_mismatch",
-      `preview_id ${previewId} was created by ${rec.tool}, not ${tool}. Nothing was sent.`
-    );
-  }
-  if (rec.status === "pending") {
-    const url = await buildApprovalUrl(rec.id);
-    return refusal(
-      "error_approval_pending",
-      `The user has not approved this action yet. Give them the approval link (${url}) and call again with preview_id once they approved it. Nothing was sent.`,
-      { approval_url: url, preview_id: rec.id }
-    );
-  }
-  if (rec.status === "consumed") {
-    return refusal(
-      "error_approval_already_used",
-      `This approval was already used (each approval executes once). ${restart}`
-    );
-  }
-
-  const pinned = Array.isArray(rec.payload.attachments)
-    ? (rec.payload.attachments as AttachmentDigest[])
-    : [];
-  if (pinned.length && !sameDigests(pinned, digestAttachments(given.attachments))) {
-    return refusal(
-      "error_attachments_mismatch",
-      `The approved action carries ${pinned.length} attachment(s) pinned by SHA-256 (${pinned
-        .map((a) => a.filename)
-        .join(
-          ", "
-        )}). Files are not stored on the server: resend exactly the same attachments with the preview_id. Nothing was sent.`
-    );
-  }
-
-  const taken = await consume(rec.id, tool);
-  if (!taken.ok) {
-    return refusal(
-      taken.reason === "already_consumed"
-        ? "error_approval_already_used"
-        : "error_approval_not_found",
-      taken.reason === "already_consumed"
-        ? `This approval was already used (each approval executes once). ${restart}`
-        : `Unknown, rejected or expired preview_id. ${restart}`
-    );
-  }
-
-  const stored = isRecord(taken.record.payload.args) ? taken.record.payload.args : {};
-  const ignored = ignoredArguments(stored, given, pinned);
-  const finalArgs: Args = {
-    ...stored,
-    ...(pinned.length ? { attachments: given.attachments } : {}),
-  };
-  const res = await run(finalArgs);
-
-  const env = readEnvelope(res);
-  const approval = {
-    preview_id: rec.id,
-    executed_payload: "stored (as approved by the user)",
-    ...(ignored.length
-      ? {
-          ignored_arguments: ignored,
-          notice: `Arguments passed on this call differ from the approved payload and were ignored: ${ignored.join(", ")}. What the user approved is what was executed.`,
-        }
-      : {}),
-  };
-  if (!env) {
-    return { ...res, content: [...res.content, { type: "text", text: JSON.stringify(approval) }] };
-  }
-  return {
-    ...res,
-    content: [{ type: "text", text: JSON.stringify({ ...env, approval }, null, 2) }],
-  };
+  return coreExecuteApproved(tool, previewId, given, run, NOT_SENT);
 }
 
 // ── spec-v2 guarded tools ────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { REPO_URL } from "./deploy-url";
 
-/** LND-01 — "at home": your data, your infra, your code. */
+/** LND-01 — "at home": your data, your infra, your code. Rendered inside the guardrails section. */
 const BADGES = [
   {
     label: "Open source",
@@ -20,7 +20,7 @@ const BADGES = [
   {
     label: "Self-hosted",
     description:
-      "Runs on your own Vercel account (or Docker). Your keys never leave your infra, and updates are one click from the dashboard.",
+      "Runs on your own Vercel account (or Docker). Your keys stay in your accounts, and updates are one click from the dashboard.",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -35,7 +35,7 @@ const BADGES = [
   {
     label: "Your data, portable",
     description:
-      "One zip with your profiles, skills, notes and settings — secrets left out. Import it into another instance and carry on.",
+      "Export one zip with your profiles, skills, notes and settings (secrets excluded), and import it into another instance from the dashboard.",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -51,41 +51,40 @@ const BADGES = [
 
 export default function Trust() {
   return (
-    <section id="at-home" className="py-20 px-6 border-t border-slate-800">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-12">
-          <p className="text-xs font-mono text-amber-400 mb-3 tracking-widest uppercase">At home</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
-            Your kitchen, your rules.
-          </h2>
-          <p className="text-slate-400 text-base mt-3 max-w-xl mx-auto leading-relaxed">
-            No SaaS in the middle: your hub, your database, your code.
-          </p>
+    <div id="at-home" className="mt-10 sm:mt-12">
+      <div>
+        <div className="text-center mb-6">
+          <p className="text-xs font-mono text-amber-400 mb-2 tracking-widest uppercase">At home</p>
+          <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            Your data stays yours.
+          </h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {BADGES.map((badge) => (
             <div
               key={badge.label}
-              className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 text-center hover:border-slate-700 transition-colors"
+              className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 sm:p-5 hover:border-slate-700 transition-colors"
             >
-              <div className="flex justify-center text-amber-400 mb-4">{badge.icon}</div>
-              {badge.href ? (
-                <a
-                  href={badge.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-white font-semibold text-lg mb-2 block hover:text-amber-300 transition-colors"
-                >
-                  {badge.label}
-                </a>
-              ) : (
-                <p className="text-white font-semibold text-lg mb-2">{badge.label}</p>
-              )}
+              <div className="flex items-center gap-2.5 mb-2">
+                <span className="text-amber-400">{badge.icon}</span>
+                {badge.href ? (
+                  <a
+                    href={badge.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white font-semibold text-base hover:text-amber-300 transition-colors"
+                  >
+                    {badge.label}
+                  </a>
+                ) : (
+                  <p className="text-white font-semibold text-base">{badge.label}</p>
+                )}
+              </div>
               <p className="text-slate-400 text-sm leading-relaxed">{badge.description}</p>
             </div>
           ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

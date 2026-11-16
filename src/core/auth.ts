@@ -293,6 +293,9 @@ export function checkCsrf(request: Request): Response | null {
   return null;
 }
 
+import { adminMisconfiguredResponse } from "./admin-misconfigured";
+export { ADMIN_MISCONFIGURED_MESSAGE, adminMisconfiguredResponse } from "./admin-misconfigured";
+
 /**
  * Check admin dashboard auth. Returns error Response or null if OK.
  *
@@ -330,11 +333,7 @@ async function _checkAdminAuthImpl(request: Request): Promise<Response | null> {
     getConfig("KEBAB_ADMIN_TOKEN_FALLBACK") === "true";
   const isProd = getConfig("NODE_ENV") === "production" || getConfig("VERCEL") === "1";
   if (isProd && !adminTokenEnv && mcpTokenEnv && !fallbackOptIn) {
-    return new Response(
-      "Admin auth misconfigured: ADMIN_AUTH_TOKEN is required when MCP_AUTH_TOKEN is set " +
-        "(or set KEBAB_ADMIN_TOKEN_FALLBACK=1 to allow shared-token fallback).",
-      { status: 503 }
-    );
+    return adminMisconfiguredResponse(request);
   }
 
   const adminRaw = adminTokenEnv || mcpTokenEnv || getBootstrapAuthToken() || "";

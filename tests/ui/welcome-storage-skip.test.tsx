@@ -38,14 +38,14 @@ describe("WelcomeShell — storage step skip", () => {
   it("jumps to the token step when Upstash is already attached", async () => {
     stubFetch(KV);
     render(<WelcomeShell initialBootstrap={false} />);
-    expect(await screen.findByText("Generate your auth token")).toBeInTheDocument();
+    expect(await screen.findByText("Create your admin key")).toBeInTheDocument();
     expect(screen.queryByText("Where your data lives")).not.toBeInTheDocument();
   });
 
   it("does not skip again after the user goes back to the storage step", async () => {
     stubFetch(KV);
     render(<WelcomeShell initialBootstrap={false} />);
-    await screen.findByText("Generate your auth token");
+    await screen.findByText("Create your admin key");
     fireEvent.click(screen.getByRole("button", { name: /← storage/i }));
     expect(await screen.findByText("Where your data lives")).toBeInTheDocument();
     // Give the effects a chance to (wrongly) re-skip.
@@ -58,7 +58,7 @@ describe("WelcomeShell — storage step skip", () => {
     render(<WelcomeShell initialBootstrap={false} />);
     expect(await screen.findByText("Where your data lives")).toBeInTheDocument();
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(screen.queryByText("Generate your auth token")).not.toBeInTheDocument();
+    expect(screen.queryByText("Create your admin key")).not.toBeInTheDocument();
   });
 
   it("keeps the storage step when there is no KV (memory / static)", async () => {
@@ -66,6 +66,6 @@ describe("WelcomeShell — storage step skip", () => {
     render(<WelcomeShell initialBootstrap={false} />);
     expect(await screen.findByText("Where your data lives")).toBeInTheDocument();
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(screen.queryByText("Generate your auth token")).not.toBeInTheDocument();
+    expect(screen.queryByText("Create your admin key")).not.toBeInTheDocument();
   });
 });

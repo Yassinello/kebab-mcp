@@ -38,6 +38,31 @@ import { parseTokens, tokenId } from "./auth";
 import { kvScanAll } from "./kv-store";
 import { getKnownConnectorIds } from "./registry";
 
+/**
+ * Audit 2026-11 — what a device may do with tools that change things.
+ *   - `read`:   read-only tools only (load skills, read profile and notes).
+ *   - `memory`: also tools whose only effect is writing the user's own
+ *               profile, notes or skills (`memoryWrite` tools).
+ *   - `full`:   every tool, including sends and third-party changes
+ *               (outgoing messages still need out-of-band approval).
+ * Back-compat: legacy OAuth `writeAllowed: true` → "full", false/absent →
+ * "read". Static tokens and dashboard-minted devices default to "full".
+ */
+export type AccessLevel = "read" | "memory" | "full";
+
+export function isAccessLevel(v: unknown): v is AccessLevel {
+  return v === "read" || v === "memory" || v === "full";
+}
+
+const ACCESS_RANK: Record<AccessLevel, number> = { read: 0, memory: 1, full: 2 };
+
+/** The most restrictive of several access levels (`full` for an empty list). */
+export function mostRestrictiveAccess(levels: readonly AccessLevel[]): AccessLevel {
+  let out: AccessLevel = "full";
+  for (const l of levels) if (ACCESS_RANK[l] < ACCESS_RANK[out]) out = l;
+  return out;
+}
+
 export interface DeviceRow {
   tokenId: string;
   label: string;
@@ -55,8 +80,10 @@ export interface DeviceRow {
   profile: string | null;
   /** Kebab House phase 1 — `oauth` for clients authorized via OAuth, else `token`. */
   kind?: "token" | "oauth";
-  /** OAuth clients: whether destructive (write) tools are allowed. */
+  /** OAuth clients: whether destructive (write) tools are allowed (= access "full"). */
   writeAllowed?: boolean;
+  /** Audit 2026-11 — access level (see AccessLevel). */
+  access?: AccessLevel;
 }
 
 interface DeviceKVEntry {
@@ -75,6 +102,12 @@ interface DeviceKVEntry {
    * is true. Absent on static-token devices (no change for them).
    */
   writeAllowed?: boolean;
+  /**
+   * Audit 2026-11 — access level. When absent it is derived: OAuth devices
+   * from `writeAllowed` (true → full, else read), every other device full.
+   * An invalid stored value fails closed to "read".
+   */
+  access?: AccessLevel;
   /**
    * SEC-06 (2026-11 audit): set when the token was rotated or revoked.
    * On Vercel the `MCP_AUTH_TOKEN` env edit only lands on the next
@@ -122,6 +155,14 @@ export function parseDeviceEntry(raw: string | null): DeviceEntryState {
 
 function isRevoked(entry: Partial<DeviceKVEntry>): boolean {
   return typeof entry.revokedAt === "string" && entry.revokedAt.length > 0;
+}
+
+/** Access level carried by a (non-revoked) device entry — see AccessLevel. */
+export function accessLevelOf(entry: Partial<DeviceKVEntry>): AccessLevel {
+  const raw = (entry as { access?: unknown }).access;
+  if (raw !== undefined) return isAccessLevel(raw) ? raw : "read";
+  if (entry.oauth) return entry.writeAllowed === true ? "full" : "read";
+  return "full";
 }
 
 /**
@@ -172,6 +213,7 @@ async function updateDeviceEntry(
     if (typeof prev.profile === "string") entry.profile = prev.profile;
     if (prev.oauth && typeof prev.oauth === "object") entry.oauth = prev.oauth;
     if (typeof prev.writeAllowed === "boolean") entry.writeAllowed = prev.writeAllowed;
+    if (prev.access !== undefined) entry.access = accessLevelOf(prev);
     if (typeof prev.revokedAt === "string") entry.revokedAt = prev.revokedAt;
   }
   mutate(entry);
@@ -313,13 +355,16 @@ async function scanRateLimitKeysForToken(hash16: string): Promise<string[]> {
 }
 
 /**
- * Enumerate current devices: one row per token in `MCP_AUTH_TOKEN`.
- * KV-missing entries surface as `{ label: "unnamed", createdAt: "unknown" }`.
+ * Enumerate current devices: one row per token in `MCP_AUTH_TOKEN`, then the
+ * clients that signed in with OAuth. KV-missing entries surface as
+ * `{ label: "unnamed", createdAt: "unknown" }`.
+ *
+ * Audit 2026-11: an instance set up through /welcome has no token in
+ * MCP_AUTH_TOKEN; its OAuth clients (Claude…) must still be listed.
  */
 export async function listDevices(): Promise<DeviceRow[]> {
   const envValue = getConfig("MCP_AUTH_TOKEN");
   const tokens = parseTokens(envValue);
-  if (tokens.length === 0) return [];
 
   const kv = getContextKVStore();
   const rows: DeviceRow[] = [];
@@ -331,6 +376,7 @@ export async function listDevices(): Promise<DeviceRow[]> {
     let connectors: string[] | null = null;
     let skillTags: string[] | null = null;
     let profile: string | null = null;
+    let access: AccessLevel = "full";
     // Display what resolution enforces: a corrupt entry is fail-closed and a
     // tombstoned token (rotated/revoked, still in a not-yet-redeployed env)
     // is refused — never show either as "All connectors".
@@ -346,14 +392,27 @@ export async function listDevices(): Promise<DeviceRow[]> {
       connectors = e.connectors ?? null;
       skillTags = e.skillTags ?? null;
       profile = typeof e.profile === "string" ? e.profile : null;
+      access = accessLevelOf(e);
       if (isRevoked(e)) {
         label = `${label} (revoked — pending redeploy)`;
         connectors = [];
         skillTags = [];
+        access = "read";
       }
     }
+    if (state.kind === "corrupt") access = "read";
     const lastSeenAt = await getLastSeenAt(t);
-    rows.push({ tokenId: id, label, createdAt, lastSeenAt, connectors, skillTags, profile });
+    rows.push({
+      tokenId: id,
+      label,
+      createdAt,
+      lastSeenAt,
+      connectors,
+      skillTags,
+      profile,
+      access,
+      writeAllowed: access === "full",
+    });
   }
   rows.push(...(await listOAuthDevices()));
   return rows;
@@ -379,7 +438,8 @@ export async function listOAuthDevices(): Promise<DeviceRow[]> {
       skillTags: e.skillTags ?? null,
       profile: typeof e.profile === "string" ? e.profile : null,
       kind: "oauth",
-      writeAllowed: e.writeAllowed === true,
+      access: accessLevelOf(e),
+      writeAllowed: accessLevelOf(e) === "full",
     });
   }
   return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -400,13 +460,15 @@ export async function createOAuthDevice(input: {
   connectors: string[] | null;
   skillTags: string[] | null;
   profile: string | null;
-  writeAllowed: boolean;
+  access: AccessLevel;
 }): Promise<void> {
+  const access: AccessLevel = isAccessLevel(input.access) ? input.access : "read";
   const entry: DeviceKVEntry = {
     label: input.label.trim().slice(0, LABEL_MAX_LEN) || "OAuth client",
     createdAt: new Date().toISOString(),
     oauth: { clientId: input.clientId, clientName: input.clientName },
-    writeAllowed: input.writeAllowed,
+    writeAllowed: access === "full",
+    access,
   };
   if (input.connectors !== null) entry.connectors = input.connectors;
   if (input.skillTags !== null) entry.skillTags = input.skillTags;
@@ -414,11 +476,117 @@ export async function createOAuthDevice(input: {
   await getContextKVStore().set(`${DEVICE_KEY_PREFIX}${input.id}`, JSON.stringify(entry));
 }
 
-/** Toggle write access of an OAuth device (TRU-05). */
-export async function setDeviceWriteAllowed(id: string, allowed: boolean): Promise<void> {
-  await updateDeviceEntry(id, (e) => {
-    e.writeAllowed = allowed;
+/** What an existing OAuth device of a client looks like (re-authorization). */
+export interface OAuthDeviceSettings {
+  id: string;
+  label: string;
+  profile: string | null;
+  skillTags: string[] | null;
+  connectors: string[] | null;
+  access: AccessLevel;
+}
+
+/**
+ * Audit 2026-11 (A3): the active (not revoked) OAuth device of a client, so
+ * a re-authorization reuses it instead of piling up duplicates. The most
+ * recently created one wins when several exist (legacy duplicates).
+ */
+export async function findOAuthDeviceByClientId(
+  clientId: string
+): Promise<OAuthDeviceSettings | null> {
+  const kv = getContextKVStore();
+  const keys = await kvScanAll(kv, `${DEVICE_KEY_PREFIX}*`);
+  let best: OAuthDeviceSettings | null = null;
+  let bestCreatedAt = "";
+  for (const key of keys) {
+    const id = key.slice(key.lastIndexOf(DEVICE_KEY_PREFIX) + DEVICE_KEY_PREFIX.length);
+    if (!/^[0-9a-f]{8}$/.test(id)) continue;
+    const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
+    if (state.kind !== "ok" || isRevoked(state.entry)) continue;
+    const e = state.entry;
+    if (!e.oauth || e.oauth.clientId !== clientId) continue;
+    const createdAt = typeof e.createdAt === "string" ? e.createdAt : "";
+    if (best && bestCreatedAt >= createdAt) continue;
+    bestCreatedAt = createdAt;
+    best = {
+      id,
+      label: typeof e.label === "string" && e.label ? e.label : "OAuth client",
+      profile: typeof e.profile === "string" ? e.profile : null,
+      skillTags: e.skillTags ?? null,
+      connectors: e.connectors ?? null,
+      access: accessLevelOf(e),
+    };
+  }
+  return best;
+}
+
+/**
+ * Audit 2026-11 (A3): apply the owner's consent to an OAuth client's device
+ * once its authorization code is exchanged. The client's existing device is
+ * reused and updated in place (label, profile, skill tags, access; the
+ * connector scope set in the dashboard is kept); otherwise a device is
+ * created under `fallbackId` (or a fresh id if that one is taken or was
+ * revoked). Returns the device id the tokens must be bound to.
+ */
+export async function applyOAuthConsent(input: {
+  fallbackId: string;
+  label: string;
+  clientId: string;
+  clientName: string;
+  skillTags: string[] | null;
+  profile: string | null;
+  access: AccessLevel;
+}): Promise<string> {
+  const access: AccessLevel = isAccessLevel(input.access) ? input.access : "read";
+  const existing = await findOAuthDeviceByClientId(input.clientId);
+  if (existing) {
+    await updateDeviceEntry(existing.id, (e) => {
+      e.label = input.label.trim().slice(0, LABEL_MAX_LEN) || e.label;
+      if (input.skillTags === null) delete e.skillTags;
+      else e.skillTags = input.skillTags;
+      if (input.profile) e.profile = input.profile;
+      else delete e.profile;
+      e.access = access;
+      e.writeAllowed = access === "full";
+      e.oauth = { clientId: input.clientId, clientName: input.clientName };
+    });
+    return existing.id;
+  }
+  const kv = getContextKVStore();
+  let id = input.fallbackId;
+  // Never overwrite another device or a revocation tombstone.
+  if (!/^[0-9a-f]{8}$/.test(id) || (await kv.get(`${DEVICE_KEY_PREFIX}${id}`)) !== null) {
+    id = randomBytes(4).toString("hex");
+  }
+  await createOAuthDevice({
+    id,
+    label: input.label,
+    clientId: input.clientId,
+    clientName: input.clientName,
+    connectors: null,
+    skillTags: input.skillTags,
+    profile: input.profile,
+    access,
   });
+  return id;
+}
+
+/**
+ * Set a device's access level (audit 2026-11). Works for static-token and
+ * OAuth devices; `writeAllowed` is kept in sync on OAuth entries so older
+ * readers see the same answer.
+ */
+export async function setDeviceAccessLevel(id: string, access: AccessLevel): Promise<void> {
+  if (!isAccessLevel(access)) throw new Error("Invalid access level");
+  await updateDeviceEntry(id, (e) => {
+    e.access = access;
+    if (e.oauth) e.writeAllowed = access === "full";
+  });
+}
+
+/** Toggle write access of an OAuth device (TRU-05). Back-compat: true = "full", false = "read". */
+export async function setDeviceWriteAllowed(id: string, allowed: boolean): Promise<void> {
+  await setDeviceAccessLevel(id, allowed ? "full" : "read");
 }
 
 /** Revoke an OAuth device: tombstone (its tokens stop resolving at once). */
@@ -428,17 +596,29 @@ export async function revokeOAuthDevice(id: string): Promise<void> {
 }
 
 /**
- * Whether the caller device may use destructive tools (TRU-05). Static
- * tokens: always (unchanged behaviour). OAuth devices: only when allowed.
+ * Access level of the caller device in one KV namespace (audit 2026-11).
+ * No entry → "full" (static token never labelled, KV-only bootstrap
+ * token); corrupt or revoked → "read" (fail closed).
+ */
+export async function getDeviceAccessLevelFrom(
+  id: string,
+  kv: { get(key: string): Promise<string | null> }
+): Promise<AccessLevel> {
+  const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
+  if (state.kind === "absent") return "full";
+  if (state.kind === "corrupt" || isRevoked(state.entry)) return "read";
+  return accessLevelOf(state.entry);
+}
+
+/**
+ * Whether the caller device may use every destructive tool (TRU-05).
+ * Derived from the access level: true only for "full".
  */
 export async function getDeviceWriteAllowedFrom(
   id: string,
   kv: { get(key: string): Promise<string | null> }
 ): Promise<boolean> {
-  const state = parseDeviceEntry(await kv.get(`${DEVICE_KEY_PREFIX}${id}`));
-  if (state.kind !== "ok") return true;
-  if (!state.entry.oauth) return true;
-  return state.entry.writeAllowed === true;
+  return (await getDeviceAccessLevelFrom(id, kv)) === "full";
 }
 
 /**
@@ -617,6 +797,7 @@ export async function rotateDeviceToken(
   let connectors: string[] | undefined;
   let skillTags: string[] | undefined;
   let profile: string | undefined;
+  let access: AccessLevel | undefined;
   if (oldState.kind === "ok") {
     if (typeof oldState.entry.label === "string" && oldState.entry.label.length > 0) {
       label = oldState.entry.label;
@@ -627,14 +808,18 @@ export async function rotateDeviceToken(
     connectors = oldState.entry.connectors;
     skillTags = oldState.entry.skillTags;
     if (typeof oldState.entry.profile === "string") profile = oldState.entry.profile;
+    // Audit 2026-11: a lowered access level survives rotation too.
+    if (oldState.entry.access !== undefined) access = accessLevelOf(oldState.entry);
   } else if (oldState.kind === "corrupt") {
     connectors = []; // fail closed, mirrors token-scope resolution
     skillTags = [];
+    access = "read";
   }
   const newEntry: DeviceKVEntry = { label, createdAt: new Date().toISOString() };
   if (connectors !== undefined) newEntry.connectors = connectors;
   if (skillTags !== undefined) newEntry.skillTags = skillTags;
   if (profile !== undefined) newEntry.profile = profile;
+  if (access !== undefined) newEntry.access = access;
   await kv.set(newKey, JSON.stringify(newEntry));
 
   // Splice env list.

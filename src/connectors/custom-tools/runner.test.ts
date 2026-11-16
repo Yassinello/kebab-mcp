@@ -773,6 +773,37 @@ describe("runner — SEC-05 caller scope, toggles and arg validation", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("EXPLOIT: a step needing more access than the calling client has is refused", async () => {
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "gone" }] }));
+    registerTool("vault_delete", handler, true);
+    const { runWithCallerMeta } = await import("@/core/token-scope");
+    const meta = {
+      tokenId: "abcd1234",
+      label: "Cursor",
+      profile: null,
+      access: "memory" as const,
+      writeAllowed: false,
+    };
+    const result = await runWithCallerMeta(meta, () => runCustomTool(oneStep("vault_delete"), {}));
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/higher access level/);
+    expect(handler).not.toHaveBeenCalled();
+
+    // A memory-write step stays allowed for the same client.
+    const write = vi.fn(async () => ({ content: [{ type: "text" as const, text: "saved" }] }));
+    mockTools.push({
+      name: "vault_append",
+      description: "mock vault_append",
+      schema: {},
+      destructive: true,
+      memoryWrite: true,
+      handler: write,
+    });
+    const ok = await runWithCallerMeta(meta, () => runCustomTool(oneStep("vault_append"), {}));
+    expect(ok.ok).toBe(true);
+    expect(write).toHaveBeenCalled();
+  });
+
   it("allows the step when the connector is in scope", async () => {
     registerTool("vault_read", async () => ({ content: [{ type: "text", text: "ok" }] }));
     const { runWithToolAccess } = await import("@/core/token-scope");

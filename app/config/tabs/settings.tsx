@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { InstanceConfig } from "@/core/types";
-import { ProfilesField } from "./settings/profiles-field";
-import { ContextFileField } from "./settings/context-file-field";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
-import { InfoTooltip } from "./settings/info-tooltip";
 import { AdvancedSection } from "./settings/advanced-section";
-import { StorageTab } from "./storage";
-import { DevicesTab } from "./devices";
 
+/**
+ * Plain labels for end users (C1.5); the environment variable behind each
+ * field stays available as a hover hint for self-hosters.
+ */
 const USER_FIELDS: {
   key: string;
   label: string;
@@ -19,48 +18,35 @@ const USER_FIELDS: {
 }[] = [
   {
     key: "MYMCP_DISPLAY_NAME",
-    label: "Display Name",
+    label: "Your name",
     placeholder: "Your name",
-    help: "Shown in the dashboard and tool greetings.",
+    help: "Shown in the dashboard and in greetings from your AI clients.",
   },
   {
     key: "MYMCP_TIMEZONE",
-    label: "Timezone",
+    label: "Time zone",
     placeholder: "Europe/Paris",
-    help: "IANA format. Used to format dates in tool responses.",
+    help: "Used to show dates and times in your time zone (for example Europe/Paris).",
   },
   {
     key: "MYMCP_LOCALE",
-    label: "Locale",
+    label: "Language and region",
     placeholder: "fr-FR",
-    help: "Used to format numbers and currencies.",
+    help: "Used to format numbers and currencies (for example fr-FR or en-US).",
   },
 ];
 
-type SubTab = "user" | "mcp" | "storage" | "devices" | "advanced";
+type SubTab = "user" | "mcp" | "advanced";
 
 export function SettingsTab({
   config,
-  vaultEnabled,
   baseUrl,
   hasAuthToken,
   scopeBadge,
-  tenantId,
-  forceSub,
-  connectors,
 }: {
   config: InstanceConfig;
-  vaultEnabled: boolean;
   baseUrl: string;
   hasAuthToken: boolean;
-  /**
-   * All known connectors (id/label/core/toolCount) — forwarded to the
-   * Devices sub-tab so the operator can scope a token to a subset of
-   * connectors.
-   */
-  connectors?:
-    | { id: string; label: string; core?: boolean | undefined; toolCount?: number | undefined }[]
-    | undefined;
   /**
    * Phase 48 / FACADE-04: identifies whether the operator is viewing
    * global settings (`null`) or a specific tenant's override.
@@ -69,37 +55,16 @@ export function SettingsTab({
    * — the write-direction itself is server-side (x-mymcp-tenant header).
    */
   scopeBadge?: { mode: "global" | "tenant"; tenantId?: string } | null;
-  /**
-   * Tenant scope for the Devices sub-tab. Devices are tenant-aware —
-   * each tenant has its own MCP_AUTH_TOKEN_<id> key, and the Devices
-   * panel renders tokens for the current scope only.
-   */
-  tenantId?: string | null | undefined;
-  /**
-   * Force a specific sub-tab to render, regardless of the `?sub=` URL
-   * param. Used by the legacy `?tab=storage` and `?tab=devices` routes
-   * (kept for bookmark compatibility) — they now render SettingsTab
-   * with the matching sub-tab pre-selected, instead of a separate
-   * top-level page.
-   */
-  forceSub?: SubTab;
 }) {
-  // Subtab state is reflected in the URL (?tab=settings&sub=user|mcp|storage|devices|advanced)
+  // Subtab state is reflected in the URL (?tab=settings&sub=user|mcp|advanced)
   // so deep-linking and back/forward navigation work. Default to "user".
+  // The profile editors moved to the Profile page, Devices and Storage to
+  // their own pages (C1.2 / C1.5; page.tsx redirects the old sub-tab links).
   const searchParams = useSearchParams();
   const router = useRouter();
   const subFromUrl = searchParams.get("sub");
   const initialSub: SubTab =
-    forceSub ??
-    (subFromUrl === "mcp"
-      ? "mcp"
-      : subFromUrl === "storage"
-        ? "storage"
-        : subFromUrl === "devices"
-          ? "devices"
-          : subFromUrl === "advanced"
-            ? "advanced"
-            : "user");
+    subFromUrl === "mcp" ? "mcp" : subFromUrl === "advanced" ? "advanced" : "user";
   const [tab, setTabState] = useState<SubTab>(initialSub);
   const setTab = (next: SubTab) => {
     setTabState(next);
@@ -140,12 +105,8 @@ export function SettingsTab({
     setSaving(false);
   };
 
-  // Storage and Devices sub-tabs render rich tables/dashboards that need
-  // breathing room; the other sub-tabs are forms that look weird when
-  // stretched. Drop the max-width constraint for the wide sub-tabs only.
-  const wide = tab === "storage" || tab === "devices";
   return (
-    <div className={wide ? "" : "max-w-2xl"}>
+    <div className="max-w-2xl">
       {/* Subtabs — MOBILE-04: larger tap targets and horizontal scroll
           fallback if labels ever overflow on a narrow viewport. */}
       <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto">
@@ -153,8 +114,6 @@ export function SettingsTab({
           [
             ["user", "User settings"],
             ["mcp", "MCP install"],
-            ["storage", "Storage"],
-            ["devices", "Devices"],
             ["advanced", "Advanced"],
           ] as const
         ).map(([k, label]) => (
@@ -192,11 +151,15 @@ export function SettingsTab({
           <div className="border border-border rounded-lg p-5 space-y-5">
             {USER_FIELDS.map((f) => (
               <div key={f.key}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <label className="text-sm font-medium">{f.label}</label>
-                  <code className="text-[11px] text-text-muted">{f.key}</code>
-                </div>
+                <label
+                  htmlFor={`setting-${f.key}`}
+                  className="text-sm font-medium block mb-1.5"
+                  title={`Environment variable: ${f.key}`}
+                >
+                  {f.label}
+                </label>
                 <input
+                  id={`setting-${f.key}`}
                   type="text"
                   placeholder={f.placeholder}
                   value={values[f.key] || ""}
@@ -206,47 +169,17 @@ export function SettingsTab({
                 <p className="text-xs text-text-muted mt-1">{f.help}</p>
               </div>
             ))}
-
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <label className="text-sm font-medium">Profile (default)</label>
-                <InfoTooltip
-                  title="What is the personal context file?"
-                  body="A short markdown document that describes you (role, current projects, preferences). MCP clients can fetch it via the my_context tool to ground responses without you re-explaining everything every conversation. Two storage modes: store the markdown inline here (persists in the KV store), or point at a note in your memory vault (stored in the KV, or in a GitHub/Obsidian repo)."
-                />
-              </div>
-              <ContextFileField vaultEnabled={vaultEnabled} initialPath={config.contextPath} />
-              <p className="text-xs text-text-muted mt-2">
-                This is the default profile. Pick where it lives. Inline = stored in the KV store.
-                Vault = a note in your memory vault, fetched on demand.
-              </p>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <label className="text-sm font-medium">Other profiles (one per hat)</label>
-                <InfoTooltip
-                  title="Profiles per hat"
-                  body="Each client token can be bound to its own profile (Devices → Edit scope). my_context then returns that profile instead of the default one — e.g. a 'perso' profile for your personal Claude and a 'work' profile for your work account."
-                />
-              </div>
-              <ProfilesField />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium block mb-1.5">Your data</label>
-              <a
-                href="/api/config/export"
-                download
-                className="inline-block bg-bg border border-border hover:bg-bg-muted text-text text-xs font-medium px-3 py-1.5 rounded-md"
-              >
-                Export everything (.zip)
-              </a>
-              <p className="text-xs text-text-muted mt-2">
-                Profiles, skills (Agent Skills folders), memory vault (Markdown, opens in Obsidian)
-                and settings. Secrets, tokens and devices are never included.
-              </p>
-            </div>
+            <p className="text-xs text-text-muted border-t border-border pt-4">
+              Your profile, the notes your AI clients keep and your backups now live on the{" "}
+              <a href="/config?tab=profile" className="text-accent hover:underline">
+                Profile
+              </a>{" "}
+              and{" "}
+              <a href="/config?tab=memory" className="text-accent hover:underline">
+                Memory
+              </a>{" "}
+              pages.
+            </p>
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
@@ -257,18 +190,12 @@ export function SettingsTab({
               {saving ? "Saving..." : "Save settings"}
             </button>
             {saved && <span className="text-xs text-green">Saved</span>}
-            {error && <span className="text-xs text-red-500">{error}</span>}
+            {error && <span className="text-xs text-red">{error}</span>}
           </div>
         </>
       )}
 
       {tab === "mcp" && <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />}
-
-      {tab === "storage" && <StorageTab />}
-
-      {tab === "devices" && (
-        <DevicesTab tenantId={tenantId} baseUrl={baseUrl} connectors={connectors} />
-      )}
 
       {tab === "advanced" && <AdvancedSection />}
     </div>

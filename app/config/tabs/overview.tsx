@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { UsageCard } from "./overview/usage-card";
+import { HubSection } from "./overview/hub-card";
 import type { ToolLog } from "@/core/logging";
-import type { InstanceConfig } from "@/core/types";
 import { ConnectorHealthWidget } from "./connector-health";
 import { toMsg } from "@/core/error-utils";
 import { formatRelativeTime } from "@/core/relative-time";
@@ -127,8 +127,7 @@ export function OverviewTab({
   totalTools,
   enabledCount,
   connectorCount,
-  logs,
-  config,
+  logs: initialLogs,
   version,
   commitSha,
   tenantId,
@@ -138,12 +137,36 @@ export function OverviewTab({
   enabledCount: number;
   connectorCount: number;
   logs: ToolLog[];
-  config: InstanceConfig;
   version: string;
   commitSha?: string | undefined;
   tenantId?: string | null | undefined;
 }) {
   const [tokenRevealed, setTokenRevealed] = useState(false);
+  // The server-rendered list comes from this page's own in-memory buffer,
+  // which is not the one the MCP route writes to: read the same API as the
+  // Logs page instead (audit 2026-11: Overview said "No tool invocations
+  // yet" while Logs listed them).
+  const [logs, setLogs] = useState<ToolLog[]>(initialLogs);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/config/logs", { credentials: "include" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { logs?: ToolLog[] };
+        if (!cancelled && Array.isArray(data.logs)) setLogs(data.logs);
+      } catch {
+        // keep the server-rendered list
+      }
+    };
+    // fire-and-forget OK: client-side refresh; errors keep the server-rendered list
+    void load();
+    const id = setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
   const [copied, setCopied] = useState<string | null>(null);
   const [update, setUpdate] = useState<UpdateStatus>({ state: "loading" });
   const [result, setResult] = useState<UpdateResult>({ state: "idle" });
@@ -255,6 +278,15 @@ export function OverviewTab({
           <span className="font-mono text-sm text-text">{tenantId}</span>
         </div>
       )}
+
+      {/* C1.1: the user's hub first — profile, skills, clients, notes. */}
+      <HubSection />
+
+      {/* Kebab House phase 0: weekly usage */}
+      <UsageCard />
+
+      {/* Server details, below the hub: health, counters, version, endpoint. */}
+      <h2 className="text-sm font-semibold text-text-dim pt-4 border-t border-border">Server</h2>
 
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />
@@ -494,19 +526,15 @@ export function OverviewTab({
       )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Active tools" value={totalTools} accent />
         <StatCard label="Active connectors" value={`${enabledCount} / ${connectorCount}`} />
         <StatCard
-          label="Last invocation"
+          label="Last tool call"
           value={lastLog ? new Date(lastLog.timestamp).toLocaleTimeString() : "—"}
           small
         />
-        <StatCard label="Display name" value={config.displayName} small />
       </div>
-
-      {/* Kebab House phase 0: weekly usage */}
-      <UsageCard />
 
       {/* Version info */}
       <Section title="Version">
@@ -570,7 +598,7 @@ export function OverviewTab({
       </Section>
 
       {/* Recent activity */}
-      <Section title="Recent activity">
+      <Section title="Recent tool calls">
         {logs.length === 0 ? (
           <p className="text-sm text-text-muted px-5 py-4">No tool invocations yet.</p>
         ) : (

@@ -7,6 +7,8 @@ description: >-
   (everything else), then confirms where it went.
 metadata:
   title: Remember
+  summary: "Keeps facts, ideas and decisions you mention, so every AI client you connect can use them later."
+  example: "Remember that I prefer short answers"
   icon: "🧠"
   tags: [rituals]
 ---

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Only the latest minor release of Kebab MCP receives security updates.
+Only the latest minor release of Kebab House receives security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -66,13 +66,24 @@ We will credit you in the security advisory unless you prefer to remain anonymou
 
 ## Security Best Practices
 
-When self-hosting Kebab MCP, follow these guidelines:
+When self-hosting Kebab House, follow these guidelines:
 
-### Token Management
+### Admin key vs device tokens
 
-- **Admin token** (`ADMIN_AUTH_TOKEN`): keep this secret and separate from user-facing tokens. Never expose it in client-side code or logs. Falls back to `MCP_AUTH_TOKEN` if unset.
-- **User tokens**: rotate regularly, especially if you suspect exposure. Use the admin API to revoke compromised tokens.
-- Store all secrets in environment variables — never hard-code them in source files.
+- **Admin key** (`ADMIN_AUTH_TOKEN`, or the token minted by `/welcome` on a zero-config deploy): it **opens the dashboard** and approves outgoing messages. Keep it like a password. **Do not paste it into an AI client.** In production `MCP_AUTH_TOKEN` is not an admin credential unless `KEBAB_ADMIN_TOKEN_FALLBACK=1` is set (Docker: set `ADMIN_AUTH_TOKEN`, see `.env.example`). When an AI client calls the MCP endpoint with the admin key, Overview shows a warning.
+- **Device tokens**: one per AI client that cannot sign in (Codex, Windsurf, n8n…), created in **Devices → Add device**. Each can be renamed, rotated or revoked on its own; a revoked token is refused at once.
+- **Sign-in (OAuth)**: Claude, ChatGPT, Cursor and Claude Code sign in through your instance's consent page instead of holding a token you copied. They appear in Devices and are revoked the same way.
+- Store all secrets in environment variables or the dashboard — never hard-code them in source files.
+
+### Access levels
+
+Each client has an access level. A client that signs in chooses it on the consent page; device tokens created in the dashboard start at *everything* and can be lowered in Devices.
+
+| Level | What the client can do |
+|---|---|
+| **Read only** | Read tools only: profile, skills, notes, and the reads of your connectors. Nothing that writes or sends. |
+| **Read + my profile and notes** (recommended) | Read, plus writing **your own** profile, notes and skills (`my_context_update`, `skill_template_install`, `vault_write`, `vault_append`, `vault_move`, `save_article`). No deletes, no sends, no writes to other services. |
+| **Everything** | Every tool, including sends (which still wait for your approval, below), deletes, writes to other services and the admin tools. |
 
 ### Environment Variable Hygiene
 
@@ -101,7 +112,8 @@ These behaviours are on by default; each has an explicit opt-out documented in `
 | Dashboard | In production `MCP_AUTH_TOKEN` is not an admin credential | `KEBAB_ADMIN_TOKEN_FALLBACK=1` |
 | Browser | `web_act` / `web_agent` refuse the logged-in `linkedin` context | `KEBAB_BROWSER_LINKEDIN_WRITE=1` |
 | Vault | No writes under `.github/` or `.git*`; GitHub search qualifiers stripped | — |
-| Outgoing messages (Unipile) | Sends, posts, comments, reactions, invitations and withdrawals need the user's approval on a signed `/approve/<id>` page; the model's `confirm: true` alone is refused | `KEBAB_APPROVAL_MODE=confirm` |
+| Outgoing messages | Gmail sends and replies, Slack and Google Chat messages, and Unipile sends, posts, comments, reactions, invitations and withdrawals need the user's approval on a signed `/approve/<id>` page; the model's `confirm: true` alone is refused | `KEBAB_APPROVAL_MODE=confirm` |
+| New OAuth clients | Choose an access level on the consent page (default: read + my profile and notes) | — |
 
 Known accepted risks: DNS rebinding between the SSRF check and the socket connect (no IP pinning). What the model may and may not be trusted with is described in [Trust model](#trust-model). See `docs/audits/2026-11-cdc-remediation.md`.
 
@@ -109,9 +121,9 @@ Known accepted risks: DNS rebinding between the SSRF check and the socket connec
 
 Kebab gives a language model tools that **read content written by strangers** (web pages, e-mails, Slack, LinkedIn and WhatsApp messages, webhook payloads, Apify datasets), **remember** it (vault) and **act in your name** (send messages, publish, write notes). A model can be steered by instructions hidden in what it reads (prompt injection). Kebab cannot make the model immune; it limits what a steered model can do without you. Background: `docs/audits/2026-11-audit-technique.md` §2.8 and `docs/specs/kebab-house-phase-1.md` §3.
 
-### 1. Untrusted content is labelled (TRU-02 — landing in phase 1)
+### 1. Untrusted content is labelled (TRU-02)
 
-Tool results that carry third-party content (web reads, paywall readers, Gmail and Slack reads, Unipile and WhatsApp reads, Apify results, Notion reads, vault notes of `external` provenance) are being wrapped in an `<untrusted_content source="…">…</untrusted_content>` block preceded by a line telling the model not to follow instructions inside it. The closing tag is escaped if it appears in the content; `structuredContent` is untouched. Opt-out: `KEBAB_UNTRUSTED_FRAMING=off`. This is a **hint to the model**, not a security boundary: a model can still be fooled by framed content. Check the release notes for the exact version that ships it.
+Tool results that carry third-party content (web reads, paywall readers, Gmail and Slack reads, Unipile and WhatsApp reads, Apify results, Notion reads, vault notes of `external` provenance) are wrapped in an `<untrusted_content source="…">…</untrusted_content>` block preceded by a line telling the model not to follow instructions inside it. The closing tag is escaped if it appears in the content; `structuredContent` is untouched. Opt-out: `KEBAB_UNTRUSTED_FRAMING=off`. This is a **hint to the model**, not a security boundary: a model can still be fooled by framed content.
 
 ### 2. Outgoing actions need your approval outside the conversation (TRU-04)
 
@@ -123,7 +135,13 @@ Tool results that carry third-party content (web reads, paywall readers, Gmail a
 
 Kill switches, halt flags, the 10-minute duplicate guard, rate limits, hash-only audit and verify-after-send still run at execution time. The pending payload is the one place where message text sits in KV: until it is executed (then only a tombstone without text remains), rejected (deleted) or expired (15 minutes).
 
-Covered: every Unipile tool that runs through `runGuardedWrite` (`whatsapp_send_message`, `linkedin_reply`, `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post`, `linkedin_cancel_invitation`) and the historical LinkedIn writes (`linkedin_send_connection`, `linkedin_send_message`, `linkedin_send_inmail`, `linkedin_engage` — `dry_run: true` stays a preview without approval).
+Covered — every message that leaves your account through Kebab House:
+
+- **E-mail**: `gmail_send`, `gmail_reply`.
+- **Chat**: `slack_send`, `slack_send_dm`, `google_chat_send_message`.
+- **LinkedIn and WhatsApp**: every Unipile tool that runs through `runGuardedWrite` (`whatsapp_send_message`, `linkedin_reply`, `linkedin_react_post`, `linkedin_comment_post`, `linkedin_create_post`, `linkedin_cancel_invitation`) and the historical LinkedIn writes (`linkedin_send_connection`, `linkedin_send_message`, `linkedin_send_inmail`, `linkedin_engage` — `dry_run: true` stays a preview without approval).
+
+Not sends, so no approval: `gmail_draft` (a draft waits in your mailbox) and `calendar_create`.
 
 `KEBAB_APPROVAL_MODE=confirm` restores the previous behaviour: spec-v2 tools act on `confirm: true` and the historical LinkedIn tools send directly. Approval links need durable KV (Upstash) and the signing secret; set `KEBAB_PUBLIC_URL` when the instance is not on Vercel so the link points to the right host.
 
@@ -135,7 +153,7 @@ Provenance is a **label**, not a signature: anyone who can write the note — yo
 
 ### 4. What is NOT protected
 
-- **Other write tools** act on the model's call alone: Gmail send/draft, Slack post, Notion, Linear, GitHub issues, Airtable, Calendar, vault writes and deletes, Custom Tools, browser actions, API connections. Their `destructive` flag drives the dashboard and tool annotations only. Restrict them with token scopes or tool toggles if a client should not have them.
+- **Other write tools** act on the model's call alone: Gmail drafts, Calendar events, Notion, Linear, GitHub issues, Airtable, vault writes and deletes, Custom Tools, browser actions, API connections. Give a client *read only* or *read + my profile and notes* (above), or use token scopes and tool toggles, if it should not have them.
 - **Reads leak into the conversation.** Anything a tool returns is visible to the model and to the AI provider, and a steered model can try to smuggle it into a later write. For Unipile sends you see that text on the approval page; for the other write tools you do not.
 - **The approval page shows what will be sent, not whether it is wise.** You are the check. A message approved by mistake is sent.
 - **Framing and provenance are advisory.** They inform the model; they do not stop it.
@@ -155,7 +173,7 @@ Rotate `MCP_AUTH_TOKEN` when:
 - A team member with access leaves
 - You can't remember the last time you rotated (≥6 months is a useful default)
 
-The procedure depends on where Kebab MCP is hosted.
+The procedure depends on where Kebab House is hosted.
 
 ### Vercel
 
@@ -167,7 +185,7 @@ The procedure depends on where Kebab MCP is hosted.
    ```
 
 3. Trigger a redeploy (Vercel does this automatically on env-var change). Both tokens are now valid.
-4. Update each MCP client (Claude Desktop, ChatGPT, Cursor, …) to use the new token. Hit the endpoint to confirm it works.
+4. Update each client that uses this token to the new one. Hit the endpoint to confirm it works. (Clients that signed in, and clients with their own device token, are not affected: rotate or revoke those in **Devices**.)
 5. Once every client is on the new token, edit the env var again and **remove the old token**. Redeploy. The old token is now revoked.
 6. Verify revocation: `curl -H "Authorization: Bearer <old-token>" https://your-app.vercel.app/api/mcp` should return `401 Unauthorized`.
 

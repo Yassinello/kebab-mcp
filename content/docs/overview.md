@@ -1,117 +1,117 @@
 ---
-title: Welcome to Kebab MCP
-summary: Tour the dashboard in 60 seconds and pick where to go next
+title: Welcome to Kebab House
+summary: What your hub does, a tour of the dashboard, and where to start
 order: 1
 ---
 
-## What this dashboard is for
+## What Kebab House is
 
-You're looking at the **Kebab MCP dashboard** — the control panel for your personal MCP server. From here you wire up connectors (Gmail, Notion, Slack, Obsidian, …), author skills, watch tool calls in real time, and check that your storage is healthy. None of this is required to start using the MCP endpoint, but it's the difference between "Kebab MCP works" and "Kebab MCP works the way I want."
+Kebab House is your personal AI hub: **one profile, one library of skills and one memory**, shared by every AI client you connect (Claude, ChatGPT, Cursor, Claude Code, Codex and any MCP client). Tell one client something, and the next one knows it. Write a skill once, and every client can use it.
 
-If you just deployed and got dropped here from the Welcome wizard: skip to [Where to start](#where-to-start). Otherwise read on for a tab-by-tab tour.
+It is a hub, not an agent: your AI clients do the thinking. Kebab House serves them your context and your tools when they ask, and keeps the risky parts under your control.
 
-## Tab-by-tab guide
+- **Profile** — who you are, what you work on, how you like answers. One profile per hat (work, home…), bound to the client that uses it.
+- **Skills** — reusable instructions in the open Agent Skills format, plus ready-made rituals (remember, morning brief, meeting prep, weekly review, read later, handoff).
+- **Memory** — notes every client can read and write: built in, or your own GitHub repository (Obsidian-friendly).
+- **Clients** — each AI client signs in (or gets its own device token), with the access level you choose.
+- **Guardrails** — outside content is labelled as data, outgoing messages wait for your approval, and every tool call is counted per client.
+- **Tools** — only what your clients' own connectors lack: LinkedIn, WhatsApp, a real browser, paywalled articles, any HTTP API as a tool. Gmail, Slack or Notion are available too, but use your client's own connector when it has one.
+
+If you just finished the Welcome wizard: say **“Set up my Kebab House”** in your AI client. A short interview writes your profile and suggests the rituals that fit your week. Then come back here to look at what it saved.
+
+## The dashboard, tab by tab
 
 ### Overview
 
-The default landing tab. Shows your **instance health widget** (token status, Vercel auto-deploy availability, endpoint URL), a **setup health widget**, and a snapshot of how many connectors and tools are active. If you ever come back wondering "is everything OK," start here.
+Your hub at a glance: setup checklist, connected clients, this week's activity, and warnings that need you (for example an AI client using your admin key instead of its own device token). The **updates banner** shows when a new Kebab House release is available, with an **Update now** button — see “I want to stay up to date” below.
 
-The Overview tab also surfaces an **upstream updates banner**: when your Vercel fork drifts behind `Yassinello/kebab-mcp`, you'll see how many commits are pending, the list of incoming commits, any breaking-change warnings, and an **Update now** button that calls GitHub's `merge-upstream` API + triggers a Vercel redeploy. A daily cron pre-fetches the status, so the banner loads instantly. The refresh icon (↻) next to "checked Xh ago" forces a live re-check (30s debounce). Configure the PAT once in Settings → Advanced → Updates; see [Configuring updates](#configuring-updates) for the full setup.
+### Profile
 
-### Connectors
-
-The credential surface for every connector Kebab MCP ships. Each one knows its required env vars, exposes a per-connector setup guide, and a **Test connection** button that verifies the credentials are real before you trust them.
-
-→ See [Connector setup](#connectors) for per-connector instructions.
-
-### Tools
-
-A live list of every registered tool, grouped under per-connector banners that expand to reveal the tools beneath. Each tool has its own toggle (disable Gmail send while keeping Gmail read), and each connector has a master "Enable all" / "Disable all" if you want to flip a whole pack at once. Click a tool row to expand a JSON-args runner inline — same as Playground, just adjacent to the tool list.
+Read and edit what every client knows about you. Create one profile per hat (`work`, `perso`…) and bind each client to one in **Devices**. Earlier versions are kept, so you can restore one.
 
 ### Skills
 
-Browse, edit, and create skills (prompt templates exposed as MCP tools and prompts). Each card has an **Actions** menu (Edit, History, Refresh, Sync, Export as Markdown / Claude skill, Delete) and clicking the body opens the dedicated edit page (`?edit=<id>`). Two ways to author:
-
-- **From scratch** — write the prompt body, declare arguments, save
-- **Compose** — pick an existing tool, pre-fill some arguments, expose the rest as `{{placeholders}}`
-
-The edit page splits into two tabs: **Editor** (Identity / Instructions / Arguments / Allowed tools) and **Settings** (version history with rollback, exports, danger zone).
+Browse, edit and create skills. Each card has an **Actions** menu (Edit, History, Export, Delete); clicking the body opens the edit page. **Templates** installs the rituals; **Import** takes a `SKILL.md` or a `.zip` (from Claude, ChatGPT or a Git repo); **Use your skills in every AI client** gives the relay skill and the native copy for Claude Code and Codex.
 
 → See [Authoring skills](#skills).
 
-### Playground
+### Memory
 
-A mini-chat UI for invoking any registered tool with custom arguments, seeing the raw response, and timing the call. Use this to sanity-check a connector after setup, or to debug a tool that's misbehaving in your AI client.
+Your notes: search, read and edit what your clients saved (“remember this”, read-later, meeting notes, handoffs). Choose where notes live: built in (stored with your other data) or a GitHub repository.
+
+### Connectors
+
+Turn tools on by pasting their credentials. Each connector has a setup guide and a **Test connection** button that checks the credentials before you rely on them.
+
+→ See [Connector setup](#connectors).
+
+### Devices
+
+One entry per AI client. Clients that signed in (OAuth) appear here on their own; **Add device** creates a device token for the others. For each client: its access level, its profile, which skill tags and connectors it sees, rename, rotate, revoke.
+
+Your **admin key** opens this dashboard. Do not paste it into an AI client: give each client its own device token.
 
 ### Logs
 
-Recent tool calls with timestamp, latency, status, and error. Persists across requests when KV is configured (`MYMCP_DURABLE_LOGS=true`); ephemeral otherwise. Filter by connector, tool, or status.
+Recent tool calls with time, client, duration and status. Filter by connector, tool or status. The weekly recap on Overview counts calls per client.
 
-### Health
+### Advanced
 
-Live instance diagnostics — bootstrap state, KV latency, request counts, error heatmap, rate-limit headroom, rehydrate counters. Open this when something feels off and the Logs aren't enough.
+Less frequent, more technical:
 
-### Settings
-
-Instance-wide configuration. The General tab covers display name, timezone, locale, context file path. Sub-tabs under Settings:
-
-- **Storage** — which mode you're in (`KV`, `File`, `Static`, or a warning state), data directory or KV endpoint, latency, key counts. Upgrade file → KV here, recover from KV-degraded, or react to the `/tmp` ephemeral trap. → See [Storage modes & data persistence](#storage).
-- **Devices** — per-client tokens (add, rename, rotate, revoke). One token per device.
-- **Advanced** — tool timeout, error webhook URL, rate limits, durable logs, cache controls, Updates PAT (see "I want to keep my fork up to date" below).
-- **Backup** — export/import skills + settings as JSON.
+- **Tools** — every registered tool, grouped by connector, each with its own on/off switch (turn off Gmail send while keeping Gmail read).
+- **Playground** — run any tool with your own arguments and see the raw response and timing.
+- **Health** — bootstrap state, storage latency, request counts, rate limits. Open it when something feels off and the Logs aren't enough.
+- **Storage** — where your data lives (`Upstash Redis`, `Filesystem`, or a warning state), with migration and recovery. → See [Storage modes & data persistence](#storage).
+- **Documentation** — these pages.
+- **Settings** — display name, timezone, export / import of your data (profiles, skills, notes and settings, secrets excluded), and the Updates token.
 
 ## Where to start
 
-Pick the path that matches what you came here to do.
+### "I want my clients to know me"
 
-### "I want to add a connector"
+1. In your AI client, say **“Set up my Kebab House”**.
+2. Answer the short interview; it writes your **Profile**.
+3. Open **Profile** here to check or edit it.
 
-1. Open **Connectors**
-2. Find the connector you want (Google, Notion, Slack, …)
-3. Click the per-connector setup guide for env-var instructions
-4. Paste credentials in the dashboard, hit **Test connection**
-5. Once it shows green, the connector's tools auto-register at the MCP endpoint
+### "I want to connect another AI client"
 
-If the **Storage** badge is orange (`Filesystem (temporary)`), fix that first — your credentials will vanish otherwise. See [Storage](#storage).
+1. Claude, ChatGPT, Cursor, Claude Code: add your instance URL (`https://<your-instance>/api/mcp`) and sign in. On the consent page, pick the access level: *read only*, *read + my profile and notes* (recommended) or *everything*.
+2. Other clients: open **Devices → Add device** and paste the device token into the client.
+
+### "I want to add a tool"
+
+1. Open **Connectors** and pick the one you need.
+2. Follow its setup guide, paste the credentials, click **Test connection**.
+3. Once it shows green, its tools are available to every connected client (within each client's access level).
+
+If the **Storage** badge is orange (`Filesystem (temporary)`), fix that first — your credentials would vanish otherwise. See [Storage](#storage).
 
 ### "I want to try a skill"
 
-1. Open **Skills**
-2. Click **Compose** to wrap an existing tool, or **New** for a from-scratch prompt template
-3. Save — the skill registers as `skill_<name>` immediately
-4. Open **Playground**, pick `skill_<name>`, run it with sample inputs
+1. Open **Skills → Templates** and install a ritual (for example `morning-brief`).
+2. In any connected client, say “morning brief”.
+3. To test without a client: **Advanced → Playground**, pick the skill, run it.
 
-### "I want to test a tool"
+### "I want to stay up to date"
 
-1. Open **Playground**
-2. Pick the tool from the dropdown
-3. Fill the schema fields, click **Run**
-4. Inspect the response, latency, and (on error) the structured error code
+1. Open **Advanced → Settings → Advanced → Updates**.
+2. Paste a GitHub token with *Contents: read & write* on your Kebab House repository, click **Save token**, then **Test connection**.
+3. Back on **Overview**, the updates banner shows whether a new release is available.
 
-### "I want to keep my fork up to date with upstream"
+A daily check runs in the background; the ↻ icon forces a re-check. **Update now** copies the new release's files into your repository as one commit (or uses GitHub's *Sync fork* if your repository is a fork), and Vercel redeploys on its own. If you edited a file that the release also changes, nothing is written and the banner lists the files.
 
-1. Open **Settings → Advanced → Updates**
-2. Paste a GitHub Personal Access Token — `public_repo` scope (or `repo` for private forks). Fine-grained PATs need *Contents: read/write* on your fork.
-3. Click **Save token** then **Test connection** — green confirms it works
-4. Switch back to **Overview** — banner shows live status
-
-After that, a daily cron at 8h UTC pre-fetches upstream commits into KV. When new commits land, you'll see a banner with the count, the commit list, and an **Update now** button that calls GitHub's `merge-upstream` API. Vercel redeploys automatically afterwards.
-
-The ↻ icon next to "checked Xh ago" forces a re-check between cron runs (30s debounce). The cache is auto-invalidated whenever you save a new PAT, so token rotations take effect immediately.
-
-If your fork has diverged (you committed locally on `main`), the auto-update is blocked — resolve manually on GitHub. If your PAT expires or has insufficient scope, the banner shows a dedicated "GitHub authentication failed" message with reconfiguration link.
-
-To disable the feature entirely, set `KEBAB_DISABLE_UPDATE_API=1` in your Vercel env vars.
+To turn the feature off, set `KEBAB_DISABLE_UPDATE_API=1` in your environment variables.
 
 ## When stuck
 
-- Check the **Logs** tab for the most recent invocation — error column shows what went wrong
-- Read [Troubleshooting](#troubleshooting) — covers the dozen most common issues including all v3 storage failure modes
-- Read the [FAQ](#faq) for design-decision questions ("can I run multi-user?", "what happens on cold starts?", …)
-- Still stuck? [Open an issue](https://github.com/Yassinello/kebab-mcp/issues) — include Kebab MCP version (sidebar footer), connector affected, and the Logs entry if applicable
+- Open **Logs** for the most recent call — the status column shows what went wrong.
+- Read [Troubleshooting](#troubleshooting) for the most common issues, including storage problems.
+- Read the [FAQ](#faq) for design questions.
+- Still stuck? [Open an issue](https://github.com/Yassinello/kebab-mcp/issues) with your Kebab House version (sidebar footer), the connector involved, and the Logs entry if there is one.
 
 ## See also
 
-→ [Getting started](#getting-started) — the 5-minute deploy if you skipped it
-→ [Storage](#storage) — durability of your saves, when to use which mode
-→ [Connector setup](#connectors) — per-connector credential walkthroughs
+→ [Getting started](#getting-started) — the deploy, if you skipped it
+→ [Storage](#storage) — where your data lives and how durable it is
+→ [Connector setup](#connectors) — credentials, connector by connector
