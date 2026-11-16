@@ -13,21 +13,27 @@
  *
  * Limits: 256 KB per note, 5 000 notes (hard); a warning above 50 MB total.
  *
- * Index consistency — the trade-off
- * ---------------------------------
- * Every write/delete/move updates the note key, then rewrites the index
- * (read-modify-write). The KV interface has no transactions, so two
- * instances writing at the same moment can each read the old index and the
- * second save drops the first one's entry. Kebab House is a single-owner
- * instance (one person, a few clients), so this is rare; we accept it rather
- * than add a lock service, and make the loss recoverable:
+ * Index consistency
+ * -----------------
+ * Every write/delete/move stores the note key first, then commits the index
+ * (read-modify-write). The KV interface has no transactions, so:
  *   - mutations are serialised inside one process (an in-process lock), so
  *     parallel tool calls landing on the same instance never race;
- *   - the index can always be rebuilt from the note keys (`rebuildIndex`):
- *     automatically when it is missing or unreadable, when a mutation finds
- *     a stored note the index does not know (drift), and when `health()`
- *     sees more or fewer note keys than index entries; manually from
- *     /config → Connectors → Memory Vault → "Rebuild index".
+ *   - across instances (serverless, Upstash) each index save first claims
+ *     the next index revision with an atomic SET NX
+ *     (`vault:index:rev:<n>`, short TTL). Two writers that read the same
+ *     index revision cannot both save it: the loser re-reads the index —
+ *     which now holds the winner's entry — re-applies its own change and
+ *     claims the next revision (B2, 2026-11 audit). A claim whose writer
+ *     died before saving is outlived by a rebuild from the note keys after a
+ *     few attempts. On the filesystem KV (one process) the lock suffices;
+ *   - self-healing: reads (list, tree, search, recent, stats) compare the
+ *     note keys with the index at most every few minutes per instance, and
+ *     the full export always does; missing entries are added from their
+ *     note, entries without a note are dropped. The index can also be
+ *     rebuilt from scratch: automatically when it is missing or unreadable,
+ *     when a mutation finds a stored note the index does not know (drift),
+ *     and manually from /config → Connectors → Memory Vault → "Rebuild index".
  * A lost index entry never loses the note itself: `vault_read` reads the
  * note key directly.
  */
@@ -36,16 +42,30 @@ import { getContextKVStore } from "@/core/request-context";
 import { kvScanAll, type KVStore } from "@/core/kv-store";
 import { VaultConflictError, VaultLimitError, VaultNotFoundError } from "@/core/connector-errors";
 import { BRAND, PRODUCT } from "@/core/constants/brand";
+import { toMsg } from "@/core/error-utils";
 import { parseNoteFrontmatter, provenanceOf, type Provenance } from "./provenance";
 import {
   baseName,
+  hasExtension,
+  isNotePath,
   isUnderFolder,
   normalizeFolder,
   validateVaultPath,
   validateVaultWritePath,
 } from "./paths";
 import {
+  bestSnippet,
+  foldText,
+  queryTerms,
+  scoreNote,
+  searchable,
+  termMatches,
+  type Searchable,
+} from "./search-rank";
+import {
   computeStats,
+  destinationExistsError,
+  type MoveOptions,
   type SearchResult,
   type TreeFile,
   type VaultBackend,
@@ -56,6 +76,8 @@ import {
 
 export const NOTE_PREFIX = "vault:note:";
 export const INDEX_KEY = "vault:index";
+/** Index revision claims (SET NX, short TTL). Under `vault:index` → never exported. */
+export const INDEX_CLAIM_PREFIX = "vault:index:rev:";
 
 export const KV_VAULT_LIMITS = {
   maxNoteBytes: 256 * 1024,
@@ -98,6 +120,8 @@ interface IndexEntry {
 interface VaultIndex {
   v: 1;
   notes: Record<string, IndexEntry>;
+  /** Revision, bumped on every save (claimed with SET NX on shared stores). */
+  rev?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -112,32 +136,7 @@ export function blobSha(content: string): string {
   return createHash("sha1").update(`blob ${buf.length}\0`).update(buf).digest("hex");
 }
 
-/** Accent- and case-insensitive form used for matching. */
-export function foldText(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/\p{M}+/gu, "")
-    .toLowerCase();
-}
-
-/** Position in `original` of the first occurrence of the folded `term`, or -1. */
-function originalIndexOf(original: string, term: string): number {
-  const folded = foldText(original);
-  const idx = folded.indexOf(term);
-  if (idx === -1) return -1;
-  // Precomposed text folds to the same length (é → e): positions line up.
-  if (folded.length === original.length) return idx;
-  // Otherwise map folded positions back character by character.
-  let foldedPos = 0;
-  for (let i = 0; i < original.length; ) {
-    const ch = String.fromCodePoint(original.codePointAt(i) ?? 0);
-    const f = foldText(ch);
-    if (foldedPos + f.length > idx) return i;
-    foldedPos += f.length;
-    i += ch.length;
-  }
-  return -1;
-}
+export { foldText };
 
 function bodyOf(content: string): string {
   if (!content.startsWith("---")) return content;
@@ -275,14 +274,49 @@ function nextMtime(): string {
   return new Date(lastMtimeMs).toISOString();
 }
 
-// ── In-process lock (serialises mutations on one instance) ──────────
+// ── Index commits, self-healing ──────────────────────────────────────
 
-let lockChain: Promise<unknown> = Promise.resolve();
+/** Lifetime of an index revision claim: far longer than one read-modify-write. */
+const CLAIM_TTL_S = 600;
+/** Claim attempts before falling back to a rebuild from the note keys. */
+const COMMIT_ATTEMPTS = 8;
+/** Reads compare the note keys with the index at most this often (per instance). */
+const HEAL_INTERVAL_MS = 5 * 60_000;
+const SCAN_PAGE = 1000;
 
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = lockChain.then(fn, fn);
-  lockChain = run.catch(() => undefined);
-  return run;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * A store shared by several instances (Upstash): index saves are claimed.
+ * The filesystem KV lives in one process, where the in-process lock is
+ * enough and a claim would only cost an extra file write.
+ */
+function needsClaims(kv: KVStore): boolean {
+  return kv.kind === "upstash" && typeof kv.setIfNotExists === "function";
+}
+
+/** Every stored note key (deduplicated: a Redis SCAN may repeat keys). */
+async function noteKeys(kv: KVStore): Promise<string[]> {
+  if (typeof kv.scan !== "function") {
+    return (await kvScanAll(kv, `${NOTE_PREFIX}*`)).filter((k) => k.startsWith(NOTE_PREFIX));
+  }
+  const out = new Set<string>();
+  let cursor = "0";
+  let guard = 0;
+  do {
+    const page = await kv.scan(cursor, { match: `${NOTE_PREFIX}*`, count: SCAN_PAGE });
+    for (const k of page.keys) if (k.startsWith(NOTE_PREFIX)) out.add(k);
+    cursor = page.cursor;
+    guard++;
+  } while (cursor !== "0" && guard < 100_000);
+  return [...out];
+}
+
+/** In `stats`, a note whose path has no extension counts like a `.md` note. */
+function statsPath(path: string): string {
+  return hasExtension(path) ? path : `${path}.md`;
 }
 
 // ── Backend ──────────────────────────────────────────────────────────
@@ -293,28 +327,60 @@ export interface ImportedNote {
 }
 
 export interface ImportNotesResult {
+  /** Notes that did not exist and were created. */
   written: string[];
+  /** Notes that existed with other content and were replaced (`overwrite: true`). */
+  overwritten: string[];
+  /** Notes that existed with other content and were left alone (default). */
+  kept: string[];
+  /** Notes that already hold exactly this content. */
+  unchanged: string[];
   rejected: Array<{ path: string; reason: string }>;
 }
 
 export interface KvVaultBackend extends VaultBackend {
   /** Rebuild `vault:index` from the note keys. Returns the number of notes indexed. */
   rebuildIndex(): Promise<{ notes: number; totalBytes: number }>;
-  /** Write many notes with a single index update (GitHub → KV import). Overwrites. */
-  importNotes(notes: ImportedNote[], message: string): Promise<ImportNotesResult>;
+  /** Compare the note keys with the index now and repair it. */
+  verifyIndex(): Promise<{ added: number; removed: number }>;
+  /**
+   * Write many notes with a single index update (GitHub → KV import).
+   * Notes that already exist with other content are kept unless `overwrite`.
+   */
+  importNotes(
+    notes: ImportedNote[],
+    message: string,
+    opts?: { overwrite?: boolean | undefined }
+  ): Promise<ImportNotesResult>;
   /** Version (blob SHA) of every indexed note — lets an import skip unchanged notes. */
   versions(): Promise<Record<string, string>>;
 }
 
 export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): KvVaultBackend {
+  // ── In-process lock (serialises mutations on one instance) ──────────
+  let lockChain: Promise<unknown> = Promise.resolve();
+  function withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = lockChain.then(fn, fn);
+    lockChain = run.catch(() => undefined);
+    return run;
+  }
+
+  let lastHealAt = 0;
+
   async function saveIndex(kv: KVStore, index: VaultIndex): Promise<void> {
     await kv.set(INDEX_KEY, JSON.stringify(index));
   }
 
   /** Rebuild from the note keys. Caller holds the lock (or accepts the race). */
   async function rebuild(kv: KVStore): Promise<VaultIndex> {
-    const keys = (await kvScanAll(kv, `${NOTE_PREFIX}*`)).filter((k) => k.startsWith(NOTE_PREFIX));
-    const index: VaultIndex = { v: 1, notes: {} };
+    const keys = await noteKeys(kv);
+    const previous = parseIndex(await kv.get(INDEX_KEY));
+    // A fresh revision far above any pending claim (see commitIndex).
+    const index: VaultIndex = {
+      v: 1,
+      notes: {},
+      rev: Math.max(Date.now(), (previous?.rev ?? 0) + 1),
+    };
     for (let i = 0; i < keys.length; i += 100) {
       const chunk = keys.slice(i, i + 100);
       const values = await getMany(kv, chunk);
@@ -340,6 +406,93 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
     const idx = parseIndex(await kv.get(INDEX_KEY));
     if (idx) return idx;
     return withLock(() => loadIndexLocked(kv));
+  }
+
+  /**
+   * Apply `mutate` to the latest index and save it. Caller holds the lock.
+   *
+   * On a shared store each save first claims revision `rev + 1` with SET NX.
+   * Losing the claim means another instance saved (or is saving) that
+   * revision from the same base: re-read, re-apply, claim the next one. So
+   * `mutate` must be safe to apply again to a newer index. `first` is an
+   * index the caller already loaded (saves one read on the first attempt).
+   */
+  async function commitIndex(
+    kv: KVStore,
+    mutate: (index: VaultIndex) => void,
+    first?: VaultIndex
+  ): Promise<VaultIndex> {
+    if (!needsClaims(kv)) {
+      const index = first ?? (await loadIndexLocked(kv));
+      mutate(index);
+      index.rev = (index.rev ?? 0) + 1;
+      await saveIndex(kv, index);
+      return index;
+    }
+    let candidate = first;
+    for (let attempt = 0; attempt < COMMIT_ATTEMPTS; attempt++) {
+      const index = candidate ?? (await loadIndexLocked(kv));
+      candidate = undefined;
+      const rev = (index.rev ?? 0) + 1;
+      mutate(index);
+      const claim = await kv.setIfNotExists!(`${INDEX_CLAIM_PREFIX}${rev}`, String(Date.now()), {
+        ttlSeconds: CLAIM_TTL_S,
+      });
+      if (claim.ok) {
+        index.rev = rev;
+        await saveIndex(kv, index);
+        return index;
+      }
+      await sleep(Math.min(200, 15 * 2 ** attempt) + Math.floor(Math.random() * 15));
+    }
+    // A writer claimed a revision and never saved it (it died in between):
+    // the note keys are the truth, and the rebuild jumps past the claim.
+    return rebuild(kv);
+  }
+
+  /**
+   * Compare the stored note keys with the index; add the missing entries
+   * (from their note) and drop entries whose note is gone.
+   */
+  async function heal(
+    kv: KVStore,
+    index: VaultIndex
+  ): Promise<{ index: VaultIndex; added: number; removed: number }> {
+    const stored = new Set((await noteKeys(kv)).map((k) => k.slice(NOTE_PREFIX.length)));
+    const missing = [...stored].filter((p) => !index.notes[p]);
+    const stale = Object.keys(index.notes).filter((p) => !stored.has(p));
+    if (missing.length === 0 && stale.length === 0) return { index, added: 0, removed: 0 };
+    return withLock(async () => {
+      const entries: Record<string, IndexEntry> = {};
+      for (let i = 0; i < missing.length; i += 100) {
+        const chunk = missing.slice(i, i + 100);
+        const values = await getMany(kv, chunk.map(noteKey));
+        chunk.forEach((p, j) => {
+          const note = parseNote(values[j] ?? null);
+          if (note) entries[p] = entryFor(p, note);
+        });
+      }
+      // Re-check under the lock: a note written meanwhile is not stale.
+      const staleValues = await getMany(kv, stale.map(noteKey));
+      const gone = stale.filter((_, j) => staleValues[j] === null);
+      if (Object.keys(entries).length === 0 && gone.length === 0) {
+        return { index, added: 0, removed: 0 };
+      }
+      const saved = await commitIndex(kv, (idx) => {
+        for (const [p, e] of Object.entries(entries)) if (!idx.notes[p]) idx.notes[p] = e;
+        for (const p of gone) delete idx.notes[p];
+      });
+      return { index: saved, added: Object.keys(entries).length, removed: gone.length };
+    });
+  }
+
+  /** The index for a read, repaired from the note keys every few minutes. */
+  async function readIndex(kv: KVStore): Promise<VaultIndex> {
+    const index = await loadIndex(kv);
+    const now = Date.now();
+    if (now - lastHealAt < HEAL_INTERVAL_MS) return index;
+    lastHealAt = now;
+    return (await heal(kv, index)).index;
   }
 
   async function readStored(kv: KVStore, path: string): Promise<StoredNote | null> {
@@ -389,9 +542,14 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
         };
         await kv.set(noteKey(path), JSON.stringify(note));
         const entry = entryFor(path, note);
-        index.notes[path] = entry;
-        await saveIndex(kv, index);
-        const warning = sizeWarning(index);
+        const saved = await commitIndex(
+          kv,
+          (idx) => {
+            idx.notes[path] = entry;
+          },
+          index
+        );
+        const warning = sizeWarning(saved);
         return { path, sha: entry.sha, created: !existing, ...(warning ? { warning } : {}) };
       });
     },
@@ -405,8 +563,13 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
           // Drop a stale index entry, if any, before reporting.
           const index = await loadIndexLocked(kv);
           if (index.notes[path]) {
-            delete index.notes[path];
-            await saveIndex(kv, index);
+            await commitIndex(
+              kv,
+              (idx) => {
+                delete idx.notes[path];
+              },
+              index
+            );
           }
           throw new VaultNotFoundError(path);
         }
@@ -414,8 +577,13 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
         await kv.delete(noteKey(path));
         const index = await loadIndexLocked(kv);
         if (index.notes[path]) {
-          delete index.notes[path];
-          await saveIndex(kv, index);
+          await commitIndex(
+            kv,
+            (idx) => {
+              delete idx.notes[path];
+            },
+            index
+          );
         } else {
           await rebuild(kv);
         }
@@ -423,7 +591,7 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
       });
     },
 
-    async move(from: string, to: string, opts?: { message?: string | undefined }) {
+    async move(from: string, to: string, opts?: MoveOptions) {
       validateKvWritePath(from);
       validateKvWritePath(to);
       if (from === to) throw new Error("Source and destination are the same path");
@@ -431,6 +599,8 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
       return withLock(async () => {
         const source = await readStored(kv, from);
         if (!source) throw new VaultNotFoundError(from);
+        // B2: never replace an existing note silently.
+        if (!opts?.overwrite && (await readStored(kv, to))) throw destinationExistsError(to);
         const moved: StoredNote = {
           content: source.content,
           mtime: nextMtime(),
@@ -440,24 +610,35 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
         // Write the copy first: if the delete fails the note is duplicated,
         // never lost.
         await kv.set(noteKey(to), JSON.stringify(moved));
-        await kv.delete(noteKey(from));
+        let deleteError: string | undefined;
+        try {
+          await kv.delete(noteKey(from));
+        } catch (err) {
+          deleteError = toMsg(err);
+        }
         const index = await loadIndexLocked(kv);
         if (!index.notes[from]) {
           // Drift: the source was not indexed — rebuild from the notes.
           await rebuild(kv);
         } else {
-          delete index.notes[from];
-          index.notes[to] = entryFor(to, moved);
-          await saveIndex(kv, index);
+          const entry = entryFor(to, moved);
+          await commitIndex(
+            kv,
+            (idx) => {
+              if (deleteError === undefined) delete idx.notes[from];
+              idx.notes[to] = entry;
+            },
+            index
+          );
         }
-        return { from, to };
+        return deleteError === undefined ? { from, to } : { from, to, deleteError };
       });
     },
 
     async list(folder?: string): Promise<VaultListEntry[]> {
       if (folder) validateVaultPath(folder);
       const f = normalizeFolder(folder);
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       const prefix = f ? `${f}/` : "";
       const files: VaultListEntry[] = [];
       const dirs = new Map<string, VaultListEntry>();
@@ -484,7 +665,7 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
     async tree(folder?: string): Promise<TreeFile[]> {
       if (folder) validateVaultPath(folder);
       const f = normalizeFolder(folder);
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       return Object.entries(index.notes)
         .filter(([p]) => isUnderFolder(p, f))
         .map(([path, e]) => ({ path, size: e.size, sha: e.sha }))
@@ -493,79 +674,91 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
 
     async search(query, opts) {
       if (opts.folder) validateVaultPath(opts.folder);
-      const terms = foldText(query).split(/\s+/).filter(Boolean);
+      const terms = queryTerms(query);
       if (terms.length === 0) throw new Error("Search query is empty");
       const kv = getKv();
-      const index = await loadIndex(kv);
+      const index = await readIndex(kv);
       const candidates = sortedEntries(index, normalizeFolder(opts.folder));
 
-      const toResult = (path: string, e: IndexEntry, match: string): SearchResult => ({
-        name: baseName(path),
-        path,
-        textMatches: [match],
-        provenance: e.prov ?? "user",
-      });
+      interface Hit {
+        path: string;
+        e: IndexEntry;
+        score: number;
+        snippet: string;
+      }
+      const hits: Hit[] = [];
+      const titleSnippet = (e: IndexEntry) => `Title match: ${e.title}`;
 
-      // Pass 1: titles (and file names) — answered from the index alone.
-      const titleMatches: SearchResult[] = [];
-      const rest: Array<[string, IndexEntry]> = [];
-      let truncated = false;
+      // Pass 1: titles and file names, from the index alone. A note whose
+      // title holds every term needs no content read.
+      const toScan: Array<{ path: string; e: IndexEntry; title: Searchable; titleScore: number }> =
+        [];
       for (const [path, e] of candidates) {
-        const hay = foldText(`${e.title}\n${baseName(path)}`);
-        if (terms.every((t) => hay.includes(t))) {
-          if (titleMatches.length < SEARCH_MAX_RESULTS) {
-            titleMatches.push(toResult(path, e, `Title match: ${e.title}`));
-          } else {
-            truncated = true;
-          }
+        const title = searchable(`${e.title}\n${baseName(path).replace(/\.md$/, "")}`);
+        const t = scoreNote(terms, title, null);
+        if (t.matched.length === terms.length) {
+          hits.push({ path, e, score: t.score, snippet: titleSnippet(e) });
         } else {
-          rest.push([path, e]);
+          toScan.push({ path, e, title, titleScore: t.score });
         }
       }
 
       // Pass 2: contents, most recent first, capped in notes and bytes.
-      const contentMatches: SearchResult[] = [];
+      // Notes beyond the cap still count through their title.
+      let truncated = false;
       let scannedNotes = 0;
       let scannedBytes = 0;
-      const firstTerm = terms[0]!;
-      outer: for (let i = 0; i < rest.length; i += READ_CHUNK) {
-        if (titleMatches.length + contentMatches.length >= SEARCH_MAX_RESULTS) {
-          truncated = true;
-          break;
-        }
-        const chunk = rest.slice(i, i + READ_CHUNK);
+      let i = 0;
+      for (; i < toScan.length; i += READ_CHUNK) {
+        if (scannedNotes >= SEARCH_MAX_SCAN_NOTES || scannedBytes >= SEARCH_MAX_SCAN_BYTES) break;
+        const chunk = toScan.slice(i, i + READ_CHUNK);
         const values = await getMany(
           kv,
-          chunk.map(([p]) => noteKey(p))
+          chunk.map((c) => noteKey(c.path))
         );
         for (let j = 0; j < chunk.length; j++) {
-          if (
-            scannedNotes >= SEARCH_MAX_SCAN_NOTES ||
-            scannedBytes >= SEARCH_MAX_SCAN_BYTES ||
-            titleMatches.length + contentMatches.length >= SEARCH_MAX_RESULTS
-          ) {
-            truncated = true;
-            break outer;
-          }
-          const [path, e] = chunk[j]!;
+          const c = chunk[j]!;
           const note = parseNote(values[j] ?? null);
-          if (!note) continue;
+          if (!note) {
+            if (c.titleScore > 0) {
+              hits.push({ path: c.path, e: c.e, score: c.titleScore, snippet: titleSnippet(c.e) });
+            }
+            continue;
+          }
           scannedNotes++;
           scannedBytes += note.size;
-          const folded = foldText(note.content);
-          if (!terms.every((t) => folded.includes(t))) continue;
-          const idx = Math.max(0, originalIndexOf(note.content, firstTerm));
-          const start = Math.max(0, idx - 50);
-          const end = Math.min(note.content.length, idx + firstTerm.length + 50);
-          const fragment =
-            (start > 0 ? "..." : "") +
-            note.content.slice(start, end).trim() +
-            (end < note.content.length ? "..." : "");
-          contentMatches.push(toResult(path, e, fragment));
+          const content = searchable(note.content);
+          const r = scoreNote(terms, c.title, content);
+          if (r.score === 0) continue;
+          const inContent = r.matched.filter((q) => termMatches(content, q));
+          hits.push({
+            path: c.path,
+            e: c.e,
+            score: r.score,
+            snippet: inContent.length ? bestSnippet(note.content, inContent) : titleSnippet(c.e),
+          });
+        }
+      }
+      if (i < toScan.length) {
+        truncated = true;
+        for (const c of toScan.slice(i)) {
+          if (c.titleScore > 0) {
+            hits.push({ path: c.path, e: c.e, score: c.titleScore, snippet: titleSnippet(c.e) });
+          }
         }
       }
 
-      const all = [...titleMatches, ...contentMatches];
+      // Best score first, then most recent.
+      hits.sort(
+        (a, b) => b.score - a.score || (a.e.mtime < b.e.mtime ? 1 : a.e.mtime > b.e.mtime ? -1 : 0)
+      );
+      if (hits.length > SEARCH_MAX_RESULTS) truncated = true;
+      const all: SearchResult[] = hits.slice(0, SEARCH_MAX_RESULTS).map((h) => ({
+        name: baseName(h.path),
+        path: h.path,
+        textMatches: [h.snippet],
+        provenance: h.e.prov ?? "user",
+      }));
       const offset = (opts.page - 1) * opts.limit;
       return {
         results: all.slice(offset, offset + opts.limit),
@@ -584,9 +777,9 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
         if (Number.isNaN(ms)) throw new Error(`Invalid 'since' date: ${opts.since}`);
         sinceIso = new Date(ms).toISOString();
       }
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       return sortedEntries(index, normalizeFolder(opts?.folder))
-        .filter(([p, e]) => p.endsWith(".md") && (!sinceIso || e.mtime >= sinceIso))
+        .filter(([p, e]) => isNotePath(p) && (!sinceIso || e.mtime >= sinceIso))
         .slice(0, limit)
         .map(([path, e]) => ({
           path,
@@ -598,12 +791,12 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
 
     async stats(folder?: string) {
       if (folder) validateVaultPath(folder);
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       const f = normalizeFolder(folder);
       const stats = computeStats(
         Object.entries(index.notes)
           .filter(([p]) => isUnderFolder(p, f))
-          .map(([path, e]) => ({ path, size: e.size }))
+          .map(([path, e]) => ({ path: statsPath(path), size: e.size }))
       );
       const warning = sizeWarning(index);
       return warning ? { ...stats, warning } : stats;
@@ -611,16 +804,10 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
 
     async health() {
       const kv = getKv();
-      let index = await loadIndex(kv);
-      const keys = (await kvScanAll(kv, `${NOTE_PREFIX}*`)).filter((k) =>
-        k.startsWith(NOTE_PREFIX)
-      );
-      const indexed = Object.keys(index.notes).length;
-      let repaired = false;
-      if (keys.length !== indexed) {
-        index = await withLock(() => rebuild(kv));
-        repaired = true;
-      }
+      const healed = await heal(kv, await loadIndex(kv));
+      lastHealAt = Date.now();
+      const index = healed.index;
+      const repaired = healed.added + healed.removed > 0;
       const notes = Object.keys(index.notes).length;
       const total = totalBytes(index);
       const warning = sizeWarning(index);
@@ -629,7 +816,7 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
         backend: "kv",
         message:
           `KV vault: ${notes} note${notes === 1 ? "" : "s"}, ${Math.round(total / 1024)} KB` +
-          (repaired ? " (index rebuilt)" : "") +
+          (repaired ? " (index repaired)" : "") +
           (warning ? ` — ${warning}` : ""),
         details: {
           notes,
@@ -644,7 +831,7 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
     async linkCandidates(path: string) {
       const noteName = baseName(path).replace(/\.md$/, "");
       const pathNoExt = path.replace(/\.md$/, "");
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       return Object.entries(index.notes)
         .filter(
           ([p, e]) => p !== path && (e.links.includes(noteName) || e.links.includes(pathNoExt))
@@ -656,7 +843,7 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
     async dueCandidates(folder?: string) {
       if (folder) validateVaultPath(folder);
       const f = normalizeFolder(folder);
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       return Object.entries(index.notes)
         .filter(([p, e]) => e.due && p.endsWith(".md") && isUnderFolder(p, f))
         .map(([p]) => p)
@@ -669,48 +856,86 @@ export function createKvVaultBackend(getKv: () => KVStore = getContextKVStore): 
       return { notes: Object.keys(index.notes).length, totalBytes: totalBytes(index) };
     },
 
+    async verifyIndex() {
+      const kv = getKv();
+      const healed = await heal(kv, await loadIndex(kv));
+      lastHealAt = Date.now();
+      return { added: healed.added, removed: healed.removed };
+    },
+
     async versions() {
-      const index = await loadIndex(getKv());
+      const index = await readIndex(getKv());
       const out: Record<string, string> = {};
       for (const [p, e] of Object.entries(index.notes)) out[p] = e.sha;
       return out;
     },
 
-    async importNotes(notes: ImportedNote[], message: string) {
+    async importNotes(notes, message, opts) {
       const kv = getKv();
       return withLock(async () => {
-        const index = await loadIndexLocked(kv);
-        const written: string[] = [];
-        const rejected: Array<{ path: string; reason: string }> = [];
-        const mtime = nextMtime();
+        const result: ImportNotesResult = {
+          written: [],
+          overwritten: [],
+          kept: [],
+          unchanged: [],
+          rejected: [],
+        };
+        const valid: ImportedNote[] = [];
         for (const n of notes) {
           try {
             validateKvWritePath(n.path);
           } catch (err) {
-            rejected.push({ path: n.path, reason: (err as Error).message });
+            result.rejected.push({ path: n.path, reason: toMsg(err) });
             continue;
           }
-          const size = Buffer.byteLength(n.content, "utf8");
-          if (size > KV_VAULT_LIMITS.maxNoteBytes) {
-            rejected.push({ path: n.path, reason: "too_large" });
+          if (Buffer.byteLength(n.content, "utf8") > KV_VAULT_LIMITS.maxNoteBytes) {
+            result.rejected.push({ path: n.path, reason: "too_large" });
             continue;
           }
-          if (!index.notes[n.path] && Object.keys(index.notes).length >= KV_VAULT_LIMITS.maxNotes) {
-            rejected.push({ path: n.path, reason: "note_limit" });
+          valid.push(n);
+        }
+        // The note keys are the truth for "does it exist" (the index may lag).
+        const stored = await getMany(
+          kv,
+          valid.map((n) => noteKey(n.path))
+        );
+        const index = await loadIndexLocked(kv);
+        let count = Object.keys(index.notes).length;
+        const entries: Record<string, IndexEntry> = {};
+        const mtime = nextMtime();
+        for (let i = 0; i < valid.length; i++) {
+          const n = valid[i]!;
+          const existing = parseNote(stored[i] ?? null);
+          if (existing) {
+            if (existing.content === n.content) {
+              result.unchanged.push(n.path);
+              if (!index.notes[n.path]) entries[n.path] = entryFor(n.path, existing);
+              continue;
+            }
+            if (!opts?.overwrite) {
+              result.kept.push(n.path);
+              continue;
+            }
+          } else if (count >= KV_VAULT_LIMITS.maxNotes) {
+            result.rejected.push({ path: n.path, reason: "note_limit" });
             continue;
+          } else {
+            count++;
           }
           const note: StoredNote = {
             content: n.content,
             mtime,
-            size,
+            size: Buffer.byteLength(n.content, "utf8"),
             message: cleanMessage(message),
           };
           await kv.set(noteKey(n.path), JSON.stringify(note));
-          index.notes[n.path] = entryFor(n.path, note);
-          written.push(n.path);
+          entries[n.path] = entryFor(n.path, note);
+          (existing ? result.overwritten : result.written).push(n.path);
         }
-        if (written.length > 0) await saveIndex(kv, index);
-        return { written, rejected };
+        if (Object.keys(entries).length > 0) {
+          await commitIndex(kv, (idx) => Object.assign(idx.notes, entries), index);
+        }
+        return result;
       });
     },
   };

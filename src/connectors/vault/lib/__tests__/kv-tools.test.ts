@@ -180,6 +180,41 @@ describe("vault tools on the KV backend", () => {
   });
 });
 
+describe("2026-11 audit — note paths and safe moves (B1, B2)", () => {
+  it("a note saved without .md gets it, and shows up in recent, stats and search", async () => {
+    const w = out(await handleVaultWrite({ path: "Inbox/2026-11-15", content: "Call the bank" }));
+    expect(w).toMatchObject({ path: "Inbox/2026-11-15.md", action: "created" });
+    expect(w.note).toMatch(/Saved as Inbox\/2026-11-15\.md/);
+
+    const rec = out(await handleVaultRecent({ n: 5 }));
+    expect((rec.notes as Array<{ path: string }>).map((n) => n.path)).toEqual([
+      "Inbox/2026-11-15.md",
+    ]);
+    expect(out(await handleVaultStats({}))).toMatchObject({ totalNotes: 1 });
+    expect(out(await handleVaultSearch({ query: "bank" }))).toMatchObject({ totalCount: 1 });
+
+    // The model may keep using the name without extension.
+    const r = out(await handleVaultRead({ path: "Inbox/2026-11-15" }));
+    expect(r).toMatchObject({ path: "Inbox/2026-11-15.md", body: "Call the bank" });
+    const a = out(await handleVaultAppend({ path: "Inbox/2026-11-15", content: "Done." }));
+    expect(a).toMatchObject({ path: "Inbox/2026-11-15.md" });
+    expect(a.note).toMatch(/Appended to Inbox\/2026-11-15\.md/);
+  });
+
+  it("vault_move refuses to replace an existing note unless overwrite is true", async () => {
+    await handleVaultWrite({ path: "Inbox/n.md", content: "new" });
+    await handleVaultWrite({ path: "Done/n.md", content: "keep me" });
+    await expect(handleVaultMove({ from: "Inbox/n.md", to: "Done/n.md" })).rejects.toThrow(
+      /already exists/
+    );
+    expect(out(await handleVaultRead({ path: "Done/n.md" })).body).toBe("keep me");
+    expect(
+      out(await handleVaultMove({ from: "Inbox/n.md", to: "Done/n.md", overwrite: true }))
+    ).toMatchObject({ success: true, action: "moved" });
+    expect(out(await handleVaultRead({ path: "Done/n.md" })).body).toBe("new");
+  });
+});
+
 describe("provenance and untrusted framing on the KV backend (TRU-02/03)", () => {
   it("keeps an external provenance and frames reads of external notes only", async () => {
     await handleVaultWrite({

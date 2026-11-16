@@ -305,6 +305,11 @@ describe("limits", () => {
         sha: "s",
         links: [],
       };
+      // The notes exist (self-healing drops index entries without a note).
+      kv.store.set(
+        `${NOTE_PREFIX}n${i}.md`,
+        JSON.stringify({ content: "x", mtime: "2026-01-01T00:00:00.000Z", size: 250 * 1024 })
+      );
     }
     kv.store.set(INDEX_KEY, JSON.stringify({ v: 1, notes }));
     const w = await vault.write("one-more.md", "x");
@@ -351,11 +356,13 @@ describe("index recovery", () => {
 
   it("recovers a lost index update when a mutation meets an unindexed note", async () => {
     await vault.write("a.md", "a");
+    await vault.tree(); // first read of this instance: self-heal check done
     // Simulate a concurrent instance whose index update was lost: two notes
     // stored, neither in the index.
     const lost = { content: "lost", mtime: "2026-01-01T00:00:00.000Z", size: 4 };
     kv.store.set(`${NOTE_PREFIX}lost1.md`, JSON.stringify(lost));
     kv.store.set(`${NOTE_PREFIX}lost2.md`, JSON.stringify(lost));
+    // Within the self-heal interval, reads trust the index.
     expect((await vault.tree()).map((f) => f.path)).toEqual(["a.md"]);
     // The note itself is never lost: reads go to the note key.
     expect((await vault.read("lost2.md")).content).toBe("lost");

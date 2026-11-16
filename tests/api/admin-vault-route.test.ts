@@ -153,21 +153,41 @@ describe("POST /api/admin/vault import-github", () => {
     expect(await kvVaultBackend.dueCandidates!()).toEqual(["Notes/b.md"]);
   });
 
-  it("a second run skips unchanged notes (resumable) and only fetches changes", async () => {
+  it("a second run skips unchanged notes (resumable) and never fetches notes that differ", async () => {
     await POST(post({ action: "import-github" }));
     FILES["Notes/a.md"] = "# A\nedited on GitHub";
     fetchMock.mockClear();
     const res = await POST(post({ action: "import-github" }));
-    const { report } = (await res.json()) as { report: { copied: number; unchanged: number } };
-    expect(report).toMatchObject({ copied: 1, unchanged: 2 });
+    const { report } = (await res.json()) as {
+      report: { copied: number; unchanged: number; keptCount: number; kept: string[] };
+    };
+    // B2: a.md exists in both with different content → kept as it is in the KV.
+    expect(report).toMatchObject({ copied: 0, unchanged: 2, keptCount: 1, kept: ["Notes/a.md"] });
     const contentCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("/contents/"));
-    // a.md (changed) + broken.md (still failing) — unchanged notes are not fetched.
+    // Only broken.md (still failing) — unchanged and kept notes are not fetched.
     expect(contentCalls.map((c) => String(c[0]).split("/contents/")[1])).toEqual([
-      "Notes/a.md",
       "Notes/broken.md",
     ]);
-    expect((await kvVaultBackend.read("Notes/a.md")).content).toBe("# A\nedited on GitHub");
+    expect((await kvVaultBackend.read("Notes/a.md")).content).toBe("# A\nlinks to [[b]]");
     FILES["Notes/a.md"] = "# A\nlinks to [[b]]";
+  });
+
+  it("B2: keeps KV notes edited since the last import; overwrite: true replaces them", async () => {
+    await POST(post({ action: "import-github" }));
+    // Edited in the KV vault after the first import (e.g. by vault_append).
+    await kvVaultBackend.write("Notes/b.md", "B — edited in Kebab House");
+    const kept = await (await POST(post({ action: "import-github" }))).json();
+    expect(kept.report).toMatchObject({ copied: 0, overwritten: 0, keptCount: 1 });
+    expect((await kvVaultBackend.read("Notes/b.md")).content).toBe("B — edited in Kebab House");
+
+    const over = await (await POST(post({ action: "import-github", overwrite: true }))).json();
+    expect(over.report).toMatchObject({
+      copied: 0,
+      overwritten: 1,
+      keptCount: 0,
+      overwrittenPaths: ["Notes/b.md"],
+    });
+    expect((await kvVaultBackend.read("Notes/b.md")).content).toBe(FILES["Notes/b.md"]);
   });
 
   it("400 when GitHub is not configured", async () => {

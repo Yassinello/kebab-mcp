@@ -22,6 +22,7 @@
  *     `vault_due` read a handful of notes instead of the whole vault; when
  *     absent (GitHub) the tools scan the tree exactly as before.
  */
+import { VaultNotFoundError } from "@/core/connector-errors";
 import type { Provenance } from "./provenance";
 
 export type VaultBackendKind = "github" | "kv";
@@ -98,6 +99,20 @@ export interface WriteResult {
   warning?: string;
 }
 
+export interface MoveOptions {
+  message?: string | undefined;
+  /** Replace the destination when a note already exists there (default: refuse). */
+  overwrite?: boolean | undefined;
+}
+
+/** B2 (2026-11 audit): vault_move never replaces an existing note silently. */
+export function destinationExistsError(to: string): Error {
+  return new Error(
+    `A note already exists at ${to}. Choose another destination, or move again with ` +
+      `overwrite: true to replace it.`
+  );
+}
+
 export interface MoveResult {
   from: string;
   to: string;
@@ -125,7 +140,7 @@ export interface VaultBackend {
   read(path: string): Promise<VaultFile>;
   write(path: string, content: string, opts?: WriteOptions): Promise<WriteResult>;
   delete(path: string, opts?: WriteOptions): Promise<{ path: string }>;
-  move(from: string, to: string, opts?: { message?: string | undefined }): Promise<MoveResult>;
+  move(from: string, to: string, opts?: MoveOptions): Promise<MoveResult>;
   list(folder?: string): Promise<VaultListEntry[]>;
   tree(folder?: string): Promise<TreeFile[]>;
   search(query: string, opts: SearchOptions): Promise<SearchOutcome>;
@@ -154,4 +169,22 @@ export function computeStats(tree: TreeFile[]): VaultStats {
     folderCounts[folder] = (folderCounts[folder] || 0) + 1;
   }
   return { totalNotes, totalSize, folderCounts };
+}
+
+/**
+ * Read the first of `paths` that exists (B1: a path given without `.md` may
+ * name a note stored with it, or a legacy note stored without it). Rethrows
+ * the first "not found" when none exists, and any other error at once.
+ */
+export async function readFirstExisting(vault: VaultBackend, paths: string[]): Promise<VaultFile> {
+  let firstMissing: unknown = null;
+  for (const p of paths) {
+    try {
+      return await vault.read(p);
+    } catch (err) {
+      if (!(err instanceof VaultNotFoundError)) throw err;
+      firstMissing ??= err;
+    }
+  }
+  throw firstMissing ?? new VaultNotFoundError(paths[0] ?? "");
 }

@@ -2,9 +2,14 @@ import { z } from "zod";
 import yaml from "js-yaml";
 import { getVaultBackend } from "../lib/select";
 import { ensureProvenance, noteProvenance, parseNoteFrontmatter } from "../lib/provenance";
+import { withMarkdownExtension } from "../lib/paths";
 
 export const vaultWriteSchema = {
-  path: z.string().describe("Path in the vault, e.g. Veille/mon-article.md"),
+  path: z
+    .string()
+    .describe(
+      "Path in the vault, e.g. Veille/mon-article.md ('.md' is added when there is no extension)"
+    ),
   content: z.string().describe("Markdown content of the note"),
   message: z
     .string()
@@ -66,7 +71,10 @@ export async function handleVaultWrite(params: {
   // frontmatter already declares a provenance (never clobbered).
   content = ensureProvenance(content, "assistant");
 
-  const result = await getVaultBackend().write(params.path, content, {
+  // B1: a note saved without extension is invisible to lists, stats and the
+  // export — save `Inbox/2026-11-15` as `Inbox/2026-11-15.md`.
+  const target = withMarkdownExtension(params.path);
+  const result = await getVaultBackend().write(target.path, content, {
     message: params.message,
     expectedVersion: params.sha,
   });
@@ -82,6 +90,9 @@ export async function handleVaultWrite(params: {
             path: result.path,
             sha: result.sha,
             provenance: noteProvenance(content),
+            ...(target.added
+              ? { note: `Saved as ${target.path}: notes need the .md extension.` }
+              : {}),
             // KV backend only: soft-limit warning (vault above 50 MB).
             ...(result.warning ? { warning: result.warning } : {}),
           },

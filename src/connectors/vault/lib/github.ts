@@ -3,6 +3,14 @@ import { fetchWithTimeout } from "@/core/fetch-utils";
 import { getConfig as readConfig } from "@/core/config-facade";
 import { noteProvenance } from "./provenance";
 import { validateVaultPath, validateVaultWritePath } from "./paths";
+import {
+  bestSnippet,
+  queryTerms,
+  scoreNote,
+  searchable,
+  termMatches,
+  type Searchable,
+} from "./search-rank";
 import type { RecentNote, SearchResult, TreeFile, VaultFile, VaultListEntry } from "./backend";
 
 const GITHUB_API = "https://api.github.com";
@@ -335,76 +343,98 @@ async function treeGrep(
     mdFiles = mdFiles.filter((t) => t.path.startsWith(prefix + "/") || t.path === prefix);
   }
 
-  // Search query terms (case-insensitive)
-  const queryLower = query.toLowerCase();
-  const queryTerms = queryLower.split(/\s+/).filter(Boolean);
+  // B3 (2026-11 audit): ranked like the KV backend — stopwords dropped,
+  // accent-insensitive, light stemming; a file needs one matching term, and
+  // files matching more terms (in the name: double) come first.
+  const terms = queryTerms(query);
+  if (terms.length === 0) return { totalCount: 0, results: [] };
 
-  // First pass: filter by filename match
-  const nameMatches: SearchResult[] = [];
-  const contentCandidates: GitTreeEntry[] = [];
+  interface Hit {
+    result: SearchResult;
+    score: number;
+  }
+  const hits: Hit[] = [];
+  const contentCandidates: Array<{ file: GitTreeEntry; name: Searchable; nameScore: number }> = [];
 
+  // First pass: file names. A name holding every term needs no content read.
   for (const file of mdFiles) {
-    const nameLower = file.path.toLowerCase();
-    if (queryTerms.some((term) => nameLower.includes(term))) {
-      nameMatches.push({
-        name: file.path.split("/").pop() || file.path,
-        path: file.path,
-        textMatches: [`Filename match`],
+    const name = searchable(file.path.replace(/\.md$/, ""));
+    const s = scoreNote(terms, name, null);
+    if (s.matched.length === terms.length) {
+      hits.push({
+        score: s.score,
+        result: {
+          name: file.path.split("/").pop() || file.path,
+          path: file.path,
+          textMatches: [`Filename match`],
+        },
       });
     } else {
-      contentCandidates.push(file);
+      contentCandidates.push({ file, name, nameScore: s.score });
     }
   }
 
   // Second pass: read content of remaining files to search inside
   // Limit concurrent reads to avoid rate limiting
   const MAX_CONTENT_READS = 20;
-  const filesToRead = contentCandidates.slice(0, MAX_CONTENT_READS);
-  const contentMatches: SearchResult[] = [];
+  const toRead = contentCandidates.slice(0, MAX_CONTENT_READS);
 
-  const readPromises = filesToRead.map(async (file) => {
-    try {
-      const res = await fetchWithTimeout(
-        `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(file.path)}`,
-        { headers: headers(pat) },
-        FETCH_TIMEOUT
-      );
-      if (!res.ok) return null;
+  const readResults = await Promise.all(
+    toRead.map(async ({ file, name, nameScore }): Promise<Hit | null> => {
+      const fileName = file.path.split("/").pop() || file.path;
+      const nameOnly = (): Hit | null =>
+        nameScore > 0
+          ? {
+              score: nameScore,
+              result: { name: fileName, path: file.path, textMatches: [`Filename match`] },
+            }
+          : null;
+      try {
+        const res = await fetchWithTimeout(
+          `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(file.path)}`,
+          { headers: headers(pat) },
+          FETCH_TIMEOUT
+        );
+        if (!res.ok) return nameOnly();
 
-      const data = (await res.json()) as GitHubContentResponse;
-      const content = Buffer.from(data.content, "base64").toString("utf-8");
-      const contentLower = content.toLowerCase();
-
-      const firstTerm = queryTerms[0];
-      if (firstTerm && queryTerms.every((term) => contentLower.includes(term))) {
-        // Extract matching context (first match, 100 chars around it)
-        const idx = contentLower.indexOf(firstTerm);
-        const start = Math.max(0, idx - 50);
-        const end = Math.min(content.length, idx + firstTerm.length + 50);
-        const fragment =
-          (start > 0 ? "..." : "") +
-          content.slice(start, end).trim() +
-          (end < content.length ? "..." : "");
-
+        const data = (await res.json()) as GitHubContentResponse;
+        const content = Buffer.from(data.content, "base64").toString("utf-8");
+        const body = searchable(content);
+        const s = scoreNote(terms, name, body);
+        if (s.score === 0) return null;
+        const inContent = s.matched.filter((q) => termMatches(body, q));
         return {
-          name: file.path.split("/").pop() || file.path,
-          path: file.path,
-          textMatches: [fragment],
-          provenance: noteProvenance(content),
-        } as SearchResult;
+          score: s.score,
+          result: {
+            name: fileName,
+            path: file.path,
+            textMatches: [inContent.length ? bestSnippet(content, inContent) : `Filename match`],
+            provenance: noteProvenance(content),
+          },
+        };
+      } catch {
+        return nameOnly();
       }
-      return null;
-    } catch {
-      return null;
+    })
+  );
+  for (const r of readResults) if (r) hits.push(r);
+  // Files not read (beyond the cap) still count through their name.
+  for (const c of contentCandidates.slice(MAX_CONTENT_READS)) {
+    if (c.nameScore > 0) {
+      hits.push({
+        score: c.nameScore,
+        result: {
+          name: c.file.path.split("/").pop() || c.file.path,
+          path: c.file.path,
+          textMatches: [`Filename match`],
+        },
+      });
     }
-  });
-
-  const readResults = await Promise.all(readPromises);
-  for (const r of readResults) {
-    if (r) contentMatches.push(r);
   }
 
-  const allResults = [...nameMatches, ...contentMatches];
+  // Stable sort: equal scores keep the tree order.
+  hits.sort((a, b) => b.score - a.score);
+  const allResults = hits.map((h) => h.result);
   const offset = (page - 1) * limit;
 
   return {

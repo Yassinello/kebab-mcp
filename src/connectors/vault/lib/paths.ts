@@ -53,3 +53,27 @@ export function isUnderFolder(path: string, folder: string): boolean {
 export function baseName(path: string): string {
   return path.split("/").pop() || path;
 }
+
+/**
+ * The last path segment ends with an extension (`.md`, `.txt`, `.canvas`).
+ * A dot followed by digits only (`v2.0`, `2026.11.15`) is not an extension.
+ */
+export function hasExtension(path: string): boolean {
+  return /\.[a-z][a-z0-9]{0,9}$/i.test(baseName(path));
+}
+
+/** A Markdown note: `.md`, or a path saved without any extension. */
+export function isNotePath(path: string): boolean {
+  return path.toLowerCase().endsWith(".md") || !hasExtension(path);
+}
+
+/**
+ * B1 (2026-11 audit): a note saved as `Inbox/2026-11-15` (no extension) was
+ * invisible to vault_recent, vault_stats, the export and the status card,
+ * which only consider `.md` files. Writes now add `.md` when the last
+ * segment has no extension. Returns the path to use and whether it changed.
+ */
+export function withMarkdownExtension(path: string): { path: string; added: boolean } {
+  if (!path || path.endsWith("/") || hasExtension(path)) return { path, added: false };
+  return { path: `${path}.md`, added: true };
+}

@@ -8,6 +8,10 @@
  *   backend uses the same scheme) is left alone, so running the import again
  *   only copies what changed: an import cut short by the time budget resumes
  *   where it stopped.
+ * - B2 (2026-11 audit): a note that exists in both with DIFFERENT content
+ *   is kept as it is in the KV (it may hold edits made since) unless the
+ *   caller passes `overwrite: true` — the dashboard asks for confirmation.
+ *   Before, one click silently replaced every such note.
  * - KV notes absent from GitHub are kept (the import never deletes).
  *
  * The import does NOT switch backend: the vault keeps following
@@ -24,7 +28,12 @@ const BATCH = 25;
 
 export interface VaultImportReport {
   totalFiles: number;
+  /** New notes copied into the KV. */
   copied: number;
+  /** Notes that existed in the KV with other content and were replaced (overwrite). */
+  overwritten: number;
+  /** Notes that exist in both with different content, left as they are in the KV. */
+  keptCount: number;
   unchanged: number;
   skippedCount: number;
   tooLargeCount: number;
@@ -34,6 +43,8 @@ export interface VaultImportReport {
   remaining: number;
   /** Detail lists, capped at 200 entries each. */
   copiedPaths: string[];
+  overwrittenPaths: string[];
+  kept: string[];
   skipped: Array<{ path: string; reason: string }>;
   tooLarge: Array<{ path: string; size: number }>;
   failed: Array<{ path: string; error: string }>;
@@ -51,6 +62,8 @@ export async function importGithubVaultToKv(
     timeBudgetMs?: number;
     concurrency?: number;
     now?: () => number;
+    /** Replace KV notes that differ from GitHub (default: keep them). */
+    overwrite?: boolean;
   } = {}
 ): Promise<VaultImportReport> {
   if (!githubVaultConfigured()) {
@@ -66,6 +79,8 @@ export async function importGithubVaultToKv(
   const report: VaultImportReport = {
     totalFiles: 0,
     copied: 0,
+    overwritten: 0,
+    keptCount: 0,
     unchanged: 0,
     skippedCount: 0,
     tooLargeCount: 0,
@@ -73,6 +88,8 @@ export async function importGithubVaultToKv(
     incomplete: false,
     remaining: 0,
     copiedPaths: [],
+    overwrittenPaths: [],
+    kept: [],
     skipped: [],
     tooLarge: [],
     failed: [],
@@ -80,6 +97,10 @@ export async function importGithubVaultToKv(
   const skip = (path: string, reason: string) => {
     report.skippedCount++;
     push(report.skipped, { path, reason });
+  };
+  const keep = (path: string) => {
+    report.keptCount++;
+    push(report.kept, path);
   };
   const tooLarge = (path: string, size: number) => {
     report.tooLargeCount++;
@@ -106,8 +127,14 @@ export async function importGithubVaultToKv(
       tooLarge(file.path, file.size);
       continue;
     }
-    if (file.sha && versions[file.path] === file.sha) {
+    const local = versions[file.path];
+    if (file.sha && local === file.sha) {
       report.unchanged++;
+      continue;
+    }
+    // In both, different content: keep the KV copy unless asked (no fetch).
+    if (local !== undefined && !opts.overwrite) {
+      keep(file.path);
       continue;
     }
     toCopy.push(file.path);
@@ -134,9 +161,17 @@ export async function importGithubVaultToKv(
       });
     }
 
-    const { written, rejected } = await kv.importNotes(fetched, "Imported from GitHub");
-    report.copied += written.length;
-    for (const p of written) push(report.copiedPaths, p);
+    const res = await kv.importNotes(fetched, "Imported from GitHub", {
+      overwrite: opts.overwrite === true,
+    });
+    report.copied += res.written.length;
+    for (const p of res.written) push(report.copiedPaths, p);
+    report.overwritten += res.overwritten.length;
+    for (const p of res.overwritten) push(report.overwrittenPaths, p);
+    report.unchanged += res.unchanged.length;
+    // Created in the KV meanwhile (or not indexed yet) with other content.
+    for (const p of res.kept) keep(p);
+    const rejected = res.rejected;
     for (const r of rejected) {
       if (r.reason === "too_large") {
         const n = fetched.find((f) => f.path === r.path);

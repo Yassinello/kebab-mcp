@@ -16,7 +16,8 @@ import {
   vaultTree,
   vaultWrite,
 } from "./github";
-import { computeStats, type VaultBackend } from "./backend";
+import { VaultNotFoundError } from "@/core/connector-errors";
+import { computeStats, destinationExistsError, type VaultBackend } from "./backend";
 
 export const githubVaultBackend: VaultBackend = {
   kind: "github",
@@ -29,10 +30,19 @@ export const githubVaultBackend: VaultBackend = {
 
   async move(from, to, opts) {
     if (from === to) throw new Error("Source and destination are the same path");
-    // Same three steps vault_move always ran: read (content + SHA), write the
-    // copy, delete the original with the known SHA (saves one GET).
+    // Read (content + SHA), write the copy, delete the original with the
+    // known SHA (saves one GET).
     const source = await vaultRead(from);
-    await vaultWrite(to, source.content, opts?.message);
+    // B2 (2026-11 audit): refuse to replace an existing destination unless
+    // asked. The destination SHA found here is reused by the write.
+    let destSha: string | undefined;
+    try {
+      destSha = (await vaultRead(to)).sha;
+    } catch (error) {
+      if (!(error instanceof VaultNotFoundError)) throw error;
+    }
+    if (destSha && !opts?.overwrite) throw destinationExistsError(to);
+    await vaultWrite(to, source.content, opts?.message, destSha);
     try {
       await vaultDelete(from, opts?.message, source.sha);
     } catch (error) {

@@ -197,4 +197,76 @@ describe("Phase 50 / COV-04 — vault/lib/github.ts", () => {
       await expect(vaultRead("x.md")).rejects.toThrow(/GITHUB_REPO/);
     });
   });
+
+  describe("2026-11 audit — move never overwrites silently (B2)", () => {
+    const file = (path: string, sha: string, content: string) =>
+      okResponse({
+        path,
+        name: path.split("/").pop(),
+        sha,
+        size: content.length,
+        content: Buffer.from(content).toString("base64"),
+      });
+
+    it("refuses when the destination exists: no PUT, no DELETE", async () => {
+      fetchMock.mockResolvedValueOnce(file("a.md", "s1", "a"));
+      fetchMock.mockResolvedValueOnce(file("b.md", "s2", "b"));
+      const { githubVaultBackend } = await import("../github-backend");
+      await expect(githubVaultBackend.move("a.md", "b.md")).rejects.toThrow(/already exists/);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("overwrite: true replaces it, reusing the destination sha", async () => {
+      fetchMock.mockResolvedValueOnce(file("a.md", "s1", "a"));
+      fetchMock.mockResolvedValueOnce(file("b.md", "s2", "b"));
+      fetchMock.mockResolvedValueOnce(okResponse({ content: { path: "b.md", sha: "s3" } }));
+      fetchMock.mockResolvedValueOnce(okResponse({}));
+      const { githubVaultBackend } = await import("../github-backend");
+      expect(await githubVaultBackend.move("a.md", "b.md", { overwrite: true })).toEqual({
+        from: "a.md",
+        to: "b.md",
+      });
+      const put = fetchMock.mock.calls[2]!;
+      expect((put[1] as RequestInit).method).toBe("PUT");
+      expect(JSON.parse(String((put[1] as RequestInit).body)).sha).toBe("s2");
+      expect((fetchMock.mock.calls[3]![1] as RequestInit).method).toBe("DELETE");
+    });
+  });
+
+  describe("2026-11 audit — ranked tree grep fallback (B3)", () => {
+    it('"pricing workshop" finds a note about "atelier pricing"', async () => {
+      const notes: Record<string, string> = {
+        "Notes/atelier.md": "# Atelier pricing\nPrepare the grid.",
+        "Notes/coffee.md": "# Coffee chat\nTuesday.",
+      };
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes("/search/code")) return okResponse({ total_count: 0, items: [] });
+        if (url.includes("/git/trees/")) {
+          return okResponse({
+            sha: "t",
+            truncated: false,
+            tree: Object.keys(notes).map((p) => ({
+              path: p,
+              mode: "100644",
+              type: "blob",
+              sha: p,
+            })),
+          });
+        }
+        const p = decodeURIComponent(url.split("/contents/")[1] ?? "");
+        return okResponse({
+          path: p,
+          name: p,
+          sha: "x",
+          size: 1,
+          content: Buffer.from(notes[p] ?? "").toString("base64"),
+        });
+      });
+      const { vaultSearch } = await loadModule();
+      const res = await vaultSearch("pricing workshop");
+      expect(res.method).toBe("tree_grep");
+      expect(res.results.map((r) => r.path)).toEqual(["Notes/atelier.md"]);
+      expect(res.results[0]!.textMatches[0]).toContain("pricing");
+    });
+  });
 });
