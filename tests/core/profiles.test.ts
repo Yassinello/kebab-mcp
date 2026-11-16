@@ -76,10 +76,13 @@ vi.mock("@/connectors/vault/lib/github", () => ({
 import {
   DEFAULT_PROFILE,
   MAX_NAMED_PROFILES,
+  MAX_PROFILE_HISTORY,
   ProfileError,
   deleteProfile,
   getProfileContent,
+  listProfileHistory,
   listProfiles,
+  restoreProfileVersion,
   saveProfile,
 } from "@/core/profiles";
 import { handleMyContext, handleMyContextUpdate } from "@/connectors/context/tools/my-context";
@@ -130,6 +133,53 @@ describe("profiles store", () => {
     await saveProfile("default", "new default");
     expect(store.get("mymcp:context:inline")).toBe("new default");
     expect(store.get("mymcp:context:mode")).toBe("inline");
+  });
+});
+
+describe("profile history (C1.2)", () => {
+  it("keeps the previous content of the default profile, newest first", async () => {
+    store.set("mymcp:context:inline", "legacy v0");
+    await saveProfile("default", "v1", { by: "Dashboard" });
+    await saveProfile("default", "v2");
+    const history = await listProfileHistory("default");
+    expect(history.map((h) => h.content)).toEqual(["v1", "legacy v0"]);
+    // v1 was saved from the dashboard; the legacy version has no author.
+    expect(history[0]).toMatchObject({ bytes: 2, by: "Dashboard" });
+    expect(history[1]!.by).toBeUndefined();
+    // Legacy keys stay the source of truth for the current content.
+    expect(store.get("mymcp:context:inline")).toBe("v2");
+    // The second save came from an MCP call → caller label recorded.
+    const def = (await listProfiles())[0]!;
+    expect(def.by).toBe("test");
+    expect(def.updatedAt).toMatch(/^\d{4}-/);
+  });
+
+  it("caps the history at 10 versions and records nothing for an identical save", async () => {
+    for (let i = 0; i < 13; i++) await saveProfile("work", `v${i}`);
+    await saveProfile("work", "v12");
+    const history = await listProfileHistory("work");
+    expect(history).toHaveLength(MAX_PROFILE_HISTORY);
+    expect(history[0]!.content).toBe("v11");
+    expect(history[9]!.content).toBe("v2");
+  });
+
+  it("restores a version, and the restore itself goes into the history", async () => {
+    await saveProfile("work", "first");
+    await saveProfile("work", "second");
+    await restoreProfileVersion("work", 0, { by: "Dashboard" });
+    expect(await getProfileContent("work")).toBe("first");
+    const history = await listProfileHistory("work");
+    expect(history.map((h) => h.content)).toEqual(["second", "first"]);
+    await expect(restoreProfileVersion("work", 5)).rejects.toMatchObject({ code: "no_version" });
+  });
+
+  it("deleting a named profile drops its history; named profiles count ignores history keys", async () => {
+    await saveProfile("work", "a");
+    await saveProfile("work", "b");
+    expect(await listProfileHistory("work")).toHaveLength(1);
+    expect((await listProfiles()).map((p) => p.name)).toEqual(["default", "work"]);
+    await deleteProfile("work");
+    expect(await listProfileHistory("work")).toEqual([]);
   });
 });
 

@@ -19,73 +19,58 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock sub-components that would pull in too many deps
-vi.mock("../../app/config/tabs/settings/context-file-field", () => ({
-  ContextFileField: () => <div data-testid="context-file-field">context field</div>,
-}));
-
 vi.mock("../../app/config/tabs/settings/mcp-install-panel", () => ({
   McpInstallPanel: () => <div data-testid="mcp-install-panel">install panel</div>,
-}));
-
-vi.mock("../../app/config/tabs/settings/info-tooltip", () => ({
-  InfoTooltip: () => <span data-testid="info-tooltip">?</span>,
 }));
 
 const mockConfig = {
   timezone: "Europe/Paris",
   locale: "fr-FR",
-  displayName: "Yassine",
+  displayName: "Test User",
   contextPath: "System/context.md",
 };
 
+function renderTab() {
+  return render(
+    <SettingsTab config={mockConfig} baseUrl="https://mymcp.example.com" hasAuthToken={true} />
+  );
+}
+
 describe("SettingsTab", () => {
-  it("renders user settings fields with config values", () => {
-    render(
-      <SettingsTab
-        config={mockConfig}
-        vaultEnabled={false}
-        baseUrl="https://mymcp.example.com"
-        hasAuthToken={true}
-      />
-    );
+  it("renders user settings fields with plain labels and config values", () => {
+    renderTab();
 
-    // Check that the three user fields are visible
-    expect(screen.getByText("Display Name")).toBeInTheDocument();
-    expect(screen.getByText("Timezone")).toBeInTheDocument();
-    expect(screen.getByText("Locale")).toBeInTheDocument();
+    // C1.5: plain labels, no env-var names on screen.
+    expect(screen.getByLabelText("Your name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Time zone")).toBeInTheDocument();
+    expect(screen.getByLabelText("Language and region")).toBeInTheDocument();
+    expect(screen.queryByText("MYMCP_DISPLAY_NAME")).toBeNull();
+    // …but the variable stays available as a hover hint for self-hosters.
+    expect(screen.getByText("Your name").getAttribute("title")).toContain("MYMCP_DISPLAY_NAME");
 
-    // Check that the input values are pre-filled from config
     const inputs = screen.getAllByRole("textbox");
     const values = inputs.map((i) => (i as HTMLInputElement).value);
-    expect(values).toContain("Yassine");
+    expect(values).toContain("Test User");
     expect(values).toContain("Europe/Paris");
     expect(values).toContain("fr-FR");
   });
 
   it("shows the Save settings button", () => {
-    render(
-      <SettingsTab
-        config={mockConfig}
-        vaultEnabled={false}
-        baseUrl="https://mymcp.example.com"
-        hasAuthToken={true}
-      />
-    );
-
+    renderTab();
     expect(screen.getByRole("button", { name: /save settings/i })).toBeInTheDocument();
   });
 
-  it("renders subtab buttons for User settings and MCP install", () => {
-    render(
-      <SettingsTab
-        config={mockConfig}
-        vaultEnabled={false}
-        baseUrl="https://mymcp.example.com"
-        hasAuthToken={true}
-      />
-    );
-
+  it("renders the remaining sub-tabs; profile, devices and storage moved out", () => {
+    renderTab();
     expect(screen.getByRole("button", { name: /user settings/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mcp install/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /advanced/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^devices$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^storage$/i })).toBeNull();
+    expect(screen.queryByText(/Profile \(default\)/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute(
+      "href",
+      "/config?tab=profile"
+    );
   });
 });

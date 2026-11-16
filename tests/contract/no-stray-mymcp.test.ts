@@ -98,7 +98,6 @@ const ALLOWLIST: readonly string[] = [
   "app/config/page.tsx",
   "app/config/tabs/logs.tsx",
   "app/config/tabs/settings.tsx",
-  "app/config/tabs/settings/context-file-field.tsx",
   // OAuth flow cookie `mymcp_oauth` (Google).
   "app/api/auth/google/route.ts",
   "app/api/auth/google/callback/route.ts",
