@@ -188,9 +188,6 @@ export function Sidebar({
             {setupMode ? "Setup mode" : "Personal AI hub"}
           </span>
         </span>
-        <span className="text-text-muted">
-          <OutlineIcon name="chevrons-up-down" size={16} />
-        </span>
       </a>
 
       <nav className="flex-1 overflow-y-auto flex flex-col" aria-label="Dashboard">
@@ -440,7 +437,7 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   // Width tier: narrow < default < wide. Only one applies.
-  const widthClass = wide ? "max-w-6xl" : narrow ? "max-w-3xl" : "max-w-5xl";
+  const widthClass = wide ? "max-w-7xl" : narrow ? "max-w-3xl" : "max-w-6xl";
   const endpoint =
     mcpUrl ?? (typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp");
   return (

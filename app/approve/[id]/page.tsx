@@ -21,6 +21,7 @@ import { CONFIG_TOOL } from "@/core/config-proposals";
 import { ApprovalActions } from "./approval-actions";
 import { KebabLogo } from "../../components/kebab-logo";
 import { StatusDot } from "../../components/list-rows";
+import { requesterLabel } from "./requester-label";
 
 export const dynamic = "force-dynamic";
 
@@ -187,7 +188,9 @@ export default async function ApprovePage({
           <Row label="Change">
             <span className="font-medium">{summary.recipient}</span>
           </Row>
-          {rec.requestedBy ? <Row label="Requested by">{rec.requestedBy}</Row> : null}
+          {rec.requestedBy ? (
+            <Row label="Requested by">{requesterLabel(rec.requestedBy)}</Row>
+          ) : null}
         </dl>
 
         <section className="px-6 md:px-10 pt-6">
@@ -234,7 +237,7 @@ export default async function ApprovePage({
             <span className="whitespace-pre-wrap">{formatValue(v)}</span>
           </Row>
         ))}
-        {rec.requestedBy ? <Row label="Requested by">{rec.requestedBy}</Row> : null}
+        {rec.requestedBy ? <Row label="Requested by">{requesterLabel(rec.requestedBy)}</Row> : null}
       </dl>
 
       <section className="px-6 md:px-10 pt-6">
