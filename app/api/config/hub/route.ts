@@ -3,13 +3,13 @@ import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { toMsg } from "@/core/error-utils";
 import { getContextKVStore, getCurrentTenantId } from "@/core/request-context";
-import { listProfiles } from "@/core/profiles";
+import { DEFAULT_PROFILE, listProfiles } from "@/core/profiles";
 import { listDevices, type DeviceRow } from "@/core/devices";
 import { readWeekUsage, recentWeeks, usageCountersEnabled } from "@/core/usage";
 import { listSkills } from "@/connectors/skills/store";
 import { templateCatalog } from "@/connectors/skills/lib/templates";
 import { getVaultBackend } from "@/connectors/vault/lib/select";
-import { readSetupState } from "@/connectors/context/tools/setup";
+import { readSetupState, setupStateKey } from "@/connectors/context/tools/setup";
 
 /**
  * 2026-11 audit (C1.1) — GET /api/config/hub: the state behind the
@@ -167,6 +167,20 @@ async function adminKeyPart(): Promise<string | null> {
 async function setupPart(): Promise<HubSummary["setup"]> {
   // Admin requests carry no caller profile: this reads the default profile's state.
   const s = await readSetupState();
+  if (s.step === "done") return { step: s.step, updatedAt: s.updatedAt || null };
+  // A setup finished from a client bound to another profile ("hat") is stored
+  // under that profile's key: it counts as done for the checklist too.
+  const kv = getContextKVStore();
+  for (const p of await listProfiles()) {
+    if (p.name === DEFAULT_PROFILE) continue;
+    const raw = await kv.get(setupStateKey(p.name));
+    try {
+      const other = raw ? (JSON.parse(raw) as { step?: string; updatedAt?: string }) : null;
+      if (other?.step === "done") return { step: "done", updatedAt: other.updatedAt || null };
+    } catch {
+      // unreadable state: ignore it
+    }
+  }
   return { step: s.step, updatedAt: s.updatedAt || null };
 }
 

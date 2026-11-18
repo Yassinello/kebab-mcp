@@ -125,6 +125,16 @@ describe("GET/POST /api/config/hub — setup checklist items", () => {
     expect(hub.setup).toEqual({ step: "done", updatedAt: "2026-11-18T09:00:00.000Z" });
   });
 
+  it("counts a setup finished from a client bound to another profile", async () => {
+    await saveProfile("work", "# Work hat", { by: "Claude" });
+    await getKVStore().set(
+      "onboarding:state:work",
+      JSON.stringify({ step: "done", updatedAt: "2026-11-18T10:00:00.000Z" })
+    );
+    const hub = (await (await GET(req())).json()) as Items;
+    expect(hub.setup).toEqual({ step: "done", updatedAt: "2026-11-18T10:00:00.000Z" });
+  });
+
   it("records the Kebab House skill once, and keeps the first time", async () => {
     const first = await POST(post({ mark: "kebab-skill" }));
     expect(first.status).toBe(200);
