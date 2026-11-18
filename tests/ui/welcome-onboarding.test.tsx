@@ -1,13 +1,13 @@
 /**
  * @vitest-environment jsdom
  *
- * Welcome flow (audit C2.1): plain "admin key" step, "Connect your AI
- * client" ordered Claude → URL clients → other clients, an always-enabled
+ * Welcome flow (audit C2.1): plain "admin key" step, "Connect Claude"
+ * first (button, URL, three steps, setup phrase), other clients folded, an always-enabled
  * "Open my dashboard", human ritual cards, and the second-browser case.
  */
 import "../components/setup";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { WelcomeShell } from "../../app/welcome/WelcomeShell";
 import { WelcomeStateProvider } from "../../app/welcome/WelcomeStateContext";
 import { MintStep } from "../../app/welcome/steps/mint";
@@ -95,45 +95,75 @@ describe("admin key step", () => {
 });
 
 describe("connect step", () => {
-  function renderConnect() {
+  function renderConnect(token: string | null = TOKEN) {
     respond((url) =>
       url.includes("/api/welcome/starter-skills") ? { body: { skills: RITUALS } } : { body: {} }
     );
     return render(
-      <WelcomeStateProvider initial={{ token: TOKEN, instanceUrl: ORIGIN, tokenSaved: true }}>
+      <WelcomeStateProvider initial={{ token, instanceUrl: ORIGIN, tokenSaved: true }}>
         <TestStep durableBackend />
       </WelcomeStateProvider>
     );
   }
 
-  it("leads with Claude: Add to Claude, then the setup phrase", () => {
+  it("leads with Connect Claude: the button, the URL, three steps, then the phrase", () => {
     renderConnect();
-    const add = screen.getByRole("link", { name: "Add to Claude" });
-    expect(add.getAttribute("href")).toContain(
-      encodeURIComponent(`${ORIGIN}/api/mcp`).replace(/%20/g, "+")
-    );
-    expect(screen.getByText("Set up my Kebab House")).toBeInTheDocument();
-    expect(screen.getByText(/to approve the connection/)).toBeInTheDocument();
+    const card = screen.getByRole("region", { name: "Connect Claude" });
+    const add = within(card).getByRole("link", { name: /^Connect Claude/ });
+    const href = new URL(add.getAttribute("href")!);
+    expect(href.origin + href.pathname).toBe("https://claude.ai/customize/connectors");
+    expect(href.searchParams.get("connectorUrl")).toBe(`${ORIGIN}/api/mcp`);
+    expect(add).toHaveAttribute("target", "_blank");
+    for (const step of ["Add the connector", "Authorise", "Choose the access level"]) {
+      expect(within(card).getByText(step)).toBeInTheDocument();
+    }
+    expect(within(card).getByText("Now say this in Claude:")).toBeInTheDocument();
+    expect(within(card).getByText("Set up my Kebab House")).toBeInTheDocument();
+    expect(within(card).getByText(/secrets are never typed in the chat/)).toBeInTheDocument();
+    // Primary path first, other clients after, closed.
     const text = document.body.textContent ?? "";
-    expect(text.indexOf("Add to Claude")).toBeLessThan(
-      text.indexOf("Claude Code, Cursor, ChatGPT")
-    );
-    expect(text.indexOf("Claude Code, Cursor, ChatGPT")).toBeLessThan(
-      text.indexOf("Other clients (token)")
-    );
+    expect(text.indexOf("Connect Claude")).toBeLessThan(text.indexOf("Set up my Kebab House"));
+    expect(text.indexOf("Set up my Kebab House")).toBeLessThan(text.indexOf("Other AI clients"));
+    const others = screen.getByText(/^Other AI clients/).closest("details")!;
+    expect(others.open).toBe(false);
   });
 
-  it("gives URL clients the URL only, and other clients their own device token", () => {
+  it("links the Kebab House skill in the dashboard, signed in", () => {
     renderConnect();
-    expect(screen.getAllByText(`${ORIGIN}/api/mcp`).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Add to Cursor" }).getAttribute("href")).toMatch(
-      /^cursor:\/\//
+    const link = screen.getByRole("link", { name: "add the Kebab House skill" });
+    const url = new URL(link.getAttribute("href")!, ORIGIN);
+    expect(url.pathname).toBe("/config");
+    expect(url.searchParams.get("tab")).toBe("skills");
+    expect(url.searchParams.get("panel")).toBe("kebab-skill");
+    expect(url.searchParams.get("token")).toBe(TOKEN);
+  });
+
+  it("keeps Cursor, Claude Code, ChatGPT and token clients under Other AI clients", () => {
+    renderConnect();
+    const others = screen.getByText(/^Other AI clients/).closest("details")!;
+    expect(within(others).getByRole("link", { name: "Add to Cursor" })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^cursor:\/\//)
     );
-    expect(screen.getByText(/Devices → Add device/)).toBeInTheDocument();
+    expect(
+      within(others).getByText(`claude mcp add --transport http kebab-house ${ORIGIN}/api/mcp`)
+    ).toBeInTheDocument();
+    expect(within(others).getByText(/Apps & Connectors/)).toBeInTheDocument();
+    expect(within(others).getByText(/Devices → Add device/)).toBeInTheDocument();
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/One token, any number of clients|paste it everywhere/);
-    // The admin key itself is never offered to AI clients.
+    // The admin key itself is never shown to paste into AI clients.
     expect(text).not.toContain(TOKEN);
+  });
+
+  it("copies the URL and the phrase", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderConnect();
+    fireEvent.click(screen.getByRole("button", { name: "Copy URL" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${ORIGIN}/api/mcp`));
+    fireEvent.click(screen.getByRole("button", { name: "Copy phrase" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Set up my Kebab House"));
   });
 
   it("opens the dashboard without running the test, which stays optional", async () => {
@@ -150,10 +180,23 @@ describe("connect step", () => {
     expect(await screen.findByText(/Your server answered/)).toBeInTheDocument();
   });
 
-  it("shows rituals with a human summary and the phrase to say", async () => {
+  it("without a key in memory, dashboard links carry no token", () => {
+    renderConnect(null);
+    expect(screen.getByRole("link", { name: /Open my dashboard/ })).toHaveAttribute(
+      "href",
+      "/config"
+    );
+    expect(screen.getByRole("link", { name: "add the Kebab House skill" })).toHaveAttribute(
+      "href",
+      "/config?tab=skills&panel=kebab-skill"
+    );
+  });
+
+  it("shows rituals with a human summary and the phrase to say, folded away", async () => {
     renderConnect();
     expect(await screen.findByText("Starts your day in two minutes.")).toBeInTheDocument();
     expect(screen.getByText(/Say:/).textContent).toContain("Morning brief");
+    expect(screen.getByText(/^Rituals \(optional/).closest("details")!.open).toBe(false);
     await waitFor(() =>
       expect(screen.queryByText(/Use when the user starts their day/)).not.toBeInTheDocument()
     );

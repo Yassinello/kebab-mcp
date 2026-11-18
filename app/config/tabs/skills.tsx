@@ -6,7 +6,7 @@ import { ImportSkillModal } from "./skills-import-modal";
 import { SkillComposer } from "./skill-composer";
 import { SkillEditPage } from "./skill-edit-page";
 import { BundleImportModal } from "./skills-bundle-import-modal";
-import { SkillsEverywherePanel } from "./skills-everywhere";
+import { KEBAB_SKILL_PANEL, KebabSkillPanel, SkillsEverywherePanel } from "./skills-everywhere";
 import { SkillTemplatesSection } from "./skills-templates";
 
 interface SkillArgument {
@@ -82,10 +82,22 @@ export function SkillsTab() {
     return <SkillEditPage skillId={editId} />;
   }
 
-  return <SkillsListView router={router} />;
+  return (
+    <SkillsListView
+      router={router}
+      focusKebabSkill={searchParams.get("panel") === KEBAB_SKILL_PANEL}
+    />
+  );
 }
 
-function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
+function SkillsListView({
+  router,
+  focusKebabSkill = false,
+}: {
+  router: ReturnType<typeof useRouter>;
+  /** Contract 3: /config?tab=skills&panel=kebab-skill. */
+  focusKebabSkill?: boolean;
+}) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState<string | null>(null);
@@ -503,7 +515,9 @@ function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
         )}
       </div>
 
-      <SkillsEverywherePanel tags={allTags.map(([t]) => t)} />
+      <KebabSkillPanel tags={allTags.map(([t]) => t)} focus={focusKebabSkill} />
+
+      <SkillsEverywherePanel />
 
       <SkillTemplatesSection
         refreshKey={skills.map((sk) => `${sk.id}:${sk.updatedAt}`).join("|")}

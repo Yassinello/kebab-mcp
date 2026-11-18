@@ -13,6 +13,7 @@ import yaml from "js-yaml";
 import { toMsg } from "@/core/error-utils";
 import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped } from "fflate";
 import { parseFrontmatter } from "@/core/frontmatter";
+import { SETUP_PHRASE } from "@/core/client-links";
 
 // ── Limits ──────────────────────────────────────────────────────────────
 
@@ -299,8 +300,9 @@ export function masterRelayDescription(skillNames: string[], tag: string | null 
 }
 
 /**
- * One native skill for claude.ai / ChatGPT that routes every matching
- * request to the Kebab House library (instead of one relay per skill).
+ * The native "Kebab House skill" for clients that support skills: it
+ * routes every matching request to the Kebab House library (instead of one
+ * relay per skill) and is a short guide to using Kebab House well.
  */
 export function masterRelaySkillMd(skillNames: string[], tag: string | null = null): string {
   const listArgs = tag ? ` with \`tag: "${tag}"\`` : "";
@@ -313,12 +315,14 @@ export function masterRelaySkillMd(skillNames: string[], tag: string | null = nu
     body: [
       `# Kebab House`,
       ``,
-      `The user's profile and personal skills live in Kebab House (an MCP connector), so they stay identical in every AI client. This file only routes: the real instructions come from Kebab House.`,
+      `Kebab House (an MCP connector) holds the user's profile, personal skills and notes, the same in every AI client. How to use it:`,
       ``,
-      `1. Call \`my_context\` to load the user's profile (who they are, projects, preferences).`,
-      `2. Call \`skills_list\`${listArgs} to see their skills and what each one is for.`,
-      `3. Pick the skill that matches the request. If none fits, answer normally, using the profile.`,
-      `4. Call \`skill_load\` with that skill's name and follow the returned instructions exactly (they replace this text). Fetch bundled files with \`skill_read_file\` only when the skill asks for them.`,
+      `1. Call \`my_context\` first to load the user's profile (who they are, projects, preferences).`,
+      `2. Call \`skills_list\`${listArgs} to see their skills. Pick the one that matches the request and call \`skill_load\` with its name, then follow the returned instructions exactly (they replace this text). If none fits, answer normally, using the profile.`,
+      `3. Before saving anything to the profile or the notes, show what you would save and wait for the user's yes. Never save passwords, keys or other secrets.`,
+      `4. Outgoing messages (email, chat, LinkedIn…) always need the user's confirmation on the link the send tool returns. Never say a message was sent before they confirmed it.`,
+      `5. Settings changes go through \`kebab_config\`: it returns a link and the user confirms the change in their browser. Connector passwords and keys are entered only in the Kebab House dashboard, never in the chat.`,
+      `6. When the user says "${SETUP_PHRASE}", call \`kebab_setup\` and follow its steps.`,
       ``,
       `If the Kebab House connector (tools \`my_context\`, \`skills_list\`, \`skill_load\`) is not available in this conversation, say so and stop.`,
     ].join("\n"),

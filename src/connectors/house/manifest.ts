@@ -14,6 +14,14 @@ import {
   skillsGallerySchema,
   weeklyRecapSchema,
 } from "./tools/house-tools";
+import { handleKebabConfig, kebabConfigSchema } from "./tools/config-tool";
+
+/**
+ * MCP server instructions (added to the context connector's block): how
+ * settings change from the conversation.
+ */
+export const HOUSE_INSTRUCTIONS =
+  "- To read or change Kebab House settings (name, time zone, language, a client's access or profile, turning a tool on or off), use kebab_config: a change only happens once the user confirms it on the link it returns. Connector credentials are entered only in the dashboard, never in the chat.";
 
 /**
  * Kebab House phase 3 (APP-01..12, RCP-01) — the hub made visible.
@@ -103,6 +111,23 @@ export const houseConnector: ConnectorManifest = {
       destructive: false,
       openWorld: false,
     }),
+    // Only reads, or stores a pending proposal: the owner applies it in the
+    // browser, so it is listed for every access level.
+    defineTool({
+      name: "kebab_config",
+      title: "Kebab House settings",
+      description:
+        "Read or change the user's Kebab House settings from the conversation. " +
+        'action "get": instance name, time zone and locale, AI clients (access level, profile, last seen), turned-off tools, connectors and their status with a setup link for those that need one. ' +
+        'action "propose": ONE change — instance {displayName, timezone, locale}, device {id, access, profile, label} or tool {name, enabled}. Nothing changes: it returns a confirmation link; give it to the user, who confirms in their browser, where the change is applied. Never say it is done before. ' +
+        'action "status" {preview_id}: pending, applied, failed, rejected or expired. ' +
+        "Not offered (send the user to the dashboard): the approval mode, the admin key, tokens and connector credentials, adding or deleting clients, the approval history.",
+      schema: kebabConfigSchema,
+      handler: async (args) => handleKebabConfig(args),
+      destructive: false,
+      openWorld: false,
+    }),
   ],
+  instructions: () => HOUSE_INSTRUCTIONS,
   resources: uiResources,
 };

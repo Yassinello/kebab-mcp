@@ -15,7 +15,12 @@ vi.mock("@/core/request-context", async (orig) => ({
   }),
   getCurrentTenantId: () => null,
 }));
-type Meta = { profile: string | null; writeAllowed: boolean; access?: string } | null;
+type Meta = {
+  profile: string | null;
+  writeAllowed: boolean;
+  access?: string;
+  label?: string | null;
+} | null;
 const caller: { meta: Meta } = { meta: null };
 vi.mock("@/core/token-scope", () => ({ getCallerMeta: () => caller.meta }));
 vi.mock("@/core/profiles", () => ({
@@ -52,8 +57,22 @@ vi.mock("@/connectors/skills/lib/templates", () => ({
     return { ok: true, id: "morning_brief", name, action: "created" };
   },
 }));
+type Conn = { id: string; label: string; status: "active" | "needs_setup" | "off" };
+const connectors: { list: Conn[] | Error } = { list: [] };
+const BASE_CONNECTORS: Conn[] = [
+  { id: "google", label: "Google Workspace", status: "needs_setup" },
+  { id: "vault", label: "Memory Vault", status: "active" },
+  { id: "slack", label: "Slack", status: "off" },
+];
+vi.mock("@/core/config-proposals", () => ({
+  listConnectorStatuses: async () => {
+    if (connectors.list instanceof Error) throw connectors.list;
+    return connectors.list.map((c) => ({ ...c }));
+  },
+}));
 
 import {
+  dashboardLink,
   handleKebabSetup,
   handleSkillTemplateInstall,
   readSetupState,
@@ -70,18 +89,22 @@ beforeEach(() => {
   active.profile = { name: "default", mode: "inline", content: "" };
   catalog[0]!.status = "available";
   catalog[0]!.installed = false;
+  connectors.list = BASE_CONNECTORS.map((c) => ({ ...c }));
 });
 
 describe("kebab_setup", () => {
   it("starts with the interview and walks through every step in order", async () => {
-    expect(t(await handleKebabSetup({}))).toMatch(/STEP 1\/4 — Interview/);
+    expect(t(await handleKebabSetup({}))).toMatch(/STEP 1\/5 — Interview/);
     expect(t(await handleKebabSetup({ action: "complete", step: "interview" }))).toMatch(
-      /STEP 2\/4 — Profile/
+      /STEP 2\/5 — Profile/
     );
     expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(
-      /STEP 3\/4 — Rituals[\s\S]*morning-brief/
+      /STEP 3\/5 — Rituals[\s\S]*morning-brief/
     );
-    expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(/STEP 4\/4 — Connectors/);
+    expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(/STEP 4\/5 — Connectors/);
+    expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(
+      /STEP 5\/5 — The Kebab House skill/
+    );
     expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(/Setup is complete/);
     expect((await readSetupState()).step).toBe("done");
   });
@@ -199,6 +222,125 @@ describe("kebab_setup — rituals and done", () => {
     expect(text).toContain('Try it: say "Morning brief"');
     expect(text).toMatch(/skill_load/);
   });
+
+  it("mentions another client, the weekly recap and kebab_config, one line each", async () => {
+    await handleKebabSetup({ action: "goto", step: "done" });
+    const text = await runWithRequestOrigin("https://house.example.org", async () =>
+      t(await handleKebabSetup({}))
+    );
+    const line = (re: RegExp) => text.split("\n").filter((l) => re.test(l));
+    expect(line(/Another AI client/)).toHaveLength(1);
+    expect(line(/Another AI client/)[0]).toContain("https://house.example.org/config?tab=devices");
+    expect(line(/kebab_weekly_recap/)).toHaveLength(1);
+    expect(line(/kebab_config/)).toHaveLength(1);
+    expect(line(/kebab_config/)[0]).toMatch(/confirm each change in their browser/);
+  });
+});
+
+describe("kebab_setup — connectors step", () => {
+  it("lists the active connectors and a deep link for each one that needs setup", async () => {
+    await handleKebabSetup({ action: "goto", step: "connectors" });
+    const text = await runWithRequestOrigin("https://house.example.org", async () =>
+      t(await handleKebabSetup({}))
+    );
+    expect(text).toMatch(/STEP 4\/5 — Connectors/);
+    expect(text).toContain("Active now: Memory Vault.");
+    expect(text).toContain(
+      "- Google Workspace: https://house.example.org/config?tab=connectors&connector=google"
+    );
+    // Turned off by the operator: not offered.
+    expect(text).not.toContain("connector=slack");
+    expect(text).toMatch(/Never ask the user to paste a password, token or API key/);
+    expect(text).not.toMatch(/is connected ✓/);
+  });
+
+  it("reports a connector set up in the dashboard since the last call, once", async () => {
+    await handleKebabSetup({ action: "goto", step: "connectors" });
+    expect(t(await handleKebabSetup({}))).not.toMatch(/connected ✓/);
+    // The owner fills the Google credentials in the dashboard, then comes back.
+    connectors.list = BASE_CONNECTORS.map((c) =>
+      c.id === "google" ? { ...c, status: "active" as const } : { ...c }
+    );
+    const next = t(await handleKebabSetup({ action: "complete", step: "connectors" }));
+    expect(next).toMatch(
+      /^Newly connected since the last check[^\n]*"Google Workspace is connected ✓"/
+    );
+    expect(next).toMatch(/STEP 5\/5 — The Kebab House skill/);
+    expect(next).not.toContain("Memory Vault is connected");
+    // Already reported: not again.
+    expect(t(await handleKebabSetup({}))).not.toMatch(/connected ✓/);
+    expect((await readSetupState()).activeConnectors).toEqual(["google", "vault"]);
+  });
+
+  it("falls back to the plain Connectors link when the registry cannot be read", async () => {
+    connectors.list = new Error("registry down");
+    await handleKebabSetup({ action: "goto", step: "connectors" });
+    const text = t(await handleKebabSetup({}));
+    expect(text).toContain("https://configured.example/config?tab=connectors .");
+    expect(text).not.toMatch(/Active now/);
+  });
+
+  it("dashboardLink takes an optional connector or panel", () => {
+    expect(dashboardLink("connectors")).toBe("https://configured.example/config?tab=connectors");
+    expect(dashboardLink("connectors", { connector: "unipile" })).toBe(
+      "https://configured.example/config?tab=connectors&connector=unipile"
+    );
+    expect(dashboardLink("skills", { panel: "kebab-skill" })).toBe(
+      "https://configured.example/config?tab=skills&panel=kebab-skill"
+    );
+  });
+});
+
+describe("kebab_setup — skill step", () => {
+  it("comes after connectors, can be skipped, and links the skill download", async () => {
+    await handleKebabSetup({ action: "goto", step: "connectors" });
+    const text = t(await handleKebabSetup({ action: "complete", step: "connectors" }));
+    expect(text).toMatch(/STEP 5\/5 — The Kebab House skill \(optional, can be skipped\)/);
+    expect(text).toContain("https://configured.example/config?tab=skills&panel=kebab-skill");
+    expect(text).toMatch(/complete" and step "skill"/);
+    expect(t(await handleKebabSetup({ action: "complete", step: "skill" }))).toMatch(
+      /Setup is complete/
+    );
+  });
+
+  it("adapts the wording to the client", async () => {
+    await handleKebabSetup({ action: "goto", step: "skill" });
+    caller.meta = { profile: null, writeAllowed: true, label: "Claude" };
+    const app = t(await handleKebabSetup({}));
+    expect(app).toMatch(
+      /^In claude\.ai or Claude Desktop:.*Settings → Capabilities → Skills → Upload/m
+    );
+    expect(app).not.toMatch(/has no skills feature/);
+
+    caller.meta = { profile: null, writeAllowed: true, label: "Claude Code" };
+    const code = t(await handleKebabSetup({}));
+    expect(code).toMatch(/~\/\.claude\/skills\//);
+    expect(code).not.toMatch(/Capabilities/);
+
+    caller.meta = { profile: null, writeAllowed: true, label: "ChatGPT" };
+    const other = t(await handleKebabSetup({}));
+    expect(other).toMatch(/Capabilities/);
+    expect(other).toMatch(/~\/\.claude\/skills\//);
+    expect(other).toMatch(/If this client has no skills feature, skip this step/);
+  });
+});
+
+describe("kebab_setup — saved states from before the skill step", () => {
+  it("an instance already at done stays done", async () => {
+    store.set("onboarding:state", JSON.stringify({ step: "done", updatedAt: "2026-10-01" }));
+    expect(t(await handleKebabSetup({}))).toMatch(/Setup is complete/);
+    expect((await readSetupState()).step).toBe("done");
+    // A late "complete" of the old last step never moves it back.
+    await handleKebabSetup({ action: "complete", step: "connectors" });
+    expect((await readSetupState()).step).toBe("done");
+  });
+
+  it("an instance saved at connectors moves on to the new skill step", async () => {
+    store.set("onboarding:state", JSON.stringify({ step: "connectors", updatedAt: "2026-10-01" }));
+    expect(t(await handleKebabSetup({}))).toMatch(/STEP 4\/5 — Connectors/);
+    // First look at the connectors: nothing is reported as newly connected.
+    expect(t(await handleKebabSetup({ action: "complete" }))).toMatch(/^STEP 5\/5/);
+  });
 });
 
 describe("kebab_setup — state per profile", () => {
@@ -215,7 +357,7 @@ describe("kebab_setup — state per profile", () => {
     caller.meta = { profile: "work", writeAllowed: true };
     active.profile = { name: "work", mode: "inline", content: "" };
     const text = t(await handleKebabSetup({}));
-    expect(text).toMatch(/STEP 1\/4 — Interview/);
+    expect(text).toMatch(/STEP 1\/5 — Interview/);
     expect(text).not.toMatch(/Setup is complete/);
     await handleKebabSetup({ action: "complete", step: "interview" });
     expect((await readSetupState()).step).toBe("profile");
