@@ -57,4 +57,26 @@ describe("DevicesTab access level", () => {
       ).toBe(true)
     );
   });
+
+  it("lists each device as a row that opens in place", async () => {
+    render(<DevicesTab />);
+    expect(await screen.findByText("Claude")).toBeInTheDocument();
+    // oauth kind, never seen: grey "Not seen yet", "Signed in" line.
+    expect(screen.getByText("Not seen yet")).toBeInTheDocument();
+    expect(screen.getByText(/Signed in/)).toBeInTheDocument();
+    expect(screen.getByText("All connectors")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();
+    const chevron = screen.getByRole("button", { name: "Show details for Claude" });
+    fireEvent.click(chevron);
+    expect(screen.getByRole("button", { name: "Hide details for Claude" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rotate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save scope" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    expect(screen.getByLabelText("New name for Claude")).toHaveValue("Claude");
+  });
 });

@@ -19,6 +19,9 @@ import { getPreview, verifyApprovalSignature, type ApprovalRecord } from "@/core
 import { runWithTenant } from "@/core/request-context";
 import { CONFIG_TOOL } from "@/core/config-proposals";
 import { ApprovalActions } from "./approval-actions";
+import { KebabLogo } from "../../components/kebab-logo";
+import { StatusDot } from "../../components/list-rows";
+import { requesterLabel } from "./requester-label";
 
 export const dynamic = "force-dynamic";
 
@@ -31,21 +34,45 @@ function one(v: string | string[] | undefined): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
 
+/**
+ * Redesign 2026-11: the dashboard's frame — warm background, a slim bar
+ * with the Kebab House tile, and one white panel with a thin border
+ * (full-bleed on phones). No sidebar: this page is one decision.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-dvh bg-bg-muted text-text flex items-start sm:items-center justify-center p-4 sm:p-8">
-      <div className="w-full max-w-xl rounded-xl border border-border bg-bg-card shadow-sm">
-        {children}
-      </div>
-    </main>
+    <div className="min-h-dvh bg-bg-app text-text flex flex-col">
+      <header className="flex items-center gap-2.5 h-14 px-4 md:px-6">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-text">
+          <KebabLogo size={18} className="text-amber-400" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium leading-tight">{PRODUCT.name}</span>
+          <span className="block text-xs text-text-muted leading-tight">Personal AI hub</span>
+        </span>
+        <a
+          href="/config"
+          className="ml-auto text-sm font-medium text-text-dim hover:text-text rounded-lg px-2.5 py-2 hover:bg-bg-nav-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Open dashboard
+        </a>
+      </header>
+      <main className="flex-1 md:px-6 md:pb-10 md:pt-6">
+        <div className="mx-auto w-full max-w-2xl bg-bg border-y md:border border-border md:rounded-2xl">
+          {children}
+        </div>
+      </main>
+    </div>
   );
 }
 
 function Notice({ title, body }: { title: string; body: string }) {
   return (
     <Shell>
-      <div className="p-6">
-        <h1 className="text-base font-semibold mb-1">{title}</h1>
+      <div className="px-6 py-8 md:px-10">
+        <h1 className="text-[24px] md:text-[26px] font-normal leading-tight tracking-tight mb-2">
+          {title}
+        </h1>
         <p className="text-sm text-text-dim">{body}</p>
       </div>
     </Shell>
@@ -54,10 +81,22 @@ function Notice({ title, body }: { title: string; body: string }) {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2.5 border-b border-border-light last:border-b-0">
-      <dt className="text-xs uppercase tracking-wide text-text-muted pt-0.5">{label}</dt>
+    <div className="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-1 sm:gap-4 py-3.5 border-b border-border">
+      <dt className="text-[13px] text-text-muted">{label}</dt>
       <dd className="text-sm break-words min-w-0">{children}</dd>
     </div>
+  );
+}
+
+function PageHeader({ status, title, body }: { status: string; title: string; body: string }) {
+  return (
+    <header className="px-6 pt-8 pb-6 md:px-10">
+      <StatusDot tone="warn" label={status} />
+      <h1 className="mt-3 text-[24px] md:text-[28px] font-normal leading-tight tracking-tight">
+        {title}
+      </h1>
+      <p className="text-sm md:text-[15px] text-text-dim mt-2">{body}</p>
+    </header>
   );
 }
 
@@ -139,25 +178,23 @@ export default async function ApprovePage({
   if (isConfig) {
     return (
       <Shell>
-        <header className="px-6 pt-6 pb-4 border-b border-border">
-          <p className="text-xs font-medium text-amber-primary uppercase tracking-wide mb-1">
-            Confirmation needed
-          </p>
-          <h1 className="text-lg font-semibold">Your assistant proposes a settings change</h1>
-          <p className="text-sm text-text-dim mt-1">
-            Nothing has changed yet. If you approve, exactly this change is applied right away.
-          </p>
-        </header>
+        <PageHeader
+          status="Confirmation needed"
+          title="Your assistant proposes a settings change"
+          body="Nothing has changed yet. If you approve, exactly this change is applied right away."
+        />
 
-        <dl className="px-6 py-2">
+        <dl className="mx-6 md:mx-10 border-t border-border">
           <Row label="Change">
             <span className="font-medium">{summary.recipient}</span>
           </Row>
-          {rec.requestedBy ? <Row label="Requested by">{rec.requestedBy}</Row> : null}
+          {rec.requestedBy ? (
+            <Row label="Requested by">{requesterLabel(rec.requestedBy)}</Row>
+          ) : null}
         </dl>
 
-        <section className="px-6 pt-2 pb-2">
-          <p className="text-xs uppercase tracking-wide text-text-muted mb-1.5">What changes</p>
+        <section className="px-6 md:px-10 pt-6">
+          <h2 className="text-sm font-semibold mb-2">What changes</h2>
           <pre className="whitespace-pre-wrap break-words font-sans text-sm rounded-lg border border-border bg-bg-muted p-4 max-h-80 overflow-auto">
             {summary.text ?? "—"}
           </pre>
@@ -179,18 +216,13 @@ export default async function ApprovePage({
 
   return (
     <Shell>
-      <header className="px-6 pt-6 pb-4 border-b border-border">
-        <p className="text-xs font-medium text-amber-primary uppercase tracking-wide mb-1">
-          Approval needed
-        </p>
-        <h1 className="text-lg font-semibold">Your assistant wants to act on your behalf</h1>
-        <p className="text-sm text-text-dim mt-1">
-          Check every field. If you approve, exactly this will be sent — once — even if the
-          assistant asks for something else afterwards.
-        </p>
-      </header>
+      <PageHeader
+        status="Approval needed"
+        title="Your assistant wants to act on your behalf"
+        body="Check every field. If you approve, exactly this will be sent — once — even if the assistant asks for something else afterwards."
+      />
 
-      <dl className="px-6 py-2">
+      <dl className="mx-6 md:mx-10 border-t border-border">
         <Row label="Tool">
           <code className="font-mono text-[13px]">{rec.tool}</code>
         </Row>
@@ -205,11 +237,11 @@ export default async function ApprovePage({
             <span className="whitespace-pre-wrap">{formatValue(v)}</span>
           </Row>
         ))}
-        {rec.requestedBy ? <Row label="Requested by">{rec.requestedBy}</Row> : null}
+        {rec.requestedBy ? <Row label="Requested by">{requesterLabel(rec.requestedBy)}</Row> : null}
       </dl>
 
-      <section className="px-6 pt-2 pb-2">
-        <p className="text-xs uppercase tracking-wide text-text-muted mb-1.5">Exact text</p>
+      <section className="px-6 md:px-10 pt-6">
+        <h2 className="text-sm font-semibold mb-2">Exact text</h2>
         {summary.text !== null ? (
           <pre className="whitespace-pre-wrap break-words font-sans text-sm rounded-lg border border-border bg-bg-muted p-4 max-h-80 overflow-auto">
             {summary.text}

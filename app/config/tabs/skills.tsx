@@ -8,6 +8,16 @@ import { SkillEditPage } from "./skill-edit-page";
 import { BundleImportModal } from "./skills-bundle-import-modal";
 import { KEBAB_SKILL_PANEL, KebabSkillPanel, SkillsEverywherePanel } from "./skills-everywhere";
 import { SkillTemplatesSection } from "./skills-templates";
+import { OutlineIcon } from "../../components/outline-icon";
+import { UnderlineTabs, TabPanel, useSubTab } from "../../components/page-tabs";
+import {
+  ListSection,
+  RowChevron,
+  RowList,
+  RowMeta,
+  StatusDot,
+  type RowTone,
+} from "../../components/list-rows";
 
 interface SkillArgument {
   name: string;
@@ -73,6 +83,8 @@ interface SkillVersionSummary {
   contentPreview: string;
 }
 
+const SKILLS_VIEWS = ["library", "templates", "clients"] as const;
+
 export function SkillsTab() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -115,6 +127,12 @@ function SkillsListView({
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Redesign 2026-11: Library · Templates · Every AI client. The Kebab
+  // House skill deep link (contract 3) opens "Every AI client".
+  const [view, setView] = useSubTab(SKILLS_VIEWS, "library", {
+    initial: focusKebabSkill ? "clients" : null,
+    clear: ["panel"],
+  });
 
   useEffect(() => {
     try {
@@ -358,175 +376,208 @@ function SkillsListView({
   const allTags = [...tagCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const visible = tagFilter ? skills.filter((sk) => (sk.tags ?? []).includes(tagFilter)) : skills;
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-text">Skills</h2>
-        <div className="flex flex-wrap items-center gap-2 [&>button]:whitespace-nowrap">
-          {flash && (
-            <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
-              {flash}
-            </span>
-          )}
-          {!composerOpen && (
-            <>
-              {syncTargets.length > 0 && skills.length > 0 && (
-                <button
-                  onClick={syncAllSkills}
-                  disabled={syncingAll}
-                  className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md disabled:opacity-60"
-                  title={`Sync all skills to ${syncTargets.map((t) => t.name).join(", ")}`}
-                >
-                  {syncingAll ? "Syncing..." : "Sync all"}
-                </button>
-              )}
-              <button
-                onClick={() => setComposerOpen(true)}
-                className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
-              >
-                Compose
-              </button>
-              <button
-                onClick={() => setBundleImportOpen(true)}
-                className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
-                title="Import SKILL.md or .zip (Claude, ChatGPT, Codex, git…)"
-                aria-label="Import SKILL.md or zip"
-              >
-                Import
-              </button>
-              <button
-                onClick={() => setImportOpen(true)}
-                className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
-                title="Keep a skill in sync with a public URL (GitHub raw, Gist…)"
-                aria-label="Import from URL"
-              >
-                From URL
-              </button>
-              {skills.length > 0 && (
-                <button
-                  onClick={() => download("/api/config/skills/export-all")}
-                  className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
-                  title="Download the whole library as Agent Skills folders (.zip)"
-                >
-                  Export all
-                </button>
-              )}
-              <button
-                onClick={startCreate}
-                className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
-              >
-                + New skill
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+  const secondaryBtn =
+    "text-sm font-medium text-text-dim hover:text-text bg-bg hover:bg-bg-muted px-3 py-1.5 border border-border rounded-lg whitespace-nowrap disabled:opacity-60";
+  const primaryBtn =
+    "text-sm font-medium text-white bg-accent hover:bg-accent/90 px-3 py-1.5 rounded-lg whitespace-nowrap";
 
-      <div className="border border-border rounded-lg overflow-hidden bg-bg-muted/20">
-        <button
-          type="button"
-          onClick={toggleHelp}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-muted/40 transition-colors"
-          aria-expanded={helpOpen}
+  return (
+    <div>
+      <UnderlineTabs
+        label="Skills sections"
+        idBase="skills"
+        value={view}
+        onChange={setView}
+        tabs={[
+          { id: "library", label: "Library", count: skills.length },
+          { id: "templates", label: "Templates" },
+          { id: "clients", label: "Every AI client" },
+        ]}
+      />
+      {flash && (
+        <p
+          role="status"
+          className="mb-4 inline-block text-xs font-medium text-green bg-green-bg px-2.5 py-1 rounded-full"
         >
-          <div
-            className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center text-xs font-bold shrink-0"
-            aria-hidden="true"
-          >
-            ?
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text">How to use skills</p>
-            <p className="text-xs text-text-dim mt-0.5">
-              {helpOpen
-                ? "Click to collapse."
-                : "What skills are, how clients see them, and when to reach for one."}
-            </p>
-          </div>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            aria-hidden="true"
-            className={`text-text-muted shrink-0 transition-transform ${helpOpen ? "rotate-180" : ""}`}
-          >
-            <path
-              d="M3.5 5.25L7 8.75L10.5 5.25"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-        {helpOpen && (
-          <div className="border-t border-border px-4 py-4 text-sm text-text-dim space-y-3 bg-bg/40">
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-                What is a skill?
-              </h4>
-              <p>
-                Reusable instructions in the open <strong>Agent Skills</strong> format (a{" "}
-                <code>SKILL.md</code> + optional bundled files such as references or scripts) — the
-                same format Claude, ChatGPT, Codex and Claude Code use. Optional typed{" "}
-                <strong>arguments</strong> fill <code>{`{{placeholders}}`}</code>.
-              </p>
-            </div>
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-                How clients see it
-              </h4>
-              <p>
-                Every client connected to Kebab gets your catalogue (name + description) and loads a
-                skill on demand with <code className="text-text">skill_load</code> — so 50 skills
-                cost 3 tools, not 50. Skills also appear as prompts (slash commands) and{" "}
-                <code>skill://</code> resources. Older skills, or ones you opt in, additionally keep
-                a dedicated <code className="text-text">skill_&lt;name&gt;</code> tool. The{" "}
-                <strong>description</strong> is what the model reads to decide when to use a skill,
-                so make it precise.
-              </p>
-            </div>
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
-                When to use a skill (vs a direct prompt)
-              </h4>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>
-                  <strong>Use a skill</strong> when you repeat the same prompt shape often (status
-                  reports, brief drafts, code reviews) — the LLM picks it for you and arguments
-                  enforce the structure.
-                </li>
-                <li>
-                  <strong>Use a direct prompt</strong> for one-shot, exploratory questions where the
-                  structure isn&apos;t reusable.
-                </li>
-                <li>
-                  Bundle a skill with <code className="text-text">toolsAllowed</code> when you want
-                  to constrain which integrations it touches (governance + reviewability).
-                </li>
-              </ul>
-            </div>
-            <div className="text-xs text-text-muted pt-1 border-t border-border/60">
-              Tip: use <strong className="text-text-dim">{`{{argument}}`}</strong> placeholders in
-              the body to inject typed inputs from the caller.
-            </div>
+          {flash}
+        </p>
+      )}
+      <TabPanel idBase="skills" value={view}>
+        {view === "library" && (
+          <div className="space-y-8">
+            <ListSection
+              id="skills-library-title"
+              title="Your skills"
+              description="Reusable instructions every connected AI client can load. Open a row for its details and history."
+              actions={
+                !composerOpen && (
+                  <>
+                    {syncTargets.length > 0 && skills.length > 0 && (
+                      <button
+                        onClick={syncAllSkills}
+                        disabled={syncingAll}
+                        className={secondaryBtn}
+                        title={`Sync all skills to ${syncTargets.map((t) => t.name).join(", ")}`}
+                      >
+                        {syncingAll ? "Syncing..." : "Sync all"}
+                      </button>
+                    )}
+                    <button onClick={() => setComposerOpen(true)} className={secondaryBtn}>
+                      Compose
+                    </button>
+                    <button
+                      onClick={() => setBundleImportOpen(true)}
+                      className={secondaryBtn}
+                      title="Import SKILL.md or .zip (Claude, ChatGPT, Codex, git…)"
+                      aria-label="Import SKILL.md or zip"
+                    >
+                      Import
+                    </button>
+                    <button
+                      onClick={() => setImportOpen(true)}
+                      className={secondaryBtn}
+                      title="Keep a skill in sync with a public URL (GitHub raw, Gist…)"
+                      aria-label="Import from URL"
+                    >
+                      From URL
+                    </button>
+                    {skills.length > 0 && (
+                      <button
+                        onClick={() => download("/api/config/skills/export-all")}
+                        className={secondaryBtn}
+                        title="Download the whole library as Agent Skills folders (.zip)"
+                      >
+                        Export all
+                      </button>
+                    )}
+                    <button onClick={startCreate} className={primaryBtn}>
+                      + New skill
+                    </button>
+                  </>
+                )
+              }
+            >
+              {composerOpen && (
+                <div className="mb-6">
+                  <SkillComposer
+                    onClose={() => setComposerOpen(false)}
+                    onCreated={async () => {
+                      setComposerOpen(false);
+                      setFlash("Skill created via composer");
+                      setTimeout(() => setFlash(null), 2500);
+                      await reload();
+                    }}
+                  />
+                </div>
+              )}
+
+              {allTags.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap text-xs mb-4">
+                  <span className="text-text-muted">Tags:</span>
+                  <button
+                    type="button"
+                    onClick={() => setTagFilter(null)}
+                    aria-pressed={tagFilter === null}
+                    className={`px-2 py-0.5 rounded-full border ${tagFilter === null ? "border-accent text-accent" : "border-border text-text-dim"}`}
+                  >
+                    all ({skills.length})
+                  </button>
+                  {allTags.map(([t, n]) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTagFilter(tagFilter === t ? null : t)}
+                      aria-pressed={tagFilter === t}
+                      className={`px-2 py-0.5 rounded-full border ${tagFilter === t ? "border-accent text-accent" : "border-border text-text-dim"}`}
+                    >
+                      #{t} ({n})
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {skills.length === 0 ? (
+                <p className="border-t border-b border-border py-8 text-sm text-text-dim">
+                  No skills defined yet. Install a{" "}
+                  <button
+                    type="button"
+                    onClick={() => setView("templates")}
+                    className="text-accent hover:underline"
+                  >
+                    template
+                  </button>
+                  , or click <strong>+ New skill</strong> to create your own.
+                </p>
+              ) : (
+                <RowList>
+                  {visible.map((skill) => (
+                    <SkillRow
+                      key={skill.id}
+                      skill={skill}
+                      drift={computeDrift(skill)}
+                      syncedTargets={Object.keys(skill.syncState ?? {}).filter(
+                        (t) => (skill.syncState ?? {})[t]?.lastSyncStatus === "ok"
+                      )}
+                      version={versionMap[skill.id] ?? 0}
+                      syncTargets={syncTargets}
+                      refreshing={refreshing === skill.id}
+                      syncing={syncing === skill.id}
+                      historyOpen={historyOpen === skill.id}
+                      historyLoading={historyLoading}
+                      historyData={historyData}
+                      rollingBack={rollingBack}
+                      onEdit={() => startEdit(skill)}
+                      onDelete={() => deleteSkill(skill.id)}
+                      onRefresh={() => refreshSkill(skill.id)}
+                      onSync={() => syncSkill(skill.id)}
+                      onToggleHistory={() => toggleHistory(skill.id)}
+                      onExport={() => exportSkill(skill.id)}
+                      onDownloadZip={() =>
+                        download(`/api/config/skills/${skill.id}/export?format=zip`)
+                      }
+                      onDownloadRelay={() =>
+                        download(`/api/config/skills/${skill.id}/export?format=relay`)
+                      }
+                      onRollback={(version) => rollbackTo(skill.id, version)}
+                    />
+                  ))}
+                </RowList>
+              )}
+
+              {syncTargets.length > 0 && (
+                <p className="mt-4 text-xs text-text-dim">
+                  Sync targets:{" "}
+                  {syncTargets.map((t) => (
+                    <code key={t.name} className="mr-2">
+                      {t.name} → {t.path}
+                    </code>
+                  ))}
+                </p>
+              )}
+            </ListSection>
+
+            <SkillsHelp open={helpOpen} onToggle={toggleHelp} />
           </div>
         )}
-      </div>
 
-      <KebabSkillPanel tags={allTags.map(([t]) => t)} focus={focusKebabSkill} />
+        {view === "templates" && (
+          <SkillTemplatesSection
+            refreshKey={skills.map((sk) => `${sk.id}:${sk.updatedAt}`).join("|")}
+            onInstalled={async (message) => {
+              setFlash(message);
+              setTimeout(() => setFlash(null), 2500);
+              await reload();
+            }}
+          />
+        )}
 
-      <SkillsEverywherePanel />
-
-      <SkillTemplatesSection
-        refreshKey={skills.map((sk) => `${sk.id}:${sk.updatedAt}`).join("|")}
-        onInstalled={async (message) => {
-          setFlash(message);
-          setTimeout(() => setFlash(null), 2500);
-          await reload();
-        }}
-      />
+        {view === "clients" && (
+          <div className="space-y-10">
+            <KebabSkillPanel tags={allTags.map(([t]) => t)} focus={focusKebabSkill} />
+            <SkillsEverywherePanel defaultOpen />
+          </div>
+        )}
+      </TabPanel>
 
       {bundleImportOpen && (
         <BundleImportModal
@@ -551,94 +602,95 @@ function SkillsListView({
           }}
         />
       )}
-
-      {composerOpen && (
-        <SkillComposer
-          onClose={() => setComposerOpen(false)}
-          onCreated={async () => {
-            setComposerOpen(false);
-            setFlash("Skill created via composer");
-            setTimeout(() => setFlash(null), 2500);
-            await reload();
-          }}
-        />
-      )}
-
-      {syncTargets.length > 0 && (
-        <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
-          Sync targets:{" "}
-          {syncTargets.map((t) => (
-            <code key={t.name} className="mr-2">
-              {t.name} → {t.path}
-            </code>
-          ))}
-        </div>
-      )}
-
-      {skills.length === 0 && (
-        <div className="border border-border rounded-lg p-8 text-center">
-          <p className="text-sm text-text-dim">
-            No skills defined yet. Install a template above, or click <strong>+ New skill</strong>{" "}
-            to create your own.
-          </p>
-        </div>
-      )}
-
-      {allTags.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap text-xs">
-          <span className="text-text-muted">Tags:</span>
-          <button
-            type="button"
-            onClick={() => setTagFilter(null)}
-            className={`px-2 py-0.5 rounded-full border ${tagFilter === null ? "border-accent text-accent" : "border-border text-text-dim"}`}
-          >
-            all ({skills.length})
-          </button>
-          {allTags.map(([t, n]) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTagFilter(tagFilter === t ? null : t)}
-              className={`px-2 py-0.5 rounded-full border ${tagFilter === t ? "border-accent text-accent" : "border-border text-text-dim"}`}
-            >
-              #{t} ({n})
-            </button>
-          ))}
-        </div>
-      )}
-
-      {visible.map((skill) => (
-        <SkillCard
-          key={skill.id}
-          skill={skill}
-          drift={computeDrift(skill)}
-          syncedTargets={Object.keys(skill.syncState ?? {}).filter(
-            (t) => (skill.syncState ?? {})[t]?.lastSyncStatus === "ok"
-          )}
-          version={versionMap[skill.id] ?? 0}
-          syncTargets={syncTargets}
-          refreshing={refreshing === skill.id}
-          syncing={syncing === skill.id}
-          historyOpen={historyOpen === skill.id}
-          historyLoading={historyLoading}
-          historyData={historyData}
-          rollingBack={rollingBack}
-          onEdit={() => startEdit(skill)}
-          onDelete={() => deleteSkill(skill.id)}
-          onRefresh={() => refreshSkill(skill.id)}
-          onSync={() => syncSkill(skill.id)}
-          onToggleHistory={() => toggleHistory(skill.id)}
-          onExport={() => exportSkill(skill.id)}
-          onDownloadZip={() => download(`/api/config/skills/${skill.id}/export?format=zip`)}
-          onDownloadRelay={() => download(`/api/config/skills/${skill.id}/export?format=relay`)}
-          onRollback={(version) => rollbackTo(skill.id, version)}
-        />
-      ))}
     </div>
   );
 }
 
-function SkillCard({
+/** "How to use skills": a closed-by-default explainer under the library. */
+function SkillsHelp({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 py-3 px-1 text-left rounded-md hover:bg-bg-muted/60 transition-colors focus-visible:outline-2 focus-visible:outline-accent"
+        aria-expanded={open}
+      >
+        <span className="text-text-dim shrink-0">
+          <OutlineIcon name="help" size={20} />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[15px] font-medium text-text">How to use skills</span>
+          <span className="block text-[13px] text-text-dim mt-0.5">
+            {open
+              ? "Click to collapse."
+              : "What skills are, how clients see them, and when to reach for one."}
+          </span>
+        </span>
+        <span
+          className={`text-text-muted inline-flex transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          <OutlineIcon name="chevron" size={16} />
+        </span>
+      </button>
+      {open && (
+        <div className="pl-1 sm:pl-11 pr-1 pb-4 pt-1 text-sm text-text-dim space-y-3">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+              What is a skill?
+            </h3>
+            <p>
+              Reusable instructions in the open <strong>Agent Skills</strong> format (a{" "}
+              <code>SKILL.md</code> + optional bundled files such as references or scripts) — the
+              same format Claude, ChatGPT, Codex and Claude Code use. Optional typed{" "}
+              <strong>arguments</strong> fill <code>{`{{placeholders}}`}</code>.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+              How clients see it
+            </h3>
+            <p>
+              Every client connected to Kebab gets your catalogue (name + description) and loads a
+              skill on demand with <code className="text-text">skill_load</code> — so 50 skills cost
+              3 tools, not 50. Skills also appear as prompts (slash commands) and{" "}
+              <code>skill://</code> resources. Older skills, or ones you opt in, additionally keep a
+              dedicated <code className="text-text">skill_&lt;name&gt;</code> tool. The{" "}
+              <strong>description</strong> is what the model reads to decide when to use a skill, so
+              make it precise.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+              When to use a skill (vs a direct prompt)
+            </h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                <strong>Use a skill</strong> when you repeat the same prompt shape often (status
+                reports, brief drafts, code reviews) — the LLM picks it for you and arguments
+                enforce the structure.
+              </li>
+              <li>
+                <strong>Use a direct prompt</strong> for one-shot, exploratory questions where the
+                structure isn&apos;t reusable.
+              </li>
+              <li>
+                Bundle a skill with <code className="text-text">toolsAllowed</code> when you want to
+                constrain which integrations it touches (governance + reviewability).
+              </li>
+            </ul>
+          </div>
+          <p className="text-xs text-text-muted pt-1">
+            Tip: use <strong className="text-text-dim">{`{{argument}}`}</strong> placeholders in the
+            body to inject typed inputs from the caller.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SkillRow({
   skill,
   drift,
   syncedTargets,
@@ -710,255 +762,247 @@ function SkillCard({
 
   const isRemote = skill.source.type === "remote";
   const remoteHasError = skill.source.type === "remote" && !!skill.source.lastError;
+  const callName = skill.exposeAsTool !== false ? `skill_${skill.id}` : agentName(skill.id);
+  const status: { tone: RowTone; label: string } = remoteHasError
+    ? { tone: "warn", label: "Fetch error" }
+    : drift.stale
+      ? { tone: "warn", label: "Out of sync" }
+      : { tone: "ok", label: syncedTargets.length > 0 ? "Live · synced" : "Live" };
+  const detailsId = `skill-${skill.id}-details`;
+  const fileCount = skill.files?.length ?? 0;
+  const toolCount = skill.toolsAllowed?.length ?? 0;
+  const menuItem =
+    "w-full text-left text-sm px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text disabled:opacity-60";
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden hover:border-border-light transition-colors">
+    <li className="border-b border-border">
       <div
-        role="button"
-        tabIndex={0}
         onClick={onEdit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onEdit();
-          }
-        }}
-        className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-bg-muted/30 transition-colors"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 sm:px-2 py-4 cursor-pointer"
         title="Click to edit"
       >
-        <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent font-bold text-sm shrink-0">
-          {skill.name.charAt(0).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-sm">{skill.name}</p>
-            <code
-              className="text-[11px] text-text-muted"
-              title={
-                skill.exposeAsTool !== false
-                  ? "Loaded via skill_load and also exposed as a dedicated tool"
-                  : "Loaded on demand via skill_load"
-              }
+        <span className="text-text-dim shrink-0 self-start mt-0.5">
+          <OutlineIcon name="sparkles" size={20} />
+        </span>
+        <div className="flex-1 min-w-[11rem]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="text-left text-[15px] font-medium text-text hover:underline focus-visible:outline-2 focus-visible:outline-accent rounded-sm"
             >
-              {skill.exposeAsTool !== false ? `skill_${skill.id}` : agentName(skill.id)}
-            </code>
+              {skill.name}
+            </button>
+            <StatusDot tone={status.tone} label={status.label} />
             {(skill.tags ?? []).map((t) => (
               <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-bg-muted text-text-dim">
                 #{t}
               </span>
             ))}
-            {(skill.files?.length ?? 0) > 0 && (
-              <span
-                className="text-[11px] font-medium text-text-muted bg-bg-muted px-2 py-0.5 rounded-full"
-                title={skill.files!.map((f) => f.path).join("\n")}
-              >
-                {skill.files!.length} file{skill.files!.length === 1 ? "" : "s"}
-              </span>
-            )}
-            <span
-              className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                isRemote ? "text-accent bg-accent/10" : "text-text-muted bg-bg-muted"
-              }`}
-            >
-              {skill.source.type}
-            </span>
-            {version > 0 && (
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
-                v{version}
-              </span>
-            )}
-            {remoteHasError && (
-              <span className="text-[11px] font-medium text-red bg-red-bg px-2 py-0.5 rounded-full">
-                fetch error
-              </span>
-            )}
-            {drift.stale && (
-              <span
-                className="text-[11px] font-medium text-orange bg-orange-bg px-2 py-0.5 rounded-full"
-                title={`Edited after last sync to: ${drift.targets.join(", ")}`}
-              >
-                drift
-              </span>
-            )}
-            {!drift.stale && syncedTargets.length > 0 && (
-              <span
-                className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full"
-                title={`Synced to ${syncedTargets.join(", ")}`}
-              >
-                synced
-              </span>
-            )}
-            {(skill.toolsAllowed?.length ?? 0) > 0 && (
-              <span
-                className="text-[11px] font-medium text-text-muted bg-bg-muted px-2 py-0.5 rounded-full"
-                title={`Allowed tools: ${skill.toolsAllowed!.join(", ")}`}
-              >
-                {skill.toolsAllowed!.length} tool{skill.toolsAllowed!.length === 1 ? "" : "s"}
-              </span>
-            )}
           </div>
-          <p className="text-xs text-text-dim mt-0.5 truncate">
+          <p className="text-[13px] text-text-dim mt-0.5 line-clamp-2 md:line-clamp-none md:truncate">
             {skill.description || <em className="text-text-muted">no description</em>}
           </p>
         </div>
-        <div
-          className="relative shrink-0"
-          ref={menuRef}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          role="presentation"
-        >
-          <button
-            type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            className="text-xs font-medium text-text-dim hover:text-text border border-border hover:border-border-light rounded-md px-2.5 py-1 inline-flex items-center gap-1"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label="Skill actions"
+        <div className="ml-auto flex items-center gap-3 shrink-0">
+          {version > 0 && <RowMeta>v{version}</RowMeta>}
+          <div
+            className="relative shrink-0"
+            ref={menuRef}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
           >
-            Actions
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 12 12"
-              fill="none"
-              aria-hidden="true"
-              className={`transition-transform ${menuOpen ? "rotate-180" : ""}`}
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="text-[13px] font-medium text-text-dim hover:text-text border border-border hover:bg-bg-muted rounded-lg px-2.5 py-1 inline-flex items-center gap-1"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="Skill actions"
             >
-              <path
-                d="M3 4.5L6 7.5L9 4.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1 w-56 bg-bg border border-border rounded-md shadow-lg overflow-hidden z-10"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onEdit)}
-                className="w-full text-left text-xs px-3 py-2 text-text hover:bg-bg-muted"
+              Actions
+              <span
+                aria-hidden="true"
+                className={`inline-flex transition-transform ${menuOpen ? "rotate-180" : ""}`}
               >
-                Edit
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onToggleHistory)}
-                className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
+                <OutlineIcon name="chevron-down" size={12} />
+              </span>
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 w-60 bg-bg border border-border rounded-lg shadow-lg overflow-hidden z-10 py-1"
               >
-                {historyOpen ? "Hide history" : "View history"}
-              </button>
-              {isRemote && (
+                <button type="button" role="menuitem" onClick={run(onEdit)} className={menuItem}>
+                  Edit
+                </button>
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={run(onRefresh)}
-                  disabled={refreshing}
-                  className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text disabled:opacity-60"
+                  onClick={run(onToggleHistory)}
+                  className={menuItem}
                 >
-                  {refreshing ? "Refreshing..." : "Refresh from URL"}
+                  {historyOpen ? "Hide history" : "View history"}
                 </button>
-              )}
-              {syncTargets.length > 0 && (
+                {isRemote && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={run(onRefresh)}
+                    disabled={refreshing}
+                    className={menuItem}
+                  >
+                    {refreshing ? "Refreshing..." : "Refresh from URL"}
+                  </button>
+                )}
+                {syncTargets.length > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={run(onSync)}
+                    disabled={syncing}
+                    className={menuItem}
+                    title={`Sync to ${syncTargets.map((t) => t.name).join(", ")}`}
+                  >
+                    {syncing ? "Syncing..." : "Sync to targets"}
+                  </button>
+                )}
+                <div className="border-t border-border my-1" />
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={run(onSync)}
-                  disabled={syncing}
-                  className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text disabled:opacity-60"
-                  title={`Sync to ${syncTargets.map((t) => t.name).join(", ")}`}
+                  onClick={run(onDownloadZip)}
+                  className={menuItem}
+                  title="SKILL.md + bundled files — uploadable to Claude, ChatGPT, Codex"
                 >
-                  {syncing ? "Syncing..." : "Sync to targets"}
+                  Download .zip (Agent Skill)
                 </button>
-              )}
-              <div className="border-t border-border" />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onDownloadZip)}
-                className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
-                title="SKILL.md + bundled files — uploadable to Claude, ChatGPT, Codex"
-              >
-                Download .zip (Agent Skill)
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onDownloadRelay)}
-                className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
-                title="Tiny native skill that loads this one from Kebab — install once in claude.ai / ChatGPT, never re-upload"
-              >
-                Download relay .zip
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onExport)}
-                className="w-full text-left text-xs px-3 py-2 text-text-dim hover:bg-bg-muted hover:text-text"
-              >
-                Export as Markdown
-              </button>
-              <div className="border-t border-border" />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(onDelete)}
-                className="w-full text-left text-xs px-3 py-2 text-red hover:bg-red-bg"
-              >
-                Delete
-              </button>
-            </div>
-          )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={run(onDownloadRelay)}
+                  className={menuItem}
+                  title="Tiny native skill that loads this one from Kebab — install once in claude.ai / ChatGPT, never re-upload"
+                >
+                  Download relay .zip
+                </button>
+                <button type="button" role="menuitem" onClick={run(onExport)} className={menuItem}>
+                  Export as Markdown
+                </button>
+                <div className="border-t border-border my-1" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={run(onDelete)}
+                  className="w-full text-left text-sm px-3 py-2 text-red hover:bg-red-bg"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+          <RowChevron
+            open={historyOpen}
+            onClick={onToggleHistory}
+            label={skill.name}
+            controls={detailsId}
+          />
         </div>
       </div>
       {historyOpen && (
-        <div className="border-t border-border px-5 py-4 bg-bg-muted/30">
-          <h4 className="text-xs font-semibold text-text-muted mb-2">Version History</h4>
-          {historyLoading ? (
-            <p className="text-xs text-text-muted">Loading...</p>
-          ) : historyData.length === 0 ? (
-            <p className="text-xs text-text-muted">No version history available.</p>
-          ) : (
-            <div className="space-y-2">
-              {[...historyData].reverse().map((v) => (
-                <div
-                  key={v.version}
-                  className="flex items-center gap-3 text-xs border border-border rounded-md px-3 py-2"
-                >
-                  <span className="font-mono font-medium text-accent shrink-0">v{v.version}</span>
-                  <span className="text-text-muted shrink-0">
-                    {new Date(v.savedAt).toLocaleString()}
-                  </span>
-                  <span className="text-text-dim flex-1 truncate">
-                    {v.contentPreview || "(empty)"}
-                  </span>
-                  {v.version !== version && (
-                    <button
-                      onClick={() => onRollback(v.version)}
-                      disabled={rollingBack}
-                      className="text-xs text-orange hover:underline shrink-0 disabled:opacity-50"
-                    >
-                      Rollback
-                    </button>
-                  )}
-                  {v.version === version && (
-                    <span className="text-[10px] font-medium text-green bg-green-bg px-1.5 py-0.5 rounded shrink-0">
-                      current
+        <div id={detailsId} className="pl-1 sm:pl-11 pr-1 sm:pr-2 pb-6 space-y-4">
+          <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+            <dt className="text-text-muted">Called as</dt>
+            <dd>
+              <code
+                className="text-text"
+                title={
+                  skill.exposeAsTool !== false
+                    ? "Loaded via skill_load and also exposed as a dedicated tool"
+                    : "Loaded on demand via skill_load"
+                }
+              >
+                {callName}
+              </code>
+            </dd>
+            <dt className="text-text-muted">Source</dt>
+            <dd className="text-text-dim break-all">
+              {skill.source.type === "remote" ? skill.source.url : "Written here"}
+              {remoteHasError && skill.source.type === "remote" && (
+                <span className="block text-red">{skill.source.lastError}</span>
+              )}
+            </dd>
+            {fileCount > 0 && (
+              <>
+                <dt className="text-text-muted">Files</dt>
+                <dd className="text-text-dim">{skill.files!.map((f) => f.path).join(", ")}</dd>
+              </>
+            )}
+            {toolCount > 0 && (
+              <>
+                <dt className="text-text-muted">Allowed tools</dt>
+                <dd className="text-text-dim">{skill.toolsAllowed!.join(", ")}</dd>
+              </>
+            )}
+            {(syncedTargets.length > 0 || drift.stale) && (
+              <>
+                <dt className="text-text-muted">Synced to</dt>
+                <dd className="text-text-dim">
+                  {syncedTargets.join(", ") || "—"}
+                  {drift.stale && (
+                    <span className="block text-orange">
+                      Edited after the last sync to: {drift.targets.join(", ")}
                     </span>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
+                </dd>
+              </>
+            )}
+          </dl>
+          <div>
+            <h4 className="text-xs font-semibold text-text-muted mb-2">Version history</h4>
+            {historyLoading ? (
+              <p className="text-xs text-text-muted">Loading...</p>
+            ) : historyData.length === 0 ? (
+              <p className="text-xs text-text-muted">No version history available.</p>
+            ) : (
+              <ul className="border-t border-border">
+                {[...historyData].reverse().map((v) => (
+                  <li
+                    key={v.version}
+                    className="flex items-center gap-3 text-xs border-b border-border py-2"
+                  >
+                    <span className="font-mono font-medium text-accent shrink-0">v{v.version}</span>
+                    <span className="text-text-muted shrink-0">
+                      {new Date(v.savedAt).toLocaleString()}
+                    </span>
+                    <span className="text-text-dim flex-1 truncate">
+                      {v.contentPreview || "(empty)"}
+                    </span>
+                    {v.version !== version && (
+                      <button
+                        onClick={() => onRollback(v.version)}
+                        disabled={rollingBack}
+                        className="text-xs text-orange hover:underline shrink-0 disabled:opacity-50"
+                      >
+                        Rollback
+                      </button>
+                    )}
+                    {v.version === version && (
+                      <span className="text-[10px] font-medium text-green bg-green-bg px-1.5 py-0.5 rounded shrink-0">
+                        current
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </li>
   );
 }

@@ -89,7 +89,7 @@ export const customToolsConnector: ConnectorManifest = {
   label: "Custom Tools",
   core: false,
   description:
-    "User-defined tools composed from existing Kebab MCP tools via a declarative JSON spec. Build them in /config → Custom Tools.",
+    "User-defined tools composed from existing Kebab House tools via a declarative JSON spec. Build them in /config → Custom Tools.",
   requiredEnvVars: [],
   get tools(): ToolDefinition[] {
     try {

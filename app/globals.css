@@ -2,10 +2,11 @@
 
 /*
  * Colour tokens. Text tokens meet WCAG AA (≥ 4.5:1 for normal text) on the
- * backgrounds they are used on — white, bg-muted, bg-sidebar, the matching
- * *-bg tint and, for accent, the active-nav tint (accent/10 on the
- * sidebar). tests/core/theme-contrast.test.ts measures every pair; adjust
- * both together.
+ * backgrounds they are used on — white, bg-muted, bg-sidebar, the warm
+ * app background (bg-app, under the sidebar and the top bar), the beige
+ * active-nav pill (bg-nav-active) and the matching *-bg tint.
+ * tests/core/theme-contrast.test.ts measures every pair; adjust both
+ * together.
  */
 @theme {
   --color-border: #e5e7eb;
@@ -14,9 +15,12 @@
   --color-bg-sidebar: #fafafa;
   --color-bg-card: #ffffff;
   --color-bg-muted: #f9fafb;
+  --color-bg-app: #f6f4f0;
+  --color-bg-nav-active: #ece7df;
+  --color-bg-nav-hover: #efebe5;
   --color-text: #111827;
   --color-text-dim: #4b5563;
-  --color-text-muted: #6b7280;
+  --color-text-muted: #5f6673;
   --color-accent: #1d4ed8;
   --color-amber-primary: #f59e0b;
   --color-amber-soft: #fef3c7;

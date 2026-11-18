@@ -1,7 +1,9 @@
 /**
- * 2026-11 audit (C1.5): the sidebar is the menu of a personal AI hub —
- * main group Overview, Profile, Skills, Memory, Connectors, Devices, Logs;
- * power-user pages under a collapsible "Advanced" group.
+ * Redesign 2026-11: the dashboard shell follows the owner's other product.
+ * Sidebar: Overview alone, then "Your hub" (Profile, Skills, Memory),
+ * "Connections" (Connectors, Devices) and "Activity" (Logs); power-user
+ * pages under "Advanced", pinned at the bottom. Top bar: Connect Claude,
+ * help and the account chip (version and storage live in its panel).
  */
 /// <reference lib="dom" />
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -13,9 +15,11 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/config",
   useSearchParams: () => new URLSearchParams(tab === "overview" ? "" : `tab=${tab}`),
 }));
-vi.mock("@/../app/components/storage-mode-badge", () => ({ StorageModeBadge: () => null }));
+vi.mock("@/../app/components/storage-mode-badge", () => ({
+  StorageModeBadge: () => <span>KV</span>,
+}));
 
-import { Sidebar, PRIMARY_NAV, ADVANCED_NAV } from "@/../app/sidebar";
+import { AppShell, Sidebar, NAV_GROUPS, PRIMARY_NAV, ADVANCED_NAV } from "@/../app/sidebar";
 
 beforeEach(() => {
   tab = "overview";
@@ -24,7 +28,13 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("<Sidebar />", () => {
-  it("lists the hub pages in the main group", () => {
+  it("groups the hub pages under small labels", () => {
+    expect(NAV_GROUPS.map((g) => [g.label, g.items.map((i) => i.label)])).toEqual([
+      [null, ["Overview"]],
+      ["Your hub", ["Profile", "Skills", "Memory"]],
+      ["Connections", ["Connectors", "Devices"]],
+      ["Activity", ["Logs"]],
+    ]);
     expect(PRIMARY_NAV.map((i) => i.label)).toEqual([
       "Overview",
       "Profile",
@@ -44,18 +54,33 @@ describe("<Sidebar />", () => {
     ]);
     render(<Sidebar />);
     expect(screen.getByText("Personal AI hub")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute(
+    const hub = screen.getByRole("list", { name: "Your hub" });
+    expect(within(hub).getByRole("link", { name: "Profile" })).toHaveAttribute(
       "href",
       "/config?tab=profile"
     );
-    expect(screen.getByRole("link", { name: "Memory" })).toHaveAttribute(
+    expect(within(hub).getByRole("link", { name: "Memory" })).toHaveAttribute(
       "href",
       "/config?tab=memory"
     );
-    expect(screen.getByRole("link", { name: "Devices" })).toHaveAttribute(
+    const connections = screen.getByRole("list", { name: "Connections" });
+    expect(within(connections).getByRole("link", { name: "Devices" })).toHaveAttribute(
       "href",
       "/config?tab=devices"
     );
+    expect(
+      within(screen.getByRole("list", { name: "Activity" })).getByRole("link", { name: "Logs" })
+    ).toBeInTheDocument();
+  });
+
+  it("marks the current page with aria-current and the beige pill", () => {
+    tab = "connectors";
+    render(<Sidebar />);
+    const current = screen.getByRole("link", { name: "Connectors" });
+    expect(current).toHaveAttribute("aria-current", "page");
+    expect(current.className).toContain("bg-bg-nav-active");
+    expect(current.className).toContain("before:bg-accent");
+    expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
   });
 
   it("keeps Advanced collapsed by default and opens it on demand", () => {
@@ -78,5 +103,81 @@ describe("<Sidebar />", () => {
       "true"
     );
     expect(screen.getByRole("link", { name: "Health" })).toHaveAttribute("aria-current", "page");
+  });
+});
+
+describe("<AppShell /> top bar", () => {
+  const renderShell = () =>
+    render(
+      <AppShell
+        title="Connectors"
+        subtitle="Your services."
+        displayName="Sam Rivera"
+        mcpUrl="https://house.example/api/mcp"
+      >
+        <p>page body</p>
+      </AppShell>
+    );
+
+  it("renders the page header inside the panel", () => {
+    renderShell();
+    expect(screen.getByRole("heading", { level: 1, name: "Connectors" })).toBeInTheDocument();
+    expect(screen.getByText("Your services.")).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveTextContent("page body");
+    expect(screen.getByRole("link", { name: "Skip to content" })).toHaveAttribute("href", "#main");
+  });
+
+  it("opens the Connect Claude card in a dialog and closes it with Escape", () => {
+    renderShell();
+    const open = screen.getByRole("button", { name: "Connect Claude" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    open.focus();
+    fireEvent.click(open);
+    const dialog = screen.getByRole("dialog", { name: "Connect Claude" });
+    expect(dialog).toHaveTextContent("https://house.example/api/mcp");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(open).toHaveFocus();
+  });
+
+  it("links the help icon to the documentation", () => {
+    renderShell();
+    expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute(
+      "href",
+      "/config?tab=documentation"
+    );
+  });
+
+  it("shows the account chip; its panel holds the version, storage and links", () => {
+    renderShell();
+    const chip = screen.getByRole("button", { name: /Sam Rivera, account menu/ });
+    expect(within(chip).getByText("SR")).toBeInTheDocument();
+    expect(chip).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute("aria-expanded", "true");
+    const panel = document.getElementById(chip.getAttribute("aria-controls")!)!;
+    expect(panel).toHaveTextContent(/v\d+\.\d+\.\d+/);
+    expect(panel).toHaveTextContent("KV");
+    expect(within(panel).getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/config?tab=settings"
+    );
+    expect(within(panel).getByRole("link", { name: /GitHub repository/ })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(chip).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("toggles the sidebar on phones with the menu button", () => {
+    renderShell();
+    const menu = screen.getByRole("button", { name: "Open menu" });
+    const sidebar = document.getElementById("sidebar")!;
+    expect(sidebar.className).toMatch(/(^|\s)hidden(\s|$)/);
+    fireEvent.click(menu);
+    expect(screen.getByRole("button", { name: "Close menu" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(sidebar.className).not.toMatch(/(^|\s)hidden(\s|$)/);
   });
 });

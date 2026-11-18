@@ -1,11 +1,13 @@
 "use client";
 
 import { PRODUCT } from "@/core/constants/brand";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import pkg from "../package.json";
 import { KebabLogo } from "./components/kebab-logo";
 import { StorageModeBadge } from "./components/storage-mode-badge";
+import { OutlineIcon } from "./components/outline-icon";
+import { ConnectClaudeDialog } from "./components/connect-claude-dialog";
 
 const VERSION = `v${pkg.version}`;
 
@@ -16,21 +18,46 @@ interface NavItem {
   icon: string;
 }
 
-// 2026-11 audit (C1.5): the main menu is the user's hub — what the AI
-// clients share (profile, skills, memory) and who uses it (devices, logs).
-export const PRIMARY_NAV: NavItem[] = [
-  { href: "/config", tab: "overview", label: "Overview", icon: "grid" },
-  { href: "/config?tab=profile", tab: "profile", label: "Profile", icon: "user" },
-  { href: "/config?tab=skills", tab: "skills", label: "Skills", icon: "sparkles" },
-  { href: "/config?tab=memory", tab: "memory", label: "Memory", icon: "notebook" },
-  { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
-  { href: "/config?tab=devices", tab: "devices", label: "Devices", icon: "devices" },
-  { href: "/config?tab=logs", tab: "logs", label: "Logs", icon: "activity" },
+interface NavGroup {
+  /** Small uppercase label above the group; none for the first group. */
+  label: string | null;
+  items: NavItem[];
+}
+
+// Redesign 2026-11: the main menu is grouped like the owner's other
+// product — Overview alone, then the hub (what every AI client shares),
+// the connections (services and clients) and the activity.
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: null,
+    items: [{ href: "/config", tab: "overview", label: "Overview", icon: "grid" }],
+  },
+  {
+    label: "Your hub",
+    items: [
+      { href: "/config?tab=profile", tab: "profile", label: "Profile", icon: "user" },
+      { href: "/config?tab=skills", tab: "skills", label: "Skills", icon: "sparkles" },
+      { href: "/config?tab=memory", tab: "memory", label: "Memory", icon: "notebook" },
+    ],
+  },
+  {
+    label: "Connections",
+    items: [
+      { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
+      { href: "/config?tab=devices", tab: "devices", label: "Devices", icon: "devices" },
+    ],
+  },
+  {
+    label: "Activity",
+    items: [{ href: "/config?tab=logs", tab: "logs", label: "Logs", icon: "activity" }],
+  },
 ];
 
-// Power-user pages, kept but out of the way under "Advanced".
-// Custom Tools is a sub-tab of Tools (?tab=tools&sub=custom); the legacy
-// ?tab=custom-tools URL still resolves (tabs.tsx).
+export const PRIMARY_NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+// Power-user pages, kept but out of the way under "Advanced" (pinned at the
+// bottom of the sidebar). Custom Tools is a sub-tab of Tools
+// (?tab=tools&sub=custom); the legacy ?tab=custom-tools URL still resolves.
 export const ADVANCED_NAV: NavItem[] = [
   { href: "/config?tab=tools", tab: "tools", label: "Tools", icon: "terminal" },
   { href: "/config?tab=playground", tab: "playground", label: "Playground", icon: "play" },
@@ -42,80 +69,40 @@ export const ADVANCED_NAV: NavItem[] = [
 
 const ADVANCED_OPEN_KEY = "kebab.sidebar.advancedOpen";
 
-const ICONS: Record<string, string> = {
-  grid: "M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5ZM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4Z",
-  package:
-    "m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12",
-  terminal: "m4 17 6-6-6-6m8 14h8",
-  sparkles:
-    "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
-  play: "M5 3l14 9-14 9V3z",
-  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
-  book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z",
-  database:
-    "M12 3c4.97 0 9 1.34 9 3v12c0 1.66-4.03 3-9 3s-9-1.34-9-3V6c0-1.66 4.03-3 9-3z M3 6c0 1.66 4.03 3 9 3s9-1.34 9-3 M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3",
-  heart:
-    "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z",
-  settings:
-    "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
-  devices:
-    "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M8 22h8 M12 18v4",
-  user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
-  notebook:
-    "M2 6h4 M2 10h4 M2 14h4 M2 18h4 M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M15 2v20",
-  chevron: "m9 18 6-6-6-6",
-  puzzle:
-    "M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z",
-};
+const FOCUS_RING =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
-function Icon({ name, size = 18 }: { name: string; size?: number }) {
-  const d = ICONS[name];
-  if (!d) return null;
+function NavLink({
+  item,
+  active,
+  disabled,
+}: {
+  item: NavItem;
+  active: boolean;
+  disabled: boolean;
+}) {
   return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d={d} />
-    </svg>
-  );
-}
-
-function renderNavItem(
-  item: NavItem,
-  pathname: string | null,
-  currentTab: string,
-  setupMode: boolean
-) {
-  const active = pathname === "/config" && currentTab === item.tab;
-  const disabled = setupMode && pathname !== "/welcome";
-  return (
-    <li key={item.href}>
+    <li>
       <a
         href={disabled ? undefined : item.href}
         aria-current={active ? "page" : undefined}
-        // MOBILE-01: min-h-11 (~44px) ensures thumb-tappable hit area on
-        // mobile per Apple HIG / Material guidance. sm: shrinks back to
-        // the previous compact density on desktop.
-        className={`flex items-center gap-2.5 px-2.5 py-2.5 sm:py-1.5 min-h-11 sm:min-h-0 rounded-md text-sm transition-colors ${
+        aria-disabled={disabled || undefined}
+        // MOBILE-01: min-h-11 (~44px) keeps a thumb-sized hit area on
+        // phones; md: returns to the compact desktop density.
+        className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 md:py-[7px] min-h-11 md:min-h-0 text-[15px] transition-colors ${FOCUS_RING} ${
           active
-            ? "bg-accent/10 text-accent font-medium"
+            ? "bg-bg-nav-active text-text font-medium before:absolute before:-left-0.5 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:bg-accent"
             : disabled
-              ? "text-text-muted cursor-not-allowed opacity-50"
-              : "text-text-dim hover:bg-bg-muted hover:text-text"
+              ? "text-text-muted cursor-not-allowed opacity-60"
+              : "text-text-dim hover:bg-bg-nav-hover hover:text-text"
         }`}
       >
-        <Icon name={item.icon} />
+        <span className={active ? "text-text" : "text-text-muted"}>
+          <OutlineIcon name={item.icon} />
+        </span>
         <span className="flex-1">{item.label}</span>
         {disabled && (
-          <span className="text-[9px] bg-bg-muted text-text-muted px-1.5 py-0.5 rounded uppercase tracking-wide">
+          <span className="text-[10px] bg-bg-nav-active text-text-muted px-1.5 py-0.5 rounded uppercase tracking-wide">
             Locked
           </span>
         )}
@@ -132,28 +119,31 @@ function getInitials(name: string): string {
   return ((first[0] ?? "") + (last[0] ?? "")).toUpperCase();
 }
 
+function useCurrentTab(): string {
+  const searchParams = useSearchParams();
+  const rawTab = searchParams?.get("tab") || "overview";
+  // The legacy `?tab=custom-tools` URL resolves to the Tools tab's
+  // "custom" sub-tab — highlight the Tools item for it.
+  return rawTab === "custom-tools" ? "tools" : rawTab;
+}
+
 export function Sidebar({
-  displayName = "User",
   serverName = PRODUCT.name,
   setupMode = false,
+  mobileOpen = false,
 }: {
-  displayName?: string | undefined;
   serverName?: string | undefined;
   setupMode?: boolean | undefined;
+  /** Phones: the menu button in the top bar shows or hides the sidebar. */
+  mobileOpen?: boolean | undefined;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const rawTab = searchParams.get("tab") || "overview";
-  // The legacy `?tab=custom-tools` URL now resolves to the Tools tab's
-  // "custom" sub-tab — highlight the Tools nav item for it.
-  const currentTab = rawTab === "custom-tools" ? "tools" : rawTab;
-  const userInitials = getInitials(displayName);
-  // MOBILE-01: open/close state for the mobile drawer. Closed by default
-  // so the page content renders immediately on small screens.
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const currentTab = useCurrentTab();
+  const onConfig = pathname === "/config";
+  const disabled = setupMode && pathname !== "/welcome";
   // C1.5: the Advanced group is collapsed by default, open when one of its
   // pages is the current one, and remembers the user's last choice.
-  const inAdvanced = ADVANCED_NAV.some((i) => i.tab === currentTab);
+  const inAdvanced = onConfig && ADVANCED_NAV.some((i) => i.tab === currentTab);
   const [advancedPref, setAdvancedPref] = useState<boolean | null>(null);
   useEffect(() => {
     try {
@@ -175,113 +165,249 @@ export function Sidebar({
   };
 
   return (
-    <>
-      {/* MOBILE-01: top bar with hamburger — visible on < sm. */}
-      <div className="sm:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-bg-sidebar">
-        <div className="flex items-center gap-2 min-w-0">
-          <KebabLogo size={22} className="text-amber-400 shrink-0" />
-          <p className="text-sm font-bold truncate">{serverName}</p>
-        </div>
-        <button
-          type="button"
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((v) => !v)}
-          className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-md hover:bg-bg-muted text-text-dim"
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {mobileOpen ? <path d="M6 6l12 12M6 18L18 6" /> : <path d="M3 6h18M3 12h18M3 18h18" />}
-          </svg>
-        </button>
-      </div>
-      <aside
-        className={`
-        ${mobileOpen ? "flex" : "hidden"} sm:flex
-        w-full sm:w-60 sm:h-screen sm:sticky sm:top-0 sm:shrink-0
-        border-b sm:border-b-0 sm:border-r border-border
-        bg-bg-sidebar flex-col
-      `}
+    <aside
+      id="sidebar"
+      className={`${mobileOpen ? "flex" : "hidden"} md:flex flex-col
+        md:col-start-1 md:row-start-1 md:row-span-2
+        md:sticky md:top-0 md:h-screen md:w-60
+        bg-bg-app px-3 pb-3 pt-1 md:pt-4 border-b border-border md:border-b-0`}
+    >
+      {/* Workspace header: the instance, like a workspace switcher. It leads
+          to the instance settings (name, time zone, language). */}
+      <a
+        href={disabled ? undefined : "/config?tab=settings"}
+        title="Instance settings"
+        className={`hidden md:flex items-center gap-2.5 rounded-lg px-2 py-2 mb-4 hover:bg-bg-nav-hover transition-colors ${FOCUS_RING}`}
       >
-        {/* Instance header */}
-        <div className="px-4 pt-6 pb-5">
-          <div className="flex items-center gap-2.5 bg-bg border border-border rounded-lg px-2.5 py-2">
-            <KebabLogo size={20} className="text-amber-400 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{serverName}</p>
-              <p className="text-[10px] text-text-muted truncate">
-                {setupMode ? "Setup mode" : "Personal AI hub"}
-              </p>
-            </div>
-          </div>
-        </div>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-text">
+          <KebabLogo size={20} className="text-amber-400" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-medium text-text truncate">{serverName}</span>
+          <span className="block text-xs text-text-muted truncate">
+            {setupMode ? "Setup mode" : "Personal AI hub"}
+          </span>
+        </span>
+      </a>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 overflow-y-auto flex flex-col" aria-label="Dashboard">
-          <ul className="space-y-0.5">
-            {PRIMARY_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
-          </ul>
-          <div className="mt-auto pt-4">
-            <div className="border-t border-border pt-3">
-              <button
-                type="button"
-                onClick={toggleAdvanced}
-                aria-expanded={advancedOpen}
-                aria-controls="sidebar-advanced"
-                className="w-full flex items-center gap-1.5 px-2.5 py-2 sm:py-1 min-h-11 sm:min-h-0 rounded-md text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text"
-              >
-                <span
-                  className={`inline-flex transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+      <nav className="flex-1 overflow-y-auto flex flex-col" aria-label="Dashboard">
+        {NAV_GROUPS.map((group, gi) => {
+          const labelId = group.label ? `nav-group-${gi}` : undefined;
+          return (
+            <div key={group.label ?? "home"} className={gi > 0 ? "mt-5" : ""}>
+              {group.label && (
+                <p
+                  id={labelId}
+                  className="px-3 mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted"
                 >
-                  <Icon name="chevron" size={12} />
-                </span>
-                Advanced
-              </button>
-              {advancedOpen && (
-                <ul id="sidebar-advanced" className="space-y-0.5 mt-1">
-                  {ADVANCED_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
-                </ul>
+                  {group.label}
+                </p>
               )}
+              <ul className="space-y-0.5" aria-labelledby={labelId}>
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={onConfig && currentTab === item.tab}
+                    disabled={disabled}
+                  />
+                ))}
+              </ul>
             </div>
-          </div>
-        </nav>
+          );
+        })}
 
-        {/* Footer: user profile */}
-        <div className="mt-auto border-t border-border px-4 py-3">
-          <div className="flex items-center gap-2.5 px-1">
-            <div className="w-8 h-8 rounded-full bg-green-bg text-green flex items-center justify-center text-xs font-bold shrink-0">
-              {userInitials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate">{displayName}</p>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[10px] text-text-muted truncate">{VERSION}</p>
-                <StorageModeBadge />
-              </div>
-            </div>
-            <a
-              href="https://github.com/Yassinello/kebab-mcp"
-              target="_blank"
-              rel="noopener"
-              className="text-text-muted hover:text-accent transition-colors shrink-0"
-              title="GitHub repository"
+        {/* Pinned at the bottom: the power-user pages. */}
+        <div className="mt-auto pt-4">
+          <div className="border-t border-black/[0.06] pt-3">
+            {advancedOpen && (
+              <ul id="sidebar-advanced" className="space-y-0.5 mb-1">
+                {ADVANCED_NAV.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={onConfig && currentTab === item.tab}
+                    disabled={disabled}
+                  />
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={toggleAdvanced}
+              aria-expanded={advancedOpen}
+              aria-controls="sidebar-advanced"
+              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 md:py-[7px] min-h-11 md:min-h-0 text-[15px] text-text-dim hover:bg-bg-nav-hover hover:text-text transition-colors ${FOCUS_RING}`}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-              </svg>
-            </a>
+              <span className="text-text-muted">
+                <OutlineIcon name="sliders" />
+              </span>
+              <span className="flex-1 text-left">Advanced</span>
+              <span
+                className={`text-text-muted inline-flex transition-transform ${advancedOpen ? "-rotate-90" : "rotate-90"}`}
+              >
+                <OutlineIcon name="chevron" size={14} />
+              </span>
+            </button>
           </div>
         </div>
-      </aside>
-    </>
+      </nav>
+    </aside>
+  );
+}
+
+/**
+ * Top-right account chip: initials, name and a chevron. Opens a small
+ * panel with the version, the storage mode and a few links.
+ */
+function UserChip({ displayName }: { displayName: string }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const itemClass = `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-dim hover:bg-bg-muted hover:text-text ${FOCUS_RING}`;
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className={`flex items-center gap-2 rounded-full md:rounded-lg pl-1 pr-1 md:pr-2 py-1 min-h-11 md:min-h-0 hover:bg-bg-nav-hover transition-colors ${FOCUS_RING}`}
+      >
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-green text-white text-[11px] font-semibold"
+        >
+          {getInitials(displayName)}
+        </span>
+        <span className="sr-only md:not-sr-only text-sm font-medium text-text max-w-40 truncate">
+          {displayName}
+        </span>
+        <span className="sr-only">, account menu</span>
+        <span
+          aria-hidden="true"
+          className={`hidden md:inline-flex text-text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <OutlineIcon name="chevron-down" size={14} />
+        </span>
+      </button>
+      {open && (
+        <div
+          id={panelId}
+          className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border bg-bg p-1.5 shadow-lg z-40"
+        >
+          <div className="px-2.5 pt-2 pb-2.5 border-b border-border mb-1.5">
+            <p className="text-sm font-medium text-text truncate">{displayName}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+              <span>{VERSION}</span>
+              <span aria-hidden="true">·</span>
+              <span>Storage</span>
+              <StorageModeBadge />
+            </div>
+          </div>
+          <a href="/config?tab=settings" className={itemClass}>
+            <OutlineIcon name="settings" size={16} />
+            Settings
+          </a>
+          <a href="/config?tab=storage" className={itemClass}>
+            <OutlineIcon name="database" size={16} />
+            Storage
+          </a>
+          <a
+            href="https://github.com/Yassinello/kebab-mcp"
+            target="_blank"
+            rel="noopener"
+            className={itemClass}
+          >
+            <OutlineIcon name="github" size={16} />
+            <span className="flex-1">GitHub repository</span>
+            <OutlineIcon name="external" size={14} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Slim bar above the white panel: on phones the menu button and the
+ * instance name on the left; everywhere the actions and the account chip
+ * on the right.
+ */
+function TopBar({
+  displayName,
+  serverName,
+  mobileOpen,
+  onToggleMenu,
+  onConnectClaude,
+}: {
+  displayName: string;
+  serverName: string;
+  mobileOpen: boolean;
+  onToggleMenu: () => void;
+  onConnectClaude: () => void;
+}) {
+  const actionClass = `inline-flex items-center gap-2 rounded-lg px-2.5 min-h-11 md:min-h-9 text-sm font-medium text-text-dim hover:bg-bg-nav-hover hover:text-text transition-colors ${FOCUS_RING}`;
+  return (
+    <header className="md:col-start-2 md:row-start-1 flex items-center gap-1 px-2 md:px-5 h-14 bg-bg-app">
+      <button
+        type="button"
+        aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        aria-expanded={mobileOpen}
+        aria-controls="sidebar"
+        onClick={onToggleMenu}
+        className={`md:hidden inline-flex min-w-11 min-h-11 items-center justify-center rounded-lg text-text-dim hover:bg-bg-nav-hover ${FOCUS_RING}`}
+      >
+        <OutlineIcon name={mobileOpen ? "x" : "menu"} size={22} />
+      </button>
+      <a
+        href="/config"
+        className={`md:hidden flex items-center gap-2 min-w-0 rounded-md ${FOCUS_RING}`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-text">
+          <KebabLogo size={16} className="text-amber-400" />
+        </span>
+        <span className="text-sm font-semibold text-text truncate">{serverName}</span>
+      </a>
+      <div className="ml-auto flex items-center gap-0.5 md:gap-1.5">
+        <button type="button" onClick={onConnectClaude} className={actionClass}>
+          <OutlineIcon name="plug" size={17} />
+          <span className="sr-only sm:not-sr-only">Connect Claude</span>
+        </button>
+        <a
+          href="/config?tab=documentation"
+          aria-label="Documentation"
+          title="Help and documentation"
+          className={`${actionClass} min-w-11 md:min-w-9 justify-center px-0`}
+        >
+          <OutlineIcon name="help" size={18} />
+        </a>
+        <UserChip displayName={displayName} />
+      </div>
+    </header>
   );
 }
 
@@ -289,9 +415,10 @@ export function AppShell({
   children,
   title,
   subtitle,
-  displayName,
-  serverName,
+  displayName = "User",
+  serverName = PRODUCT.name,
   setupMode,
+  mcpUrl,
   narrow,
   wide,
 }: {
@@ -301,26 +428,55 @@ export function AppShell({
   displayName?: string;
   serverName?: string;
   setupMode?: boolean;
+  /** The instance's MCP endpoint, for the "Connect Claude" dialog. */
+  mcpUrl?: string;
   narrow?: boolean;
   /** Wide content area (e.g. Documentation) — fits TOC + reading column. */
   wide?: boolean;
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
   // Width tier: narrow < default < wide. Only one applies.
-  const widthClass = wide ? "max-w-6xl" : narrow ? "max-w-3xl" : "max-w-4xl";
+  const widthClass = wide ? "max-w-7xl" : narrow ? "max-w-3xl" : "max-w-6xl";
+  const endpoint =
+    mcpUrl ?? (typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp");
   return (
-    // MOBILE-01: vertical stack (top bar + content) on < sm, horizontal
-    // sidebar layout on sm+.
-    <div className="flex flex-col sm:flex-row min-h-screen">
-      <Sidebar displayName={displayName} serverName={serverName} setupMode={setupMode} />
-      <main className="flex-1 overflow-auto min-w-0">
-        <div className={`${widthClass} mx-auto px-4 sm:px-8 py-6 sm:py-10`}>
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{title}</h1>
-            {subtitle && <p className="text-text-dim mt-1 text-sm sm:text-base">{subtitle}</p>}
+    // Phones: top bar, (menu), panel stacked. md+: sidebar column on the
+    // warm background, top bar and the white panel on the right.
+    <div className="min-h-screen bg-bg-app flex flex-col md:grid md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-[3.5rem_1fr]">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-bg focus:px-3 focus:py-2 focus:text-sm focus:text-accent focus:shadow"
+      >
+        Skip to content
+      </a>
+      <TopBar
+        displayName={displayName}
+        serverName={serverName}
+        mobileOpen={mobileOpen}
+        onToggleMenu={() => setMobileOpen((v) => !v)}
+        onConnectClaude={() => setConnectOpen(true)}
+      />
+      <Sidebar serverName={serverName} setupMode={setupMode} mobileOpen={mobileOpen} />
+      <main
+        id="main"
+        className="md:col-start-2 md:row-start-2 flex-1 min-w-0 bg-bg border-t border-border md:border md:rounded-2xl md:mr-4 md:mb-4"
+      >
+        <div className={`${widthClass} px-4 py-6 md:px-12 md:py-10`}>
+          <div className="mb-6 md:mb-8">
+            <h1 className="text-[26px] md:text-[28px] font-normal leading-tight tracking-tight text-text">
+              {title}
+            </h1>
+            {subtitle && <p className="text-sm md:text-[15px] text-text-dim mt-1.5">{subtitle}</p>}
           </div>
           {children}
         </div>
       </main>
+      <ConnectClaudeDialog
+        open={connectOpen}
+        onClose={() => setConnectOpen(false)}
+        mcpUrl={endpoint}
+      />
     </div>
   );
 }

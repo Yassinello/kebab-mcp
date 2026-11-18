@@ -62,11 +62,15 @@ describe("SettingsTab", () => {
 
   it("renders the remaining sub-tabs; profile, devices and storage moved out", () => {
     renderTab();
-    expect(screen.getByRole("button", { name: /user settings/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /mcp install/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /advanced/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^devices$/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^storage$/i })).toBeNull();
+    // Redesign 2026-11: the shared underline tabs (role="tab").
+    expect(screen.getByRole("tab", { name: /user settings/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.getByRole("tab", { name: /mcp install/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /advanced/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^devices$/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /^storage$/i })).toBeNull();
     expect(screen.queryByText(/Profile \(default\)/)).toBeNull();
     expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute(
       "href",

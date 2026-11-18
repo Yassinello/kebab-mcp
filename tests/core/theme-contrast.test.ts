@@ -74,6 +74,17 @@ describe("theme tokens — WCAG AA contrast", () => {
       () => token("accent"),
       () => over(token("accent"), token("bg-sidebar"), 0.1),
     ],
+    // Redesign 2026-11: sidebar, top bar and section labels sit on the warm
+    // app background; the current nav item is a beige pill.
+    ["text on app background", () => token("text"), () => token("bg-app")],
+    ["text-dim on app background", () => token("text-dim"), () => token("bg-app")],
+    ["text-muted on app background", () => token("text-muted"), () => token("bg-app")],
+    ["accent on app background", () => token("accent"), () => token("bg-app")],
+    ["text on active nav pill", () => token("text"), () => token("bg-nav-active")],
+    ["text-dim on active nav pill", () => token("text-dim"), () => token("bg-nav-active")],
+    ["text-muted on active nav pill", () => token("text-muted"), () => token("bg-nav-active")],
+    ["text-dim on nav hover", () => token("text-dim"), () => token("bg-nav-hover")],
+    ["green on app background", () => token("green"), () => token("bg-app")],
     ["white on accent (primary button)", white, () => token("accent")],
     ["green on white", () => token("green"), white],
     ["green pill (green on green-bg)", () => token("green"), () => token("green-bg")],

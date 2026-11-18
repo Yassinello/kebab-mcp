@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { OutlineIcon } from "../../components/outline-icon";
 
 type AuthType = "none" | "bearer" | "api_key_header" | "basic";
 
@@ -214,14 +215,13 @@ export function ApiConnectionsSection() {
   }
 
   return (
-    <div className="space-y-3 mt-10 pt-6 border-t border-border">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-1">
-            Bring your own
-          </p>
-          <h3 className="font-semibold text-base">API Connections</h3>
-          <p className="text-xs text-text-dim mt-0.5">
+    <section className="mt-14" aria-labelledby="api-connections-title">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 mb-4">
+        <div className="min-w-0 max-w-2xl">
+          <h2 id="api-connections-title" className="font-semibold text-base text-text">
+            API Connections
+          </h2>
+          <p className="text-sm text-text-dim mt-1">
             Configure any HTTP API with a base URL + auth, then build custom tools that call its
             endpoints. Your tools appear in every connected MCP client.
           </p>
@@ -235,7 +235,7 @@ export function ApiConnectionsSection() {
           {!draft && (
             <button
               onClick={startCreate}
-              className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
+              className="text-sm font-medium text-accent bg-bg hover:bg-accent/5 px-3 py-1.5 border border-border rounded-lg"
             >
               + Add API Connection
             </button>
@@ -258,69 +258,68 @@ export function ApiConnectionsSection() {
       )}
 
       {connections.length === 0 && !draft && (
-        <div className="border border-border rounded-lg p-6 text-center">
-          <p className="text-sm text-text-dim">
-            No API connections yet. Click <strong>+ Add API Connection</strong> to start.
-          </p>
-        </div>
+        <p className="border-t border-b border-border py-6 text-sm text-text-dim">
+          No API connections yet. Click <strong>+ Add API Connection</strong> to start.
+        </p>
       )}
 
-      {connections.map((c) => {
-        const probe = testResults[c.id];
-        return (
-          <div
-            key={c.id}
-            className="border border-border rounded-lg overflow-hidden hover:border-border-light transition-colors"
-          >
-            <div className="flex items-center gap-3 px-5 py-4">
-              <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent font-bold text-sm">
-                {c.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-sm">{c.name}</p>
-                  <code className="text-[11px] text-text-muted truncate">{c.baseUrl}</code>
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
-                    {c.auth.type}
+      {connections.length > 0 && (
+        <ul className="border-t border-border">
+          {connections.map((c) => {
+            const probe = testResults[c.id];
+            return (
+              <li key={c.id} className="border-b border-border">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 sm:px-2 py-4">
+                  <span className="text-text-dim shrink-0">
+                    <OutlineIcon name="link" size={20} />
                   </span>
-                  {probe && (
-                    <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        probe.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"
-                      }`}
-                      title={probe.error || `${probe.status} in ${probe.ms}ms`}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-[15px] text-text">{c.name}</p>
+                      <code className="text-[11px] text-text-muted truncate">{c.baseUrl}</code>
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-muted bg-bg-muted">
+                        {c.auth.type}
+                      </span>
+                      {probe && (
+                        <span
+                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                            probe.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"
+                          }`}
+                          title={probe.error || `${probe.status} in ${probe.ms}ms`}
+                        >
+                          {probe.ok ? `healthy (${probe.status})` : "unreachable"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => test(c.id)}
+                      disabled={testing === c.id}
+                      className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded disabled:opacity-60"
                     >
-                      {probe.ok ? `healthy (${probe.status})` : "unreachable"}
-                    </span>
-                  )}
+                      {testing === c.id ? "…" : "Test"}
+                    </button>
+                    <button
+                      onClick={() => startEdit(c)}
+                      className="text-xs text-accent hover:underline px-2 py-1 rounded"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => remove(c.id)}
+                      className="text-xs text-red hover:underline px-2 py-1 rounded"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => test(c.id)}
-                  disabled={testing === c.id}
-                  className="text-xs text-text-dim hover:text-accent px-2 py-1 rounded disabled:opacity-60"
-                >
-                  {testing === c.id ? "…" : "Test"}
-                </button>
-                <button
-                  onClick={() => startEdit(c)}
-                  className="text-xs text-accent hover:underline px-2 py-1 rounded"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => remove(c.id)}
-                  className="text-xs text-red hover:underline px-2 py-1 rounded"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

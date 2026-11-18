@@ -286,7 +286,7 @@ export function OverviewTab({
       <UsageCard />
 
       {/* Server details, below the hub: health, counters, version, endpoint. */}
-      <h2 className="text-sm font-semibold text-text-dim pt-4 border-t border-border">Server</h2>
+      <h2 className="text-base font-semibold text-text pt-8 border-t border-border">Server</h2>
 
       {/* Connector health — SLA sparklines */}
       <ConnectorHealthWidget />

@@ -107,7 +107,17 @@ describe("/config?tab=skills&panel=kebab-skill", () => {
     await waitFor(() => expect(panel).not.toHaveAttribute("data-highlighted"));
   });
 
-  it("without the parameter the panel is there but not scrolled to", async () => {
+  it("lands on the 'Every AI client' tab", async () => {
+    nav.params = new URLSearchParams("tab=skills&panel=kebab-skill");
+    render(<SkillsTab />);
+    expect(await screen.findByRole("tab", { name: "Every AI client" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("without the parameter the panel is on its tab but not scrolled to", async () => {
+    nav.params = new URLSearchParams("tab=skills&sub=clients");
     render(<SkillsTab />);
     const panel = await screen.findByRole("region", {
       name: "Add the Kebab House skill to Claude",

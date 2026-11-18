@@ -6,7 +6,16 @@
  * Root-scope gated.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { OutlineIcon } from "../../components/outline-icon";
+import {
+  ListSection,
+  RowChevron,
+  RowList,
+  RowMeta,
+  StatusDot,
+  type RowTone,
+} from "../../components/list-rows";
 import { DeviceInviteModal } from "./device-invite-modal";
 import { DeviceInstallSnippet } from "./device-install-snippet";
 
@@ -23,6 +32,27 @@ interface DeviceRow {
   profile?: string | null;
   /** Audit 2026-11 — what the device may do with tools that change things. */
   access?: "read" | "memory" | "full";
+  /** Signed-in app (OAuth) or a device key created here. */
+  kind?: "token" | "oauth";
+}
+
+const SMALL_BTN =
+  "px-3 py-1.5 text-[13px] font-medium rounded-lg border border-border bg-bg text-text-dim hover:bg-bg-muted hover:text-text disabled:opacity-50";
+
+/** Seen in the last 30 days = Active; never = Not seen yet; else Idle. */
+function deviceStatus(r: { lastSeenAt: string | null }): { tone: RowTone; label: string } {
+  if (!r.lastSeenAt) return { tone: "off", label: "Not seen yet" };
+  const t = Date.parse(r.lastSeenAt);
+  if (Number.isFinite(t) && Date.now() - t < 30 * 86_400_000)
+    return { tone: "ok", label: "Active" };
+  return { tone: "off", label: "Idle" };
+}
+
+/** Short scope for the row's right side. */
+function scopeShort(r: { connectors: string[] | null; skillTags?: string[] | null }): string {
+  if (r.connectors === null) return r.skillTags ? "All connectors · some skills" : "All connectors";
+  if (r.connectors.length === 0) return "Skills only";
+  return `${r.connectors.length} connector${r.connectors.length === 1 ? "" : "s"}`;
 }
 
 /** Audit 2026-11 — access levels, as the owner reads them. */
@@ -235,136 +265,149 @@ export function DevicesTab({
     return `${conn} · skills: ${tags.length ? tags.map((t) => `#${t}`).join(" ") : "none"}${prof}`;
   };
 
-  const renderRow = (r: DeviceRow) => (
-    <ScopeRowGroup
-      key={r.tokenId}
-      row={r}
-      isEditing={scopeEditId === r.tokenId}
-      pickable={pickable}
-      busy={busy === r.tokenId}
-      onSave={saveScope}
-      onCancel={() => setScopeEditId(null)}
-    >
-      {renderMainRow(r)}
-    </ScopeRowGroup>
-  );
-
-  const renderMainRow = (r: DeviceRow) => (
-    <tr className="border-t border-border">
-      <td className="px-3 py-2">
-        {editingId === r.tokenId ? (
-          <input
-            autoFocus
-            value={editValue}
-            maxLength={40}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void commitRename(r.tokenId);
-              if (e.key === "Escape") setEditingId(null);
-            }}
-            onBlur={() => void commitRename(r.tokenId)}
-            className="px-2 py-1 bg-bg-muted border border-border rounded text-xs w-40"
-          />
-        ) : (
-          <button type="button" onClick={() => startRename(r)} className="hover:underline">
-            {r.label}
-          </button>
+  const renderRow = (r: DeviceRow) => {
+    const open = scopeEditId === r.tokenId;
+    const status = deviceStatus(r);
+    const detailsId = `device-${r.tokenId}-details`;
+    const toggle = () => setScopeEditId(open ? null : r.tokenId);
+    return (
+      <li key={r.tokenId} className="border-b border-border">
+        <div
+          onClick={toggle}
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 sm:px-2 py-4 cursor-pointer"
+        >
+          <span className="text-text-dim shrink-0 self-start mt-0.5">
+            <OutlineIcon name={r.kind === "oauth" ? "plug" : "devices"} size={20} />
+          </span>
+          <div className="flex-1 min-w-[11rem]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {editingId === r.tokenId ? (
+                <input
+                  autoFocus
+                  aria-label={`New name for ${r.label}`}
+                  value={editValue}
+                  maxLength={40}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void commitRename(r.tokenId);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  onBlur={() => void commitRename(r.tokenId)}
+                  className="px-2 py-1 bg-bg border border-border rounded-md text-sm w-48"
+                />
+              ) : (
+                <p className="text-[15px] font-medium text-text">{r.label}</p>
+              )}
+              <StatusDot tone={status.tone} label={status.label} />
+            </div>
+            <p className="text-[13px] text-text-dim mt-0.5">
+              {r.kind === "oauth" ? "Signed in" : "Device key"}{" "}
+              <code className="font-mono text-[12px]">{r.tokenId}</code> · last seen{" "}
+              {fmtRelative(r.lastSeenAt)}
+              {fmtDate(r.createdAt) !== "—" && ` · added ${fmtDate(r.createdAt)}`}
+            </p>
+          </div>
+          <div
+            className="ml-auto flex items-center gap-3 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <RowMeta>{scopeShort(r)}</RowMeta>
+            <select
+              aria-label={`What ${r.label} can do`}
+              title="What this device can do"
+              value={r.access ?? "full"}
+              disabled={busy === r.tokenId}
+              onChange={(e) => void saveAccess(r.tokenId, e.target.value)}
+              className="bg-bg border border-border rounded-lg px-2 py-1 text-[13px] text-text"
+            >
+              {ACCESS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <RowChevron open={open} onClick={toggle} label={r.label} controls={detailsId} />
+          </div>
+        </div>
+        {open && (
+          <div id={detailsId} className="pl-1 sm:pl-11 pr-1 sm:pr-2 pb-6 space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] text-text-dim mr-2">{scopeSummary(r)}</span>
+              <button
+                type="button"
+                disabled={busy === r.tokenId}
+                onClick={() => startRename(r)}
+                className={SMALL_BTN}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                disabled={busy === r.tokenId}
+                onClick={() => void onRotate(r)}
+                className={SMALL_BTN}
+              >
+                Rotate
+              </button>
+              <button
+                type="button"
+                disabled={busy === r.tokenId}
+                onClick={() => void onRevoke(r)}
+                className="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-red/30 text-red hover:bg-red-bg disabled:opacity-50"
+              >
+                Revoke
+              </button>
+            </div>
+            <ScopeEditor
+              row={r}
+              isEditing={open}
+              pickable={pickable}
+              busy={busy === r.tokenId}
+              onSave={saveScope}
+              onCancel={() => setScopeEditId(null)}
+            />
+          </div>
         )}
-      </td>
-      <td className="px-3 py-2 font-mono text-[11px] text-text-dim">{r.tokenId}</td>
-      <td className="px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setScopeEditId(scopeEditId === r.tokenId ? null : r.tokenId)}
-          className="hover:underline text-left"
-          title="Scope this token to a subset of connectors"
-        >
-          {scopeSummary(r)}
-        </button>
-        <select
-          aria-label={`What ${r.label} can do`}
-          title="What this device can do"
-          value={r.access ?? "full"}
-          disabled={busy === r.tokenId}
-          onChange={(e) => void saveAccess(r.tokenId, e.target.value)}
-          className="mt-1 block bg-bg-muted border border-border rounded px-1.5 py-0.5 text-[11px]"
-        >
-          {ACCESS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="px-3 py-2">{fmtRelative(r.lastSeenAt)}</td>
-      <td className="px-3 py-2">{fmtDate(r.createdAt)}</td>
-      <td className="px-3 py-2 text-right whitespace-nowrap">
-        <button
-          type="button"
-          disabled={busy === r.tokenId}
-          onClick={() => void onRotate(r)}
-          className="px-2 py-1 text-[11px] mr-1 rounded border border-border hover:bg-bg-muted"
-        >
-          Rotate
-        </button>
-        <button
-          type="button"
-          disabled={busy === r.tokenId}
-          onClick={() => void onRevoke(r)}
-          className="px-2 py-1 text-[11px] rounded border border-red-800 text-red-400 hover:bg-red-950/40"
-        >
-          Revoke
-        </button>
-      </td>
-    </tr>
-  );
+      </li>
+    );
+  };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-text-dim">
-          Every AI client that can reach your hub: the ones that signed in (Claude, ChatGPT,
-          Cursor…) and the device tokens you created. Choose what each one may do, which profile it
-          uses and which skills it sees, or revoke it.
-        </p>
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/90"
-        >
-          + Add device
-        </button>
-      </div>
-      {error && error !== "root_only" && (
-        <div className="mb-3 rounded border border-red-800 bg-red-950/40 text-red-300 px-3 py-2 text-xs">
-          {error}
-        </div>
-      )}
-      {!rows && !error && <p className="text-xs text-text-muted">Loading devices…</p>}
-      {rows && rows.length === 0 && (
-        <div className="rounded border border-border bg-bg-muted p-6 text-sm text-text-dim">
-          No AI client yet. Connect one from your client (Claude: Settings → Connectors → Add custom
-          connector, with your Kebab House URL), or use <strong>Add device</strong> to create a
-          token for a client that cannot sign in.
-        </div>
-      )}
-      {rows && rows.length > 0 && (
-        <div className="border border-border rounded overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-bg-muted text-text-dim">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Label</th>
-                <th className="text-left px-3 py-2 font-medium">Token ID</th>
-                <th className="text-left px-3 py-2 font-medium">Scope</th>
-                <th className="text-left px-3 py-2 font-medium">Last seen</th>
-                <th className="text-left px-3 py-2 font-medium">Created</th>
-                <th className="text-right px-3 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>{rows.map(renderRow)}</tbody>
-          </table>
-        </div>
-      )}
+      <ListSection
+        id="devices-title"
+        title="AI clients and devices"
+        description="The ones that signed in (Claude, ChatGPT, Cursor…) and the device keys you created. Open a row to choose what it sees, rename, rotate or revoke it."
+        actions={
+          <button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent/90 whitespace-nowrap"
+          >
+            + Add device
+          </button>
+        }
+      >
+        {error && error !== "root_only" && (
+          <div
+            role="alert"
+            className="mb-3 rounded-lg border border-red/20 bg-red-bg text-red px-3 py-2 text-xs"
+          >
+            {error}
+          </div>
+        )}
+        {!rows && !error && <p className="text-sm text-text-muted">Loading devices…</p>}
+        {rows && rows.length === 0 && (
+          <p className="border-t border-b border-border py-8 text-sm text-text-dim">
+            No AI client yet. Connect one from your client (Claude: Settings → Connectors → Add
+            custom connector, with your Kebab House URL), or use <strong>Add device</strong> to
+            create a key for a client that cannot sign in.
+          </p>
+        )}
+        {rows && rows.length > 0 && <RowList>{rows.map(renderRow)}</RowList>}
+      </ListSection>
       {inviteOpen && (
         <DeviceInviteModal
           baseUrl={resolvedBaseUrl}
@@ -388,19 +431,18 @@ export function DevicesTab({
 }
 
 /**
- * Wraps a device's main row and, when `isEditing`, renders an inline
- * connector-scope picker row beneath it. "All connectors" clears the scope
- * (null); otherwise the checked subset is saved as the token's allowlist.
- * Core connectors are always in scope and never shown here.
+ * Inline editor shown in an open device row: connector scope ("All
+ * connectors" clears it to null; otherwise the checked subset is saved as
+ * the token's allowlist), skill tags and profile. Core connectors are
+ * always in scope and never shown here.
  */
-function ScopeRowGroup({
+function ScopeEditor({
   row,
   isEditing,
   pickable,
   busy,
   onSave,
   onCancel,
-  children,
 }: {
   row: DeviceRow;
   isEditing: boolean;
@@ -413,7 +455,6 @@ function ScopeRowGroup({
     profile: string | null
   ) => void | Promise<void>;
   onCancel: () => void;
-  children: ReactNode;
 }) {
   // Local draft: "all" = full access (null); "subset" = the checked set.
   const [mode, setMode] = useState<"all" | "subset">(row.connectors === null ? "all" : "subset");
@@ -477,139 +518,123 @@ function ScopeRowGroup({
   };
 
   return (
-    <>
-      {children}
-      {isEditing && (
-        <tr className="border-t border-border bg-bg-muted/40">
-          <td colSpan={6} className="px-3 py-3">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-4 text-xs">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name={`scope-${row.tokenId}`}
-                    checked={mode === "all"}
-                    onChange={() => setMode("all")}
-                  />
-                  All connectors (full access)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name={`scope-${row.tokenId}`}
-                    checked={mode === "subset"}
-                    onChange={() => setMode("subset")}
-                  />
-                  Only selected connectors
-                </label>
-              </div>
-              {mode === "subset" && (
-                <>
-                  {teamPresetIds.length > 0 && (
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <span className="text-text-muted">Quick preset:</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelected(new Set(teamPresetIds))}
-                        className="px-2 py-0.5 rounded border border-border hover:bg-bg-muted"
-                        title="Select the typical team connectors (scraping / outreach)"
-                      >
-                        Team scope ({teamPresetIds.length})
-                      </button>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {pickable.length === 0 && (
-                      <p className="text-[11px] text-text-muted col-span-full">
-                        No configurable connectors available.
-                      </p>
-                    )}
-                    {pickable.map((c) => (
-                      <label
-                        key={c.id}
-                        className="flex items-center gap-1.5 text-[11px] cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(c.id)}
-                          onChange={() => toggle(c.id)}
-                        />
-                        <span>
-                          {c.label}
-                          {typeof c.toolCount === "number" && (
-                            <span className="text-text-muted"> ({c.toolCount})</span>
-                          )}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
-              <p className="text-[11px] text-text-muted">
-                Core tools (skills, profile) are always available and not listed here.
-              </p>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" htmlFor={`skill-tags-${row.tokenId}`}>
-                  Skill tags visible to this token
-                </label>
-                <input
-                  id={`skill-tags-${row.tokenId}`}
-                  value={skillTagsDraft}
-                  onChange={(e) => setSkillTagsDraft(e.target.value)}
-                  placeholder="empty = every skill · e.g. perso, cadens"
-                  className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
-                />
-                <p className="text-[11px] text-text-muted">
-                  Only skills tagged with one of these appear in this client (skills_list,
-                  skill_load, prompts, native bundle).
-                </p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" htmlFor={`profile-${row.tokenId}`}>
-                  Profile served by my_context
-                </label>
-                <select
-                  id={`profile-${row.tokenId}`}
-                  value={profileDraft}
-                  onChange={(e) => setProfileDraft(e.target.value)}
-                  className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
-                >
-                  <option value="">default</option>
-                  {profileNames.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                  {profileDraft && !profileNames.includes(profileDraft) && (
-                    <option value={profileDraft}>{profileDraft} (missing)</option>
-                  )}
-                </select>
-                <p className="text-[11px] text-text-muted">
-                  One profile per hat: create them in Settings → Profiles.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={save}
-                  className="px-2.5 py-1 text-[11px] rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
-                >
-                  Save scope
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onCancel}
-                  className="px-2.5 py-1 text-[11px] rounded border border-border hover:bg-bg-muted"
-                >
-                  Cancel
-                </button>
-              </div>
+    <div className="flex flex-col gap-3 rounded-lg bg-bg-muted px-4 py-4">
+      <div className="flex items-center gap-4 text-xs">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            name={`scope-${row.tokenId}`}
+            checked={mode === "all"}
+            onChange={() => setMode("all")}
+          />
+          All connectors (full access)
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="radio"
+            name={`scope-${row.tokenId}`}
+            checked={mode === "subset"}
+            onChange={() => setMode("subset")}
+          />
+          Only selected connectors
+        </label>
+      </div>
+      {mode === "subset" && (
+        <>
+          {teamPresetIds.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="text-text-muted">Quick preset:</span>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set(teamPresetIds))}
+                className="px-2 py-0.5 rounded border border-border hover:bg-bg-muted"
+                title="Select the typical team connectors (scraping / outreach)"
+              >
+                Team scope ({teamPresetIds.length})
+              </button>
             </div>
-          </td>
-        </tr>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {pickable.length === 0 && (
+              <p className="text-[11px] text-text-muted col-span-full">
+                No configurable connectors available.
+              </p>
+            )}
+            {pickable.map((c) => (
+              <label key={c.id} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
+                <span>
+                  {c.label}
+                  {typeof c.toolCount === "number" && (
+                    <span className="text-text-muted"> ({c.toolCount})</span>
+                  )}
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
       )}
-    </>
+      <p className="text-[11px] text-text-muted">
+        Core tools (skills, profile) are always available and not listed here.
+      </p>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium" htmlFor={`skill-tags-${row.tokenId}`}>
+          Skill tags visible to this token
+        </label>
+        <input
+          id={`skill-tags-${row.tokenId}`}
+          value={skillTagsDraft}
+          onChange={(e) => setSkillTagsDraft(e.target.value)}
+          placeholder="empty = every skill · e.g. perso, cadens"
+          className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
+        />
+        <p className="text-[11px] text-text-muted">
+          Only skills tagged with one of these appear in this client (skills_list, skill_load,
+          prompts, native bundle).
+        </p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium" htmlFor={`profile-${row.tokenId}`}>
+          Profile served by my_context
+        </label>
+        <select
+          id={`profile-${row.tokenId}`}
+          value={profileDraft}
+          onChange={(e) => setProfileDraft(e.target.value)}
+          className="px-2 py-1 bg-bg border border-border rounded text-xs max-w-sm"
+        >
+          <option value="">default</option>
+          {profileNames.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+          {profileDraft && !profileNames.includes(profileDraft) && (
+            <option value={profileDraft}>{profileDraft} (missing)</option>
+          )}
+        </select>
+        <p className="text-[11px] text-text-muted">
+          One profile per hat: create them in Settings → Profiles.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={save}
+          className="px-2.5 py-1 text-[11px] rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+        >
+          Save scope
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onCancel}
+          className="px-2.5 py-1 text-[11px] rounded border border-border hover:bg-bg-muted"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
