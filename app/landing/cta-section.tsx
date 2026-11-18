@@ -29,7 +29,18 @@ export default function CtaSection() {
             View on GitHub
           </a>
         </div>
-        <p className="text-xs text-slate-500 mt-6">
+        <p className="text-sm text-slate-400 mt-6">
+          Then connect Claude and say &ldquo;Set up my Kebab House&rdquo;: Claude does the rest.{" "}
+          <a
+            href={`${REPO_URL}/blob/main/docs/CONNECT-CLAUDE.md`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-200 hover:text-white underline"
+          >
+            Set it up from Claude
+          </a>
+        </p>
+        <p className="text-xs text-slate-500 mt-3">
           Prefer a fork, Docker or the CLI?{" "}
           <a href="/deploy" className="text-slate-300 hover:text-white underline">
             Other ways to deploy

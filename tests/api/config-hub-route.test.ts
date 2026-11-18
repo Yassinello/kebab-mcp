@@ -10,7 +10,7 @@ import os from "node:os";
 import { getKVStore, resetKVStoreCache } from "@/core/kv-store";
 import { kvVaultBackend } from "@/connectors/vault/lib/kv-backend";
 import { saveProfile } from "@/core/profiles";
-import { GET } from "../../app/api/config/hub/route";
+import { GET, POST } from "../../app/api/config/hub/route";
 
 const ADMIN = "hub-route-admin-token-0123456789abcd";
 
@@ -88,5 +88,60 @@ describe("GET /api/config/hub", () => {
     await getKVStore().set("security:admin-token-mcp-last", "not a date");
     const hub = (await (await GET(req())).json()) as Hub;
     expect(hub.adminKeyUsedAt).toBeNull();
+  });
+});
+
+describe("GET/POST /api/config/hub — setup checklist items", () => {
+  function post(body: unknown, auth = true): Request {
+    return new Request("http://localhost/api/config/hub", {
+      method: "POST",
+      headers: {
+        "x-forwarded-for": "8.8.8.8",
+        "content-type": "application/json",
+        origin: "http://localhost",
+        ...(auth ? { authorization: `Bearer ${ADMIN}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  interface Items {
+    setup: { step: string; updatedAt: string | null } | null;
+    kebabSkillAddedAt: string | null;
+  }
+
+  it("a fresh hub: onboarding not started, Kebab House skill not added", async () => {
+    const hub = (await (await GET(req())).json()) as Items;
+    expect(hub.setup).toEqual({ step: "interview", updatedAt: null });
+    expect(hub.kebabSkillAddedAt).toBeNull();
+  });
+
+  it("reads the onboarding state written by kebab_setup", async () => {
+    await getKVStore().set(
+      "onboarding:state",
+      JSON.stringify({ step: "done", updatedAt: "2026-11-18T09:00:00.000Z" })
+    );
+    const hub = (await (await GET(req())).json()) as Items;
+    expect(hub.setup).toEqual({ step: "done", updatedAt: "2026-11-18T09:00:00.000Z" });
+  });
+
+  it("records the Kebab House skill once, and keeps the first time", async () => {
+    const first = await POST(post({ mark: "kebab-skill" }));
+    expect(first.status).toBe(200);
+    const { kebabSkillAddedAt: at } = (await first.json()) as { kebabSkillAddedAt: string };
+    expect(Number.isNaN(Date.parse(at))).toBe(false);
+    const again = (await (await POST(post({ mark: "kebab-skill" }))).json()) as {
+      kebabSkillAddedAt: string;
+    };
+    expect(again.kebabSkillAddedAt).toBe(at);
+    const hub = (await (await GET(req())).json()) as Items;
+    expect(hub.kebabSkillAddedAt).toBe(at);
+  });
+
+  it("refuses unknown marks and unauthenticated calls", async () => {
+    expect((await POST(post({ mark: "something-else" }))).status).toBe(400);
+    expect((await POST(post({ mark: "kebab-skill" }, false))).status).toBe(401);
+    const hub = (await (await GET(req())).json()) as Items;
+    expect(hub.kebabSkillAddedAt).toBeNull();
   });
 });

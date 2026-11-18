@@ -280,7 +280,7 @@ export function OverviewTab({
       )}
 
       {/* C1.1: the user's hub first — profile, skills, clients, notes. */}
-      <HubSection />
+      <HubSection mcpUrl={endpoint} />
 
       {/* Kebab House phase 0: weekly usage */}
       <UsageCard />
