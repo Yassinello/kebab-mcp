@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StatusDot } from "../../components/list-rows";
 
 /**
  * Kebab House RIT-02 — ritual templates in the Skills tab. Install goes
@@ -22,8 +23,6 @@ interface TemplateEntry {
   status: "available" | "installed" | "modified";
 }
 
-const OPEN_KEY = "kebab.skills.templatesOpen";
-
 export function SkillTemplatesSection({
   refreshKey,
   onInstalled,
@@ -35,7 +34,6 @@ export function SkillTemplatesSection({
   const [templates, setTemplates] = useState<TemplateEntry[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,30 +50,12 @@ export function SkillTemplatesSection({
     };
   }, [refreshKey]);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(OPEN_KEY);
-      if (saved !== null) setOpen(saved === "1");
-    } catch {
-      /* localStorage unavailable — keep default */
-    }
-  }, []);
-
-  if (!templates || templates.length === 0) return null;
+  if (!templates) return <p className="text-sm text-text-muted">Loading templates…</p>;
+  if (templates.length === 0) {
+    return <p className="text-sm text-text-dim">No templates on this instance.</p>;
+  }
 
   const installedCount = templates.filter((t) => t.status !== "available").length;
-  // Default: open until every template is installed.
-  const isOpen = open ?? installedCount < templates.length;
-
-  const toggle = () => {
-    const next = !isOpen;
-    setOpen(next);
-    try {
-      localStorage.setItem(OPEN_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  };
 
   const install = async (t: TemplateEntry) => {
     if (
@@ -110,80 +90,79 @@ export function SkillTemplatesSection({
   };
 
   return (
-    <section className="border border-border rounded-lg overflow-hidden" aria-label="Templates">
-      <button
-        type="button"
-        onClick={toggle}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-muted/40 transition-colors"
-        aria-expanded={isOpen}
-      >
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text">
-            Templates{" "}
-            <span className="text-xs font-normal text-text-muted">
-              · rituals · {installedCount}/{templates.length} installed
-            </span>
-          </p>
-          <p className="text-xs text-text-dim mt-0.5">
-            Ready-made skills that use your profile and notes. Install one, then edit it like any
-            skill.
-          </p>
-        </div>
-        <span className="text-xs text-text-muted">{isOpen ? "Hide" : "Show"}</span>
-      </button>
-      {isOpen && (
-        <div className="border-t border-border p-3 grid gap-2 sm:grid-cols-2">
-          {templates.map((t) => {
-            const installed = t.status === "installed";
-            return (
-              <div
-                key={t.id}
-                className="flex items-start gap-3 border border-border rounded-md px-3 py-2.5 bg-bg"
+    <section aria-label="Templates">
+      <div className="mb-4 max-w-2xl">
+        <h2 className="text-base font-semibold text-text">Templates</h2>
+        <p className="text-sm text-text-dim mt-1">
+          Ready-made skills that use your profile and notes. Install one, then edit it like any
+          skill. {installedCount} of {templates.length} installed.
+        </p>
+      </div>
+      <ul className="border-t border-border">
+        {templates.map((t) => {
+          const installed = t.status === "installed";
+          return (
+            <li
+              key={t.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-1 sm:px-2 py-4"
+            >
+              <span
+                className="text-lg leading-none w-5 text-center shrink-0 self-start mt-0.5"
+                aria-hidden="true"
               >
-                <span className="text-lg leading-none mt-0.5" aria-hidden="true">
-                  {t.icon}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text">
-                    {t.title} <code className="text-[11px] text-text-muted">{t.name}</code>
-                  </p>
-                  <p className="text-xs text-text-dim mt-0.5 line-clamp-2" title={t.description}>
-                    {t.summary ?? t.description}
-                  </p>
-                  {t.example ? (
-                    <p className="text-xs text-text-muted mt-0.5">Say: “{t.example}”</p>
-                  ) : null}
+                {t.icon}
+              </span>
+              <div className="flex-1 min-w-[11rem]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-[15px] font-medium text-text">{t.title}</p>
+                  <code className="text-[12px] text-text-muted">{t.name}</code>
+                  <StatusDot
+                    tone={installed ? "ok" : t.status === "modified" ? "warn" : "off"}
+                    label={
+                      installed
+                        ? "Installed"
+                        : t.status === "modified"
+                          ? "Changed"
+                          : "Not installed"
+                    }
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => !installed && install(t)}
-                  disabled={installed || busy === t.id}
-                  aria-label={`${installed ? "Installed" : t.status === "modified" ? "Update" : "Install"} ${t.name}`}
-                  title={
-                    t.status === "modified"
-                      ? "Your copy differs from the template: update it (saved as a new version)"
-                      : undefined
-                  }
-                  className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-md border whitespace-nowrap ${
-                    installed
-                      ? "border-border text-green bg-green-bg cursor-default"
-                      : "border-accent/30 text-accent hover:bg-accent/10 disabled:opacity-60"
-                  }`}
-                >
-                  {installed
-                    ? "Installed"
-                    : busy === t.id
-                      ? "Installing…"
-                      : t.status === "modified"
-                        ? "Update"
-                        : "Install"}
-                </button>
+                <p className="text-[13px] text-text-dim mt-0.5" title={t.description}>
+                  {t.summary ?? t.description}
+                </p>
+                {t.example ? (
+                  <p className="text-[13px] text-text-muted mt-0.5">Say: “{t.example}”</p>
+                ) : null}
               </div>
-            );
-          })}
-          {error && <p className="text-xs text-red sm:col-span-2">{error}</p>}
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => !installed && install(t)}
+                disabled={installed || busy === t.id}
+                aria-label={`${installed ? "Installed" : t.status === "modified" ? "Update" : "Install"} ${t.name}`}
+                title={
+                  t.status === "modified"
+                    ? "Your copy differs from the template: update it (saved as a new version)"
+                    : undefined
+                }
+                className={`ml-auto shrink-0 text-sm font-medium px-3 py-1.5 rounded-lg border whitespace-nowrap ${
+                  installed
+                    ? "border-border text-text-muted bg-bg-muted cursor-default"
+                    : "border-border bg-bg text-accent hover:bg-accent/5 disabled:opacity-60"
+                }`}
+              >
+                {installed
+                  ? "Installed"
+                  : busy === t.id
+                    ? "Installing…"
+                    : t.status === "modified"
+                      ? "Update"
+                      : "Install"}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {error && <p className="text-xs text-red mt-3">{error}</p>}
     </section>
   );
 }

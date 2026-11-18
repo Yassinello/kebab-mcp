@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { UnderlineTabs } from "../../components/page-tabs";
 import type { ConnectorSummary } from "../tabs";
 import { toMsg } from "@/core/error-utils";
 import { CustomToolsTab } from "./custom-tools";
@@ -57,27 +58,18 @@ export function ToolsTab({
 
   return (
     <div>
-      <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto">
-        {(
+      <UnderlineTabs
+        label="Tools sections"
+        idBase="tools"
+        value={sub}
+        onChange={setSub}
+        tabs={
           [
-            ["all", "All tools"],
-            ["custom", "Custom tools"],
+            { id: "all", label: "All tools" },
+            { id: "custom", label: "Custom tools" },
           ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setSub(k)}
-            className={`text-sm font-medium px-4 py-3 sm:py-2 min-h-11 sm:min-h-0 -mb-px border-b-2 transition-colors whitespace-nowrap ${
-              sub === k
-                ? "border-accent text-accent"
-                : "border-transparent text-text-dim hover:text-text"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        }
+      />
 
       {sub === "custom" ? (
         <CustomToolsTab />

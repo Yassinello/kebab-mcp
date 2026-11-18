@@ -85,7 +85,8 @@ export function ApprovalActions({
     const ok = state.status !== "rejected";
     return (
       <footer
-        className={`px-6 py-5 border-t border-border mt-4 rounded-b-xl ${
+        role="status"
+        className={`px-6 md:px-10 py-5 border-t border-border mt-8 md:rounded-b-2xl ${
           ok ? "bg-green-bg" : "bg-red-bg"
         }`}
       >
@@ -108,7 +109,7 @@ export function ApprovalActions({
 
   const busy = state.kind === "sending";
   return (
-    <footer className="px-6 py-5 border-t border-border mt-4 flex flex-col-reverse sm:flex-row sm:items-center gap-3">
+    <footer className="px-6 md:px-10 py-5 border-t border-border mt-8 flex flex-col-reverse sm:flex-row sm:items-center gap-3">
       <p className="text-xs text-text-muted sm:mr-auto">
         Expires in {minutesLeft} min · single use
       </p>
@@ -117,7 +118,7 @@ export function ApprovalActions({
         type="button"
         disabled={busy}
         onClick={() => send("reject")}
-        className="px-4 py-2 text-sm rounded-lg border border-border bg-bg hover:bg-bg-muted disabled:opacity-50"
+        className="px-4 py-2 text-sm font-medium rounded-lg border border-border bg-bg hover:bg-bg-muted disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {busy && state.decision === "reject" ? "Rejecting…" : "Reject"}
       </button>
@@ -125,7 +126,7 @@ export function ApprovalActions({
         type="button"
         disabled={busy}
         onClick={() => send("approve")}
-        className="px-4 py-2 text-sm rounded-lg bg-green text-white font-medium hover:opacity-90 disabled:opacity-50"
+        className="px-4 py-2 text-sm rounded-lg bg-green text-white font-medium hover:opacity-90 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {busy && state.decision === "approve" ? "Approving…" : copy.approve}
       </button>

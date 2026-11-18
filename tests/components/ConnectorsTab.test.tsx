@@ -99,10 +99,62 @@ describe("ConnectorsTab", () => {
       expect(screen.getByText("Obsidian Vault")).toBeInTheDocument();
     });
 
-    // The "Setup needed" badge was deliberately removed in 2718209 to cut
-    // visual noise on fresh installs (12+ disabled connectors). Only the
-    // Active badge survives — assert that, not the dropped one.
-    expect(screen.getByText("Active")).toBeInTheDocument();
+    // Redesign 2026-11: each row carries a status dot with its label.
+    expect(document.getElementById("connector-google")).toHaveTextContent("Active");
+    expect(document.getElementById("connector-vault")).toHaveTextContent("Needs setup");
+  });
+
+  it("filters rows with the All · Active · Needs setup tabs", async () => {
+    const withOff: ConnectorSummary[] = [
+      ...mockConnectors,
+      {
+        id: "webhook",
+        label: "Webhook Receiver",
+        description: "Receive payloads",
+        enabled: false,
+        reason: "disabled by MYMCP_DISABLE_WEBHOOK",
+        toolCount: 2,
+        requiredEnvVars: [],
+        tools: [],
+      },
+    ];
+    render(<ConnectorsTab connectors={withOff} />);
+    const all = await screen.findByRole("tab", { name: /^All/ });
+    expect(all).toHaveAttribute("aria-selected", "true");
+    expect(all).toHaveTextContent("3");
+    expect(document.getElementById("connector-webhook")).toHaveTextContent("Off");
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Active/ }));
+    expect(screen.getByRole("tab", { name: /^Active/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Google Workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Obsidian Vault")).toBeNull();
+    expect(screen.queryByText("Webhook Receiver")).toBeNull();
+    expect(window.location.search).toContain("sub=active");
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Needs setup/ }));
+    expect(screen.getByText("Obsidian Vault")).toBeInTheDocument();
+    expect(screen.queryByText("Google Workspace")).toBeNull();
+
+    // Arrow keys move between tabs.
+    fireEvent.keyDown(screen.getByRole("tab", { name: /^Needs setup/ }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
+    expect(window.location.search).not.toContain("sub=");
+  });
+
+  it("opens a row in place with its chevron", async () => {
+    render(<ConnectorsTab connectors={mockConnectors} />);
+    const chevron = await screen.findByRole("button", {
+      name: "Show details for Obsidian Vault",
+    });
+    expect(chevron).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(chevron);
+    const hide = screen.getByRole("button", { name: "Hide details for Obsidian Vault" });
+    expect(hide).toHaveAttribute("aria-expanded", "true");
+    const details = document.getElementById(hide.getAttribute("aria-controls")!)!;
+    expect(details).toHaveClass("max-h-[4000px]");
+    expect(details).toHaveTextContent("Why it is off: missing env vars: GITHUB_PAT");
+    fireEvent.click(hide);
+    expect(details).toHaveClass("max-h-0");
   });
 
   it("expands a connector on click to show tools", async () => {
@@ -288,6 +340,14 @@ describe("ConnectorsTab — connector deep link", () => {
     await waitFor(() => expect(card("vault")).not.toHaveAttribute("data-highlighted"));
     expect(screen.getAllByRole("note")).toHaveLength(1);
     expect(screen.getByRole("note")).toHaveTextContent(/say “done”/);
+  });
+
+  it("lands on the All tab even when another tab is in the link", async () => {
+    nav.params = new URLSearchParams("tab=connectors&sub=active&connector=vault");
+    render(<ConnectorsTab connectors={withExtras} />);
+    await waitFor(() => expect(card("vault")).toHaveAttribute("data-highlighted", "true"));
+    expect(screen.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
+    expect(isOpen("vault")).toBe(true);
   });
 
   it("highlights a connector without a credential form but does not open it", async () => {

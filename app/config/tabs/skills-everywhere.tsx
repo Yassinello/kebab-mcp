@@ -112,14 +112,14 @@ export function KebabSkillPanel({
       id={KEBAB_SKILL_PANEL}
       aria-labelledby="kebab-skill-title"
       data-highlighted={highlight ? "true" : undefined}
-      className={`border rounded-lg px-4 py-4 scroll-mt-6 transition-shadow duration-500 ${
+      className={`border rounded-xl px-5 py-5 scroll-mt-24 transition-shadow duration-500 ${
         highlight ? "border-accent ring-2 ring-accent/40 bg-accent/10" : "border-border bg-bg"
       }`}
     >
-      <h3 id="kebab-skill-title" className="text-sm font-semibold text-text">
+      <h2 id="kebab-skill-title" className="text-base font-semibold text-text">
         Add the Kebab House skill to Claude
-      </h3>
-      <p className="text-xs text-text-dim mt-1 leading-relaxed">
+      </h2>
+      <p className="text-sm text-text-dim mt-1 leading-relaxed max-w-2xl">
         One small skill that makes Claude use your profile, your skills and the Kebab House rules on
         its own, without you asking. Add it once per Claude account.
       </p>
@@ -127,7 +127,7 @@ export function KebabSkillPanel({
         <button
           type="button"
           onClick={onDownload}
-          className="text-xs font-medium bg-accent text-white px-3 py-1.5 rounded-md hover:bg-accent/90 whitespace-nowrap"
+          className="text-sm font-medium bg-accent text-white px-3.5 py-2 rounded-lg hover:bg-accent/90 whitespace-nowrap"
         >
           Download the Kebab House skill (.zip)
         </button>
@@ -150,14 +150,14 @@ export function KebabSkillPanel({
           </label>
         )}
       </div>
-      <ul className="mt-3 space-y-1 text-xs text-text-dim">
+      <ul className="mt-4 space-y-1 text-[13px] text-text-dim">
         {KEBAB_SKILL_STEPS.map((s) => (
           <li key={s.client}>
             <strong className="text-text">{s.client}:</strong> {s.text}
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-text-muted mt-2">
+      <p className="text-xs text-text-muted mt-3">
         It lists your skill names only: edits to a skill are live right away. Download it again when
         you add, rename or remove many skills.
       </p>
@@ -169,38 +169,37 @@ function download(href: string) {
   window.location.href = href;
 }
 
-export function SkillsEverywherePanel() {
-  const [open, setOpen] = useState(false);
+export function SkillsEverywherePanel({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
+  const [open, setOpen] = useState(defaultOpen);
   const [origin, setOrigin] = useState("https://your-kebab.vercel.app");
   useEffect(() => {
     if (typeof window !== "undefined") setOrigin(window.location.origin);
   }, []);
 
   return (
-    <div className="border border-accent/30 rounded-lg overflow-hidden bg-accent/5">
+    <section>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/10 transition-colors"
+        className="w-full flex items-center gap-3 py-2 text-left rounded-md focus-visible:outline-2 focus-visible:outline-accent group"
         aria-expanded={open}
       >
-        <div className="w-7 h-7 rounded-full bg-accent/15 text-accent flex items-center justify-center text-xs font-bold shrink-0">
-          ⇄
-        </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text">Use your skills in every AI client</p>
-          <p className="text-xs text-text-dim mt-0.5">
+          <p className="text-base font-semibold text-text">Use your skills in every AI client</p>
+          <p className="text-sm text-text-dim mt-1">
             One library here — Claude (all accounts), ChatGPT, Codex, Claude Code, Cadens…
           </p>
         </div>
-        <span className="text-xs text-text-muted">{open ? "Hide" : "Show"}</span>
+        <span className="text-sm text-text-dim group-hover:text-text">
+          {open ? "Hide" : "Show"}
+        </span>
       </button>
       {open && (
-        <div className="border-t border-accent/20 px-4 py-4 text-sm text-text-dim space-y-4 bg-bg/40">
+        <div className="mt-4 border-t border-border text-sm text-text-dim divide-y divide-border [&>div]:py-4">
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
               1 · Any client connected to Kebab — nothing to install
-            </h4>
+            </h3>
             <p>
               Clients see your catalogue in Kebab&apos;s server instructions and load a skill with{" "}
               <code>skill_load</code> when a request matches (plus <code>skills_list</code> and{" "}
@@ -209,9 +208,9 @@ export function SkillsEverywherePanel() {
             </p>
           </div>
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
               2 · claude.ai, Claude Desktop, ChatGPT — the Kebab House skill
-            </h4>
+            </h3>
             <p>
               Add the Kebab House skill once (see{" "}
               <a href={`#${KEBAB_SKILL_PANEL}`} className="text-accent">
@@ -223,9 +222,9 @@ export function SkillsEverywherePanel() {
             </p>
           </div>
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
               3 · Optional — a relay per skill
-            </h4>
+            </h3>
             <p>
               For a skill you want the app to trigger on its own exact description, download its{" "}
               <strong>relay .zip</strong> (skill → Actions) and upload it the same way. It only
@@ -234,9 +233,9 @@ export function SkillsEverywherePanel() {
             </p>
           </div>
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
               4 · Claude Code / Codex — native copy
-            </h4>
+            </h3>
             <p className="mb-2">
               Pull the whole library (scoped to the token&apos;s skill tags) into the agent&apos;s
               skills folder. Re-run (or cron) to update. <code>KEBAB_TOKEN</code> is your MCP token.
@@ -249,9 +248,9 @@ export function SkillsEverywherePanel() {
             </div>
           </div>
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">
               5 · Profiles
-            </h4>
+            </h3>
             <p>
               Tag skills (<code>perso</code>, <code>cadens</code>…), then in{" "}
               <strong>Devices</strong> give each client token the tags it may see. A token without
@@ -260,6 +259,6 @@ export function SkillsEverywherePanel() {
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

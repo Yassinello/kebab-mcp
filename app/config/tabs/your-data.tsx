@@ -124,10 +124,15 @@ export function YourDataSection({ onImported }: { onImported?: () => void }) {
   };
 
   return (
-    <section className="border border-border rounded-lg p-5 space-y-4" aria-labelledby="data-title">
-      <h2 id="data-title" className="text-base font-semibold">
-        Your data
-      </h2>
+    <section className="space-y-4" aria-labelledby="data-title">
+      <div>
+        <h2 id="data-title" className="text-base font-semibold">
+          Your data
+        </h2>
+        <p className="text-sm text-text-dim mt-1">
+          Keep a copy of everything, or bring a copy back.
+        </p>
+      </div>
       <div>
         <a
           href="/api/config/export"
@@ -141,7 +146,7 @@ export function YourDataSection({ onImported }: { onImported?: () => void }) {
           keys and devices are never included.
         </p>
       </div>
-      <div className="border-t border-border pt-4 space-y-2">
+      <div className="border-t border-border pt-5 space-y-2">
         <label htmlFor="import-zip" className="text-sm font-medium block">
           Import a backup (.zip)
         </label>

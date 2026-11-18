@@ -30,11 +30,14 @@ test.describe("storage tab + badge", () => {
     await expect(page.getByRole("button", { name: /recheck/i })).toBeVisible();
   });
 
-  test("storage badge is visible in sidebar", async ({ page }) => {
+  test("storage badge is visible in the account menu", async ({ page }) => {
     await page.goto(`/config?token=${token}`);
     await page.waitForLoadState("networkidle");
+    // Redesign 2026-11: the badge moved from the sidebar footer to the
+    // top-right account chip's panel.
+    await page.getByRole("button", { name: /account menu/ }).click();
     // Badge text is one of: KV, File, Static, KV ✗, or … (loading)
-    const badge = page.locator("a[href='/config?tab=storage']");
+    const badge = page.locator("a[href='/config?tab=storage']").first();
     await expect(badge).toBeVisible();
   });
 

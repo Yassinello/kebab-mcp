@@ -138,6 +138,27 @@ describe("<ProfileTab />", () => {
   });
 });
 
+describe("<ProfileTab /> tabs (redesign 2026-11)", () => {
+  it("splits the page into Your profile · Other profiles · Your data", async () => {
+    stubApi({ inline: "# Me" });
+    render(<ProfileTab vaultEnabled={false} initialPath="System/context.md" />);
+    const mine = await screen.findByRole("tab", { name: "Your profile" });
+    expect(mine).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Profile text")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Export everything (.zip)" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Your data" }));
+    expect(screen.getByRole("link", { name: "Export everything (.zip)" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Profile text")).toBeNull();
+    expect(window.location.search).toContain("sub=data");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Other profiles" }));
+    expect(screen.getByText("Other profiles (one per hat)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Your profile" }));
+    expect(window.location.search).not.toContain("sub=");
+  });
+});
+
 describe("Your data (C1.4)", () => {
   it("posts the zip to the export endpoint and renders the report, unknown fields included", async () => {
     const calls: Call[] = [];

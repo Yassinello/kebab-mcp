@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { UnderlineTabs } from "../../components/page-tabs";
 import type { InstanceConfig } from "@/core/types";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
 import { AdvancedSection } from "./settings/advanced-section";
@@ -109,28 +110,19 @@ export function SettingsTab({
     <div className="max-w-2xl">
       {/* Subtabs — MOBILE-04: larger tap targets and horizontal scroll
           fallback if labels ever overflow on a narrow viewport. */}
-      <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto">
-        {(
+      <UnderlineTabs
+        label="Settings sections"
+        idBase="settings"
+        value={tab}
+        onChange={setTab}
+        tabs={
           [
-            ["user", "User settings"],
-            ["mcp", "MCP install"],
-            ["advanced", "Advanced"],
+            { id: "user", label: "User settings" },
+            { id: "mcp", label: "MCP install" },
+            { id: "advanced", label: "Advanced" },
           ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className={`text-sm font-medium px-4 py-3 sm:py-2 min-h-11 sm:min-h-0 -mb-px border-b-2 transition-colors whitespace-nowrap ${
-              tab === k
-                ? "border-accent text-accent"
-                : "border-transparent text-text-dim hover:text-text"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        }
+      />
 
       {tab === "user" && (
         <>

@@ -66,6 +66,7 @@ describe("SkillsTab", () => {
   it("shows the 'use your skills in every AI client' guide", async () => {
     render(<SkillsTab />);
 
+    fireEvent.click(await screen.findByRole("tab", { name: "Every AI client" }));
     await waitFor(() => {
       expect(screen.getByText(/use your skills in every ai client/i)).toBeInTheDocument();
     });
@@ -110,6 +111,59 @@ describe("SkillsTab", () => {
     });
   });
 
+  it("shows a skill as a row; its chevron opens the details and history", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      const body = url.startsWith("/api/config/skill-versions")
+        ? {
+            ok: true,
+            currentVersion: 2,
+            versions: [
+              {
+                version: 1,
+                savedAt: "2026-01-01",
+                name: "w",
+                description: "",
+                contentPreview: "old",
+              },
+              {
+                version: 2,
+                savedAt: "2026-01-02",
+                name: "w",
+                description: "",
+                contentPreview: "new",
+              },
+            ],
+          }
+        : url.startsWith("/api/config/skills")
+          ? {
+              ok: true,
+              skills: [
+                {
+                  id: "weekly",
+                  name: "weekly-status",
+                  description: "Draft a weekly status report",
+                  content: "body",
+                  arguments: [],
+                  source: { type: "inline" },
+                  createdAt: "2026-01-01",
+                  updatedAt: "2026-01-01",
+                },
+              ],
+            }
+          : { ok: true };
+      return { ok: true, json: () => Promise.resolve(body) } as unknown as Response;
+    });
+    render(<SkillsTab />);
+    expect(await screen.findByRole("tab", { name: /^Library/ })).toHaveTextContent("1");
+    expect(await screen.findByText("Live")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for weekly-status" }));
+    expect(await screen.findByText("Version history")).toBeInTheDocument();
+    expect(screen.getByText("skill_weekly")).toBeInTheDocument();
+    expect(await screen.findByText("old")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
+  });
+
   it("lists ritual templates with an Install button that posts to the templates route", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
@@ -147,6 +201,7 @@ describe("SkillsTab", () => {
 
     render(<SkillsTab />);
 
+    fireEvent.click(await screen.findByRole("tab", { name: "Templates" }));
     await waitFor(() => {
       expect(screen.getByRole("region", { name: "Templates" })).toBeInTheDocument();
     });
@@ -165,6 +220,7 @@ describe("SkillsTab", () => {
   it("offers the Kebab House skill download with install steps (contract 3)", async () => {
     render(<SkillsTab />);
 
+    fireEvent.click(await screen.findByRole("tab", { name: "Every AI client" }));
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Download the Kebab House skill (.zip)" })

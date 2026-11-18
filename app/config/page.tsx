@@ -190,6 +190,7 @@ export default async function ConfigPage({
       title={meta.title}
       subtitle={meta.subtitle}
       displayName={config.displayName}
+      mcpUrl={`${baseUrl}/api/mcp`}
       wide={wide}
     >
       <DestructiveVarsBanner />
