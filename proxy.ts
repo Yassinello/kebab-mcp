@@ -213,7 +213,7 @@ function renderSignInPage(returnPath: string): string {
 <body>
 <main class="card">
   <div class="logo">🥙</div>
-  <h1>Sign in to Kebab MCP</h1>
+  <h1>Sign in to Kebab House</h1>
   <p>Paste your admin token to access the dashboard.</p>
   <form method="get" action="${safeReturn}" autocomplete="off">${hiddenFields}
     <label for="token">Admin token</label>

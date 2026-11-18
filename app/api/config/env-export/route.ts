@@ -57,7 +57,7 @@ async function getHandler() {
     ]);
 
     const lines: string[] = [
-      "# Kebab MCP — exported credentials",
+      "# Kebab House — exported credentials",
       `# Exported: ${new Date().toISOString()}`,
       "",
     ];

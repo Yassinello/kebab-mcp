@@ -41,7 +41,7 @@ async function postHandler(ctx: PipelineContext) {
       return NextResponse.json(
         {
           error:
-            "First-run setup only accepts loopback (localhost) requests. Open the setup wizard on the machine running Kebab MCP.",
+            "First-run setup only accepts loopback (localhost) requests. Open the setup wizard on the machine running Kebab House.",
         },
         { status: 403 }
       );
