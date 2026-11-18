@@ -788,6 +788,24 @@
     }
   },
   {
+    "name": "kebab_config",
+    "pack": "house",
+    "schemaKeys": [
+      "action",
+      "device",
+      "instance",
+      "preview_id",
+      "tool"
+    ],
+    "destructive": false,
+    "annotations": {
+      "title": "Kebab House settings",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "kebab_setup",
     "pack": "context",
     "schemaKeys": [

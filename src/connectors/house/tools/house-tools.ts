@@ -33,7 +33,7 @@ type Pack = { manifest: { id: string; core?: boolean; label: string } };
 
 // ── Caller scope ─────────────────────────────────────────────────────
 
-interface CallerView {
+export interface CallerView {
   /** Connector allowlist of the caller (`null` = every connector). */
   scope: Set<string> | null;
   /** The caller may see other clients' activity. */
@@ -53,7 +53,7 @@ function hasFullAccess(meta: CallerMeta | null): boolean {
   return meta.access === "full";
 }
 
-function callerView(): CallerView {
+export function callerView(): CallerView {
   const meta = getCallerMeta();
   // Outside an MCP tool call (tests, server code) there is no restriction.
   const scope = getToolAccessContext()?.connectorScope ?? null;

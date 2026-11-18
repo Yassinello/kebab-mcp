@@ -7,6 +7,9 @@
  * /config) and here, server-side, with `checkAdminAuth`. The link carries
  * an HMAC (`sig`) over the preview id and tenant; a bad signature renders
  * nothing about the preview.
+ *
+ * A settings change proposed by `kebab_config` gets its own wording: it is
+ * applied as soon as the owner approves it here (no second step).
  */
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -14,6 +17,7 @@ import { PRODUCT } from "@/core/constants/brand";
 import { checkAdminAuth } from "@/core/auth";
 import { getPreview, verifyApprovalSignature, type ApprovalRecord } from "@/core/approvals";
 import { runWithTenant } from "@/core/request-context";
+import { CONFIG_TOOL } from "@/core/config-proposals";
 import { ApprovalActions } from "./approval-actions";
 
 export const dynamic = "force-dynamic";
@@ -111,7 +115,16 @@ export default async function ApprovePage({
       />
     );
   }
+  const isConfig = rec.tool === CONFIG_TOOL;
   if (rec.status === "consumed") {
+    if (isConfig) {
+      return (
+        <Notice
+          title="Already applied"
+          body="This change was already applied. You can go back to your conversation."
+        />
+      );
+    }
     return (
       <Notice
         title="Already sent"
@@ -122,6 +135,47 @@ export default async function ApprovePage({
 
   const { summary } = rec;
   const details = Object.entries(summary.details);
+
+  if (isConfig) {
+    return (
+      <Shell>
+        <header className="px-6 pt-6 pb-4 border-b border-border">
+          <p className="text-xs font-medium text-amber-primary uppercase tracking-wide mb-1">
+            Confirmation needed
+          </p>
+          <h1 className="text-lg font-semibold">Your assistant proposes a settings change</h1>
+          <p className="text-sm text-text-dim mt-1">
+            Nothing has changed yet. If you approve, exactly this change is applied right away.
+          </p>
+        </header>
+
+        <dl className="px-6 py-2">
+          <Row label="Change">
+            <span className="font-medium">{summary.recipient}</span>
+          </Row>
+          {rec.requestedBy ? <Row label="Requested by">{rec.requestedBy}</Row> : null}
+        </dl>
+
+        <section className="px-6 pt-2 pb-2">
+          <p className="text-xs uppercase tracking-wide text-text-muted mb-1.5">What changes</p>
+          <pre className="whitespace-pre-wrap break-words font-sans text-sm rounded-lg border border-border bg-bg-muted p-4 max-h-80 overflow-auto">
+            {summary.text ?? "—"}
+          </pre>
+        </section>
+
+        <ApprovalActions
+          id={rec.id}
+          sig={sig!}
+          tenant={tenant}
+          // An approved but not yet applied change (an earlier attempt
+          // failed midway) can be approved again: it applies once.
+          status="pending"
+          minutesLeft={minutesLeft(rec)}
+          kind="config"
+        />
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
