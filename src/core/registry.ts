@@ -152,7 +152,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Kebab House views",
     description: "Interactive views (MCP Apps) and the weekly recap.",
     requiredEnvVars: [],
-    toolCount: 3,
+    toolCount: 4,
     core: true,
     loader: () => import("@/connectors/house/manifest").then((m) => m.houseConnector),
   },

@@ -21,6 +21,7 @@ import {
   MASTER_RELAY_NAME,
   MAX_DESCRIPTION_CHARS,
   masterRelayDescription,
+  masterRelaySkillMd,
   parseSkillMd,
 } from "./lib/bundle";
 import { planImport } from "./lib/importer";
@@ -33,6 +34,7 @@ import {
   templateCatalog,
 } from "./lib/templates";
 import { SKILL_TEMPLATE_SOURCES } from "./lib/templates.generated";
+import { SETUP_PHRASE } from "@/core/client-links";
 
 const TEMPLATES_DIR = path.resolve(__dirname, "../../../content/skill-templates");
 const EXPECTED = [
@@ -298,6 +300,26 @@ describe("master relay (RLY-01/02)", () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(parsed.body).toMatch(/not available in this conversation, say so and stop/);
+  });
+
+  it("its body is a short guide to using Kebab House", () => {
+    const parsed = parseSkillMd(masterRelaySkillMd(["remember"]));
+    const body = parsed.body;
+    expect(body.length).toBeLessThan(2000);
+    // my_context first, then the skills.
+    expect(body.indexOf("my_context")).toBeLessThan(body.indexOf("skills_list"));
+    expect(body).toMatch(
+      /Before saving anything to the profile or the notes[^\n]*wait for the user's yes/
+    );
+    expect(body).toMatch(/Never save passwords, keys or other secrets/);
+    expect(body).toMatch(/Never say a message was sent before they confirmed it/);
+    expect(body).toMatch(/`kebab_config`[^\n]*confirms the change in their browser/);
+    expect(body).toMatch(/entered only in the Kebab House dashboard, never in the chat/);
+    expect(body).toContain(`"${SETUP_PHRASE}", call \`kebab_setup\``);
+    expect(body).toMatch(/not available in this conversation, say so and stop/);
+    // Still the router: same name and trigger description.
+    expect(parsed.name).toBe(MASTER_RELAY_NAME);
+    expect(parsed.description).toBe(masterRelayDescription(["remember"]));
   });
 
   it("truncates the name list cleanly to fit 1024 characters", () => {

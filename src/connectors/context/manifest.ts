@@ -69,7 +69,7 @@ export const contextConnector: ConnectorManifest = {
       name: "kebab_setup",
       title: "Set up Kebab House",
       description:
-        "Set up or personalise Kebab House (the user's personal AI hub): interview, profile, ritual skills, connectors. " +
+        "Set up or personalise Kebab House (the user's personal AI hub): interview, profile, ritual skills, connectors, the Kebab House skill. " +
         `Call it when the user says "${SETUP_PHRASE}", asks to configure or personalise their assistant/hub, or when my_context reports no profile. ` +
         "It returns the current step and exactly what to do; call it again with action=complete to move on.",
       schema: kebabSetupSchema,
@@ -118,7 +118,8 @@ export const contextConnector: ConnectorManifest = {
       "setup",
       {
         title: "Set up Kebab House",
-        description: "Guided setup: interview, profile, rituals, connectors.",
+        description:
+          "Guided setup: interview, profile, rituals, connectors, the Kebab House skill.",
       },
       async () => ({
         messages: [
