@@ -2,6 +2,13 @@
 
 All notable changes to Kebab House (formerly Kebab MCP).
 
+## [0.1.18](https://github.com/Yassinello/kebab-mcp/compare/v0.1.17...v0.1.18) (2026-11-18)
+
+
+### Features
+
+* set up Kebab House from Claude — connect once, say one sentence ([#82](https://github.com/Yassinello/kebab-mcp/issues/82)) ([2dbe7bc](https://github.com/Yassinello/kebab-mcp/commit/2dbe7bcc3c6dd47463f6b5dd25ea49ec4a2693c1))
+
 ## [0.1.17](https://github.com/Yassinello/kebab-mcp/compare/v0.1.16...v0.1.17) (2026-11-16)
 
 
