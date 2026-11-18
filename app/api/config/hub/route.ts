@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 import { toMsg } from "@/core/error-utils";
 import { getContextKVStore, getCurrentTenantId } from "@/core/request-context";
 import { listProfiles } from "@/core/profiles";
@@ -8,6 +9,7 @@ import { readWeekUsage, recentWeeks, usageCountersEnabled } from "@/core/usage";
 import { listSkills } from "@/connectors/skills/store";
 import { templateCatalog } from "@/connectors/skills/lib/templates";
 import { getVaultBackend } from "@/connectors/vault/lib/select";
+import { readSetupState } from "@/connectors/context/tools/setup";
 
 /**
  * 2026-11 audit (C1.1) — GET /api/config/hub: the state behind the
@@ -20,6 +22,14 @@ import { getVaultBackend } from "@/connectors/vault/lib/select";
 
 /** Contract 2: written by the MCP transport when a client authenticates with the admin key. */
 const ADMIN_TOKEN_MCP_LAST_KEY = "security:admin-token-mcp-last";
+
+/**
+ * When the owner added the Kebab House skill (contract 3). Written by the
+ * dashboard when they download it, or when they tick "I did it" (it may
+ * have been added from another device or unzipped by hand). The download
+ * route itself stays free of side effects.
+ */
+const KEBAB_SKILL_ADDED_KEY = "hub:kebab-skill-added";
 
 /** Weeks of usage counters scanned to find the AI clients in use. */
 const CLIENT_WEEKS = 4;
@@ -55,6 +65,10 @@ interface HubSummary {
   notes: { count: number; backend: string } | null;
   /** ISO time an AI client last used the admin key (contract 2), else null. */
   adminKeyUsedAt: string | null;
+  /** Conversational onboarding ("Set up my Kebab House"), default profile. */
+  setup: { step: string; updatedAt: string | null } | null;
+  /** ISO time the owner added the Kebab House skill, else null. */
+  kebabSkillAddedAt: string | null;
   errors: string[];
 }
 
@@ -150,17 +164,62 @@ async function adminKeyPart(): Promise<string | null> {
   return v && !Number.isNaN(Date.parse(v)) ? v : null;
 }
 
+async function setupPart(): Promise<HubSummary["setup"]> {
+  // Admin requests carry no caller profile: this reads the default profile's state.
+  const s = await readSetupState();
+  return { step: s.step, updatedAt: s.updatedAt || null };
+}
+
+async function kebabSkillPart(): Promise<string | null> {
+  const v = ((await getContextKVStore().get(KEBAB_SKILL_ADDED_KEY)) ?? "").trim();
+  return v && !Number.isNaN(Date.parse(v)) ? v : null;
+}
+
 async function getHandler(): Promise<Response> {
   const errors: string[] = [];
-  const [profile, skills, clients, notes, adminKeyUsedAt] = await Promise.all([
-    settle("profile", errors, profilePart),
-    settle("skills", errors, skillsPart),
-    settle("clients", errors, clientsPart),
-    settle("notes", errors, notesPart),
-    settle("admin key", errors, adminKeyPart),
-  ]);
-  const body: HubSummary = { profile, skills, clients, notes, adminKeyUsedAt, errors };
+  const [profile, skills, clients, notes, adminKeyUsedAt, setup, kebabSkillAddedAt] =
+    await Promise.all([
+      settle("profile", errors, profilePart),
+      settle("skills", errors, skillsPart),
+      settle("clients", errors, clientsPart),
+      settle("notes", errors, notesPart),
+      settle("admin key", errors, adminKeyPart),
+      settle("setup", errors, setupPart),
+      settle("Kebab House skill", errors, kebabSkillPart),
+    ]);
+  const body: HubSummary = {
+    profile,
+    skills,
+    clients,
+    notes,
+    adminKeyUsedAt,
+    setup,
+    kebabSkillAddedAt,
+    errors,
+  };
   return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }
 
+/**
+ * POST /api/config/hub {"mark": "kebab-skill"} — records that the owner
+ * added the Kebab House skill (checklist item). Idempotent: the first
+ * time is kept.
+ */
+async function postHandler(ctx: PipelineContext): Promise<Response> {
+  let mark: unknown = null;
+  try {
+    mark = ((await ctx.request.json()) as { mark?: unknown } | null)?.mark;
+  } catch {
+    // fall through to the 400 below
+  }
+  if (mark !== "kebab-skill") {
+    return NextResponse.json({ ok: false, error: "unknown_mark" }, { status: 400 });
+  }
+  const existing = await kebabSkillPart();
+  const at = existing ?? new Date().toISOString();
+  if (!existing) await getContextKVStore().set(KEBAB_SKILL_ADDED_KEY, at);
+  return NextResponse.json({ ok: true, kebabSkillAddedAt: at });
+}
+
 export const GET = withAdminAuth(getHandler);
+export const POST = withAdminAuth(postHandler);

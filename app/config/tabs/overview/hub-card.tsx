@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { formatRelativeTime } from "@/core/relative-time";
+import { ConnectClaudeCard } from "../../../components/connect-claude-card";
 import {
   LINKS,
   formatBytes,
   gettingStartedSteps,
+  hasConnectedClient,
   nextAction,
   parseHub,
   type HubData,
+  type HubStep,
 } from "./hub-state";
 
 const DISMISS_KEY = "kebab.overview.gettingStartedDismissed";
@@ -16,12 +19,35 @@ const DISMISS_KEY = "kebab.overview.gettingStartedDismissed";
 /**
  * 2026-11 audit (C1.1) — top of the Overview: the admin-key warning,
  * the "Your Kebab House" card (profile, skills, clients, notes, one next
- * action) and the "Getting started" checklist.
+ * action) and the "Getting started" checklist. Until an AI client has
+ * connected, the "Connect Claude" card (shared with /welcome) leads.
  */
-export function HubSection() {
+export function HubSection({ mcpUrl }: { mcpUrl?: string } = {}) {
   const [hub, setHub] = useState<HubData | null>(null);
   const [failed, setFailed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [markError, setMarkError] = useState(false);
+  const endpoint =
+    mcpUrl ?? (typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp");
+
+  // "I did it" on the Kebab House skill step (nothing can detect an upload in Claude).
+  const markSkillAdded = async () => {
+    setMarkError(false);
+    try {
+      const res = await fetch("/api/config/hub", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mark: "kebab-skill" }),
+      });
+      const d = (await res.json()) as { ok?: boolean; kebabSkillAddedAt?: string };
+      if (!res.ok || !d.ok) throw new Error(String(res.status));
+      const at = d.kebabSkillAddedAt ?? new Date().toISOString();
+      setHub((h) => (h ? { ...h, kebabSkillAddedAt: at } : h));
+    } catch {
+      setMarkError(true);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -79,20 +105,34 @@ export function HubSection() {
     <div className="space-y-6">
       {hub.adminKeyUsedAt && <AdminKeyWarning at={hub.adminKeyUsedAt} />}
 
+      {!hasConnectedClient(hub) && (
+        <ConnectClaudeCard mcpUrl={endpoint} tone="light" skillHref={LINKS.kebabSkill} />
+      )}
+
       <section className="border border-border rounded-lg p-5" aria-labelledby="hub-title">
         <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-6 mb-4">
           <div className="flex-1">
             <h2 id="hub-title" className="text-base font-semibold">
               Your Kebab House
             </h2>
-            <p className="text-sm text-text-dim mt-0.5">{action.why}</p>
+            <p className="text-sm text-text-dim mt-0.5">
+              {action.copy ? `${action.label} in Claude. ` : ""}
+              {action.why}
+            </p>
           </div>
-          <a
-            href={action.href}
-            className="self-start shrink-0 bg-accent text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-accent/90"
-          >
-            {action.label}
-          </a>
+          {action.href ? (
+            <a
+              href={action.href}
+              className="self-start shrink-0 bg-accent text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-accent/90"
+            >
+              {action.label}
+            </a>
+          ) : action.copy ? (
+            <CopyPhrase
+              value={action.copy}
+              className="self-start shrink-0 bg-accent text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-accent/90"
+            />
+          ) : null}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <ProfileTile hub={hub} />
@@ -136,36 +176,93 @@ export function HubSection() {
               Hide this list
             </button>
           </div>
-          <ol className="space-y-2">
+          <ol className="space-y-3">
             {steps.map((s) => (
-              <li key={s.id} className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] ${
-                    s.done ? "bg-green-bg border-green text-green" : "border-border text-text-muted"
-                  }`}
-                >
-                  {s.done ? "✓" : ""}
-                </span>
-                <div className="flex-1 min-w-0">
-                  {s.done ? (
-                    <p className="text-sm text-text-dim line-through">{s.label}</p>
-                  ) : (
-                    <a href={s.href} className="text-sm font-medium text-accent hover:underline">
-                      {s.label}
-                    </a>
-                  )}
-                  <p className="text-xs text-text-muted">
-                    <span className="sr-only">{s.done ? "Done. " : "To do. "}</span>
-                    {s.hint}
-                  </p>
-                </div>
-              </li>
+              <ChecklistItem key={s.id} step={s} onMark={markSkillAdded} />
             ))}
           </ol>
+          {markError && (
+            <p role="alert" className="text-xs text-red mt-3">
+              Could not save that. Try again.
+            </p>
+          )}
         </section>
       )}
     </div>
+  );
+}
+
+function ChecklistItem({ step: s, onMark }: { step: HubStep; onMark: () => void }) {
+  return (
+    <li data-step={s.id} className="flex items-start gap-3">
+      <span
+        aria-hidden="true"
+        className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] ${
+          s.done ? "bg-green-bg border-green text-green" : "border-border text-text-muted"
+        }`}
+      >
+        {s.done ? "✓" : ""}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {s.done || !s.href ? (
+            <p
+              className={`text-sm ${s.done ? "text-text-dim line-through" : "font-medium text-text"}`}
+            >
+              {s.label}
+            </p>
+          ) : (
+            <a href={s.href} className="text-sm font-medium text-accent hover:underline">
+              {s.label}
+            </a>
+          )}
+          {!s.done && s.copy && (
+            <CopyPhrase
+              value={s.copy}
+              className="text-xs text-accent font-medium px-2 py-0.5 border border-accent/30 rounded-md hover:bg-accent/10"
+            />
+          )}
+          {!s.done && s.manual && (
+            <button
+              type="button"
+              onClick={onMark}
+              className="text-xs text-text-dim hover:text-text underline"
+            >
+              I did it
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-text-muted">
+          <span className="sr-only">{s.done ? "Done. " : "To do. "}</span>
+          {s.hint}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+/** Copies the setup phrase; it is said in the AI client, not done here. */
+function CopyPhrase({ value, className }: { value: string; className: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // fire-and-forget OK: clipboard copy in a click handler; failures are caught below
+        void Promise.resolve()
+          .then(() => navigator.clipboard.writeText(value))
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {
+            // Clipboard unavailable: the phrase is on screen to type.
+          });
+      }}
+      className={className}
+    >
+      {copied ? "Copied ✓" : "Copy the phrase"}
+    </button>
   );
 }
 

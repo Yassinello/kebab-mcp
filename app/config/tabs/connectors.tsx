@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ConnectorSummary } from "../tabs";
 import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
@@ -14,8 +14,25 @@ import { MultiAccountSelector } from "./multi-account-selector";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
+/**
+ * Packs that never get a card here: api-connections is managed by
+ * <ApiConnectionsSection /> below (a placeholder card made users wonder
+ * which surface was authoritative). Core packs are hidden too.
+ */
+const HIDDEN_PACK_IDS = new Set(["api-connections"]);
+
+/** How long a card stays highlighted after a deep link. */
+const DEEP_LINK_HIGHLIGHT_MS = 2500;
+
 export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }) {
   const router = useRouter();
+  // Contract 1: /config?tab=connectors&connector=<packId> (links sent by the
+  // AI client during setup) scrolls to that card, highlights it and opens
+  // its credential form. An unknown id leaves the tab as usual.
+  const deepLinkId = useSearchParams()?.get("connector") ?? null;
+  const [arrivedId, setArrivedId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const deepLinkHandled = useRef(false);
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -108,6 +125,33 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
     }
     setRecentlySavedId(null);
   }, [connectors, recentlySavedId]);
+
+  useEffect(() => {
+    if (loading || deepLinkHandled.current || !deepLinkId) return;
+    deepLinkHandled.current = true;
+    const pack = connectors.find(
+      (c) => c.id === deepLinkId && !c.core && !HIDDEN_PACK_IDS.has(c.id)
+    );
+    if (!pack) return;
+    if (PACKS.some((d) => d.id === pack.id)) setExpanded(pack.id);
+    setArrivedId(pack.id);
+    setHighlightId(pack.id);
+  }, [loading, deepLinkId, connectors]);
+
+  // Scroll once the card is rendered (and opened), after the deep link.
+  useEffect(() => {
+    if (!arrivedId) return;
+    document
+      .getElementById(`connector-${arrivedId}`)
+      ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [arrivedId]);
+
+  // The highlight is brief; the "say done" note stays.
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => setHighlightId(null), DEEP_LINK_HIGHLIGHT_MS);
+    return () => clearTimeout(t);
+  }, [highlightId]);
 
   const getValue = useCallback(
     (key: string): string => {
@@ -355,7 +399,6 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   //   below. Showing a placeholder card here too made users wonder which
   //   surface was authoritative and how the two related. The section below
   //   is the single source of truth for creating and managing connections.
-  const HIDDEN_PACK_IDS = new Set(["api-connections"]);
   const visibleConnectors = connectors.filter((c) => !c.core && !HIDDEN_PACK_IDS.has(c.id));
 
   return (
@@ -414,8 +457,14 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         return (
           <div
             key={pack.id}
-            className={`border rounded-lg overflow-hidden transition-all ${
-              pack.enabled ? "border-accent/30" : "border-border"
+            id={`connector-${pack.id}`}
+            data-highlighted={highlightId === pack.id ? "true" : undefined}
+            className={`border rounded-lg overflow-hidden transition-all scroll-mt-6 ${
+              highlightId === pack.id
+                ? "border-accent ring-2 ring-accent/40"
+                : pack.enabled
+                  ? "border-accent/30"
+                  : "border-border"
             } ${isOpen ? "shadow-sm" : ""}`}
           >
             <div
@@ -543,6 +592,15 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                 );
               })()}
             </div>
+
+            {arrivedId === pack.id && (
+              <p
+                role="note"
+                className="border-t border-accent/20 bg-accent/5 px-3 sm:px-5 py-2 text-xs text-text"
+              >
+                When you&rsquo;re done, go back to your AI conversation and say &ldquo;done&rdquo;.
+              </p>
+            )}
 
             <div
               className={`overflow-hidden transition-all duration-200 ease-out ${

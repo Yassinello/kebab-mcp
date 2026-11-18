@@ -16,6 +16,11 @@
 </p>
 
 <p align="center">
+  <strong>Set it up from Claude:</strong> deploy, connect Claude, then say “Set up my Kebab House”. Claude does the rest with you.<br />
+  <a href="docs/CONNECT-CLAUDE.md">Step-by-step guide →</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/github/license/Yassinello/kebab-mcp" alt="License: AGPL-3.0" />
   <img src="https://img.shields.io/github/v/release/Yassinello/kebab-mcp?label=version" alt="Version" />
   <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D"><img src="https://img.shields.io/badge/deploy-vercel-%23000?logo=vercel" alt="Deploy on Vercel" /></a>
@@ -242,6 +247,8 @@ You can also ask Claude in a Claude Code conversation: *"Run `npx @yassinello/cr
 
 ### Connect your AI client
 
+**Claude first.** The last welcome step (and the dashboard Overview, until a client connects) has a **Connect Claude** button: add the connector, approve it, then say “Set up my Kebab House”. Walkthrough: [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md).
+
 **Sign-in first.** Claude, ChatGPT, Cursor and Claude Code connect with OAuth: give them the URL only (`https://your-app.vercel.app/api/mcp`). They open your instance's consent page, where you sign in with your admin key and choose the access level: *read only*, *read + my profile and notes* (recommended) or *everything*. The client then appears in *Devices*, where you can bind a profile or revoke it.
 
 **Device token for the others.** Codex, Windsurf, n8n and any client without sign-in get their own token: *Devices → Add device*. Never paste your admin key into an AI client: it opens your dashboard. Details: [docs/CLIENTS.md](docs/CLIENTS.md).
@@ -436,6 +443,7 @@ See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to add tools, connector
 
 Ordered by reader journey — discover, deploy, use, author, contribute.
 
+- [docs/CONNECT-CLAUDE.md](docs/CONNECT-CLAUDE.md) — set it up from Claude: connect Claude, say one sentence, confirm changes in your browser
 - [content/docs/skills.md](content/docs/skills.md) — the skills library: channels per client, tags, import and export
 - [docs/API.md](docs/API.md) — route-by-route API reference (all 42 endpoints)
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — per-connector setup and env var reference

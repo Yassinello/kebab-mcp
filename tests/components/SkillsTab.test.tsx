@@ -162,18 +162,20 @@ describe("SkillsTab", () => {
     });
   });
 
-  it("offers the master relay download with install steps in 'Use everywhere'", async () => {
+  it("offers the Kebab House skill download with install steps (contract 3)", async () => {
     render(<SkillsTab />);
 
     await waitFor(() => {
-      expect(screen.getByText(/use your skills in every ai client/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Download the Kebab House skill (.zip)" })
+      ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByText(/use your skills in every ai client/i));
-    expect(screen.getByRole("button", { name: "Master relay (.zip)" })).toBeInTheDocument();
-    expect(screen.getByText("claude.ai")).toBeInTheDocument();
-    expect(screen.getByText("ChatGPT")).toBeInTheDocument();
+    expect(screen.getByText("claude.ai and Claude Desktop:")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code:")).toBeInTheDocument();
+    expect(screen.getByText("ChatGPT:")).toBeInTheDocument();
     expect(
-      screen.getByText(/re-upload the relay when you add, rename or remove/i)
+      screen.getByText(/Download it again when you add, rename or remove many skills/i)
     ).toBeInTheDocument();
+    expect(screen.queryByText(/master relay/i)).toBeNull();
   });
 });

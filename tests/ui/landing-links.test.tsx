@@ -119,6 +119,17 @@ describe("landing (LND-01)", () => {
     expect(container.querySelector("#at-home")!.textContent).toMatch(/secrets excluded/);
   });
 
+  it("the install section points to the Set it up from Claude guide", () => {
+    const { container } = render(<LandingPage />);
+    const link = [...container.querySelectorAll("a")].find(
+      (a) => a.textContent === "Set it up from Claude"
+    );
+    expect(link?.getAttribute("href")).toBe(`${REPO_URL}/blob/main/docs/CONNECT-CLAUDE.md`);
+    expect(link?.closest("p")?.textContent).toMatch(
+      /connect Claude and say “Set up my Kebab House”/
+    );
+  });
+
   it("has a collapsible FAQ", () => {
     const { container } = render(<LandingPage />);
     const items = container.querySelectorAll("#faq details");

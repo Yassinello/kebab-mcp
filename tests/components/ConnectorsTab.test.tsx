@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import "./setup";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ConnectorsTab } from "../../app/config/tabs/connectors";
 import type { ConnectorSummary } from "../../app/config/tabs";
@@ -11,8 +11,11 @@ import type { ConnectorSummary } from "../../app/config/tabs";
 // after a successful save. The default jest-style App-Router mock isn't
 // available in component-test mode, so provide a minimal stub.
 const refreshMock = vi.fn();
+// Contract 1 deep link: tests set `nav.params` to simulate ?connector=<id>.
+const nav = vi.hoisted(() => ({ params: new URLSearchParams() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: refreshMock, push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => nav.params,
 }));
 
 // Mock ApiConnectionsSection which makes its own fetch calls — keep this
@@ -215,5 +218,105 @@ describe("ConnectorsTab — Save feedback (2026-04-29 regression)", () => {
     await waitFor(() => {
       expect(screen.getByText(/Fill in at least one credential/i)).toBeInTheDocument();
     });
+  });
+});
+
+// Contract 1: /config?tab=connectors&connector=<packId> — the link Claude
+// sends during setup so the owner enters secrets in the dashboard.
+describe("ConnectorsTab — connector deep link", () => {
+  const withExtras: ConnectorSummary[] = [
+    ...mockConnectors,
+    {
+      id: "linear",
+      label: "Linear",
+      description: "Issues",
+      enabled: false,
+      reason: "missing env vars: LINEAR_API_KEY",
+      toolCount: 3,
+      requiredEnvVars: ["LINEAR_API_KEY"],
+      tools: [],
+    },
+    {
+      id: "skills",
+      label: "Skills",
+      description: "Core",
+      enabled: true,
+      reason: "",
+      toolCount: 4,
+      requiredEnvVars: [],
+      tools: [],
+      core: true,
+    },
+  ];
+  const scrolled: string[] = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    scrolled.length = 0;
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this.id);
+    });
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ok: true, vars: {} }),
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    nav.params = new URLSearchParams();
+    vi.useRealTimers();
+  });
+
+  const card = (id: string) => document.getElementById(`connector-${id}`)!;
+  const isOpen = (id: string) =>
+    card(id).querySelector(".max-h-\\[4000px\\]") !== null &&
+    card(id).querySelector(".max-h-0") === null;
+
+  it("scrolls to the card, highlights it briefly and opens its credential form", async () => {
+    nav.params = new URLSearchParams("tab=connectors&connector=vault");
+    render(<ConnectorsTab connectors={withExtras} />);
+    await waitFor(() => expect(card("vault")).toHaveAttribute("data-highlighted", "true"));
+    expect(isOpen("vault")).toBe(true);
+    expect(isOpen("google")).toBe(false);
+    expect(screen.getByTestId("cred-GITHUB_PAT")).toBeInTheDocument();
+    await waitFor(() => expect(scrolled).toContain("connector-vault"));
+    expect(card("vault")).toHaveTextContent(
+      "When you’re done, go back to your AI conversation and say “done”."
+    );
+    // The highlight fades; the note stays.
+    await vi.advanceTimersByTimeAsync(3000);
+    await waitFor(() => expect(card("vault")).not.toHaveAttribute("data-highlighted"));
+    expect(screen.getAllByRole("note")).toHaveLength(1);
+    expect(screen.getByRole("note")).toHaveTextContent(/say “done”/);
+  });
+
+  it("highlights a connector without a credential form but does not open it", async () => {
+    nav.params = new URLSearchParams("tab=connectors&connector=linear");
+    render(<ConnectorsTab connectors={withExtras} />);
+    await waitFor(() => expect(card("linear")).toHaveAttribute("data-highlighted", "true"));
+    expect(isOpen("linear")).toBe(false);
+    expect(card("linear")).toHaveTextContent(/say “done”/);
+  });
+
+  it("an unknown or hidden id leaves the tab as usual", async () => {
+    for (const id of ["nope", "skills"]) {
+      nav.params = new URLSearchParams(`tab=connectors&connector=${id}`);
+      const { unmount } = render(<ConnectorsTab connectors={withExtras} />);
+      await waitFor(() => expect(screen.getByText("Google Workspace")).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(50);
+      expect(document.querySelector("[data-highlighted]")).toBeNull();
+      expect(screen.queryByRole("note")).toBeNull();
+      expect(scrolled).toEqual([]);
+      expect(isOpen("google")).toBe(false);
+      expect(isOpen("vault")).toBe(false);
+      unmount();
+    }
+  });
+
+  it("without the parameter nothing is opened or highlighted", async () => {
+    render(<ConnectorsTab connectors={withExtras} />);
+    await waitFor(() => expect(screen.getByText("Google Workspace")).toBeInTheDocument());
+    expect(document.querySelector("[data-highlighted]")).toBeNull();
+    expect(screen.queryByRole("note")).toBeNull();
   });
 });

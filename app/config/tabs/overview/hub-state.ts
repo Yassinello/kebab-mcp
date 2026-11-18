@@ -4,6 +4,8 @@
  * GET /api/config/hub. Pure functions, unit-tested.
  */
 
+import { SETUP_PHRASE } from "@/core/client-links";
+
 export interface HubData {
   profile: {
     mode: "inline" | "vault";
@@ -24,6 +26,10 @@ export interface HubData {
   } | null;
   notes: { count: number; backend: string } | null;
   adminKeyUsedAt: string | null;
+  /** Conversational onboarding state (`kebab_setup`); step "done" when finished. */
+  setup: { step: string; updatedAt: string | null } | null;
+  /** When the owner added the Kebab House skill (download or "I did it"). */
+  kebabSkillAddedAt: string | null;
   errors: string[];
 }
 
@@ -37,6 +43,12 @@ export function parseHub(raw: unknown): HubData {
     clients: obj<HubData["clients"]>(d.clients),
     notes: obj<HubData["notes"]>(d.notes),
     adminKeyUsedAt: typeof d.adminKeyUsedAt === "string" ? d.adminKeyUsedAt : null,
+    setup: (() => {
+      const s = obj<{ step?: unknown; updatedAt?: unknown }>(d.setup);
+      if (!s || typeof s.step !== "string") return null;
+      return { step: s.step, updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : null };
+    })(),
+    kebabSkillAddedAt: typeof d.kebabSkillAddedAt === "string" ? d.kebabSkillAddedAt : null,
     errors: Array.isArray(d.errors)
       ? (d.errors.filter((e) => typeof e === "string") as string[])
       : [],
@@ -44,23 +56,35 @@ export function parseHub(raw: unknown): HubData {
 }
 
 export const LINKS = {
-  connectClient: "/config?tab=settings&sub=mcp",
+  /** The "Connect Claude" card, shown at the top of the Overview until a client connects. */
+  connectClient: "#connect-claude",
   profile: "/config?tab=profile",
   skills: "/config?tab=skills",
+  kebabSkill: "/config?tab=skills&panel=kebab-skill",
   devices: "/config?tab=devices",
   memory: "/config?tab=memory",
 } as const;
 
 export interface HubStep {
-  id: "client" | "profile" | "ritual" | "second-client";
+  id: "client" | "setup" | "kebab-skill" | "second-client";
   label: string;
   hint: string;
-  href: string;
+  /** Where the step is done; absent when it happens in the AI client. */
+  href?: string;
+  /** Text to copy instead of a link (the setup phrase). */
+  copy?: string;
+  /** The owner can tick the step by hand (nothing to detect it). */
+  manual?: boolean;
   done: boolean;
 }
 
+/** True when any AI client (device token or signed-in app) has been seen. */
+export function hasConnectedClient(hub: HubData): boolean {
+  return (hub.clients?.connected ?? 0) >= 1;
+}
+
 /**
- * The four "Getting started" steps. A step whose data is unavailable
+ * The "Getting started" steps, in order. A step whose data is unavailable
  * (that part of the hub failed to load) counts as not done.
  */
 export function gettingStartedSteps(hub: HubData): HubStep[] {
@@ -69,23 +93,24 @@ export function gettingStartedSteps(hub: HubData): HubStep[] {
     {
       id: "client",
       label: "Connect an AI client",
-      hint: "Add Kebab House to Claude, ChatGPT or another AI app.",
+      hint: "Add Kebab House to Claude, or to ChatGPT, Cursor or another AI app.",
       href: LINKS.connectClient,
       done: connected >= 1,
     },
     {
-      id: "profile",
-      label: "Create your profile",
-      hint: "Say “Set up my Kebab House” in your AI client, or write it here.",
-      href: LINKS.profile,
-      done: hub.profile?.filled === true,
+      id: "setup",
+      label: `Say “${SETUP_PHRASE}”`,
+      hint: "Claude then interviews you, writes your profile, installs rituals and helps you plug in connectors.",
+      copy: SETUP_PHRASE,
+      done: hub.setup?.step === "done",
     },
     {
-      id: "ritual",
-      label: "Install a ritual",
-      hint: "Ready-made skills like a morning brief or a weekly review.",
-      href: LINKS.skills,
-      done: (hub.skills?.rituals.installed ?? 0) >= 1,
+      id: "kebab-skill",
+      label: "Add the Kebab House skill",
+      hint: "Claude then uses your profile, skills and Kebab House rules on its own.",
+      href: LINKS.kebabSkill,
+      manual: true,
+      done: hub.kebabSkillAddedAt !== null,
     },
     {
       id: "second-client",
@@ -99,7 +124,9 @@ export function gettingStartedSteps(hub: HubData): HubStep[] {
 
 export interface NextAction {
   label: string;
-  href: string;
+  /** Link to follow; absent when the action is a phrase to copy. */
+  href?: string;
+  copy?: string;
   why: string;
 }
 
@@ -113,7 +140,14 @@ export function nextAction(hub: HubData): NextAction {
     };
   }
   const step = gettingStartedSteps(hub).find((s) => !s.done);
-  if (step) return { label: step.label, href: step.href, why: step.hint };
+  if (step) {
+    return {
+      label: step.label,
+      why: step.hint,
+      ...(step.href ? { href: step.href } : {}),
+      ...(step.copy ? { copy: step.copy } : {}),
+    };
+  }
   if ((hub.notes?.count ?? 0) === 0) {
     return {
       label: "Open your memory",
