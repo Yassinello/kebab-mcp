@@ -99,6 +99,8 @@ If the **Storage** badge is orange (`Filesystem (temporary)`), fix that first â€
 2. Paste a GitHub token with *Contents: read & write* on your Kebab House repository, click **Save token**, then **Test connection**.
 3. Back on **Overview**, the updates banner shows whether a new release is available.
 
+Even without a token, **Overview** says when a new release is out; the token is what lets **Update now** install it.
+
 A daily check runs in the background; the â†» icon forces a re-check. **Update now** copies the new release's files into your repository as one commit (or uses GitHub's *Sync fork* if your repository is a fork), and Vercel redeploys on its own. If you edited a file that the release also changes, nothing is written and the banner lists the files.
 
 To turn the feature off, set `KEBAB_DISABLE_UPDATE_API=1` in your environment variables.

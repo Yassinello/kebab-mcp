@@ -41,7 +41,7 @@ export default function CtaSection() {
           </a>
         </p>
         <p className="text-xs text-slate-500 mt-3">
-          Prefer a fork, Docker or the CLI?{" "}
+          Prefer Docker or the CLI, or want to contribute?{" "}
           <a href="/deploy" className="text-slate-300 hover:text-white underline">
             Other ways to deploy
           </a>

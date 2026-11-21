@@ -31,7 +31,15 @@ in `app/landing/deploy-url.ts`): it creates a copy of the repo in the user's
 GitHub account, the Vercel project, and a free Upstash KV store (`stores`
 parameter) in one pass. The copy is not a GitHub fork, so dashboard updates use
 **release sync** (`src/core/release-sync.ts`) instead of `merge-upstream`.
-Fork + Import remains supported and keeps `merge-upstream`.
+Fork + Import remains supported and keeps `merge-upstream`, but it is
+presented as the **contributor** path: GitHub forces every fork of a public
+repo to be public, so an instance deployed from a fork lives in a public repo
+(docs/specs/cdc-instances-testeurs.md, DEP-10).
+
+Copies of the repo do not run upstream's GitHub Actions: every job is guarded
+by `github.repository == 'Yassinello/kebab-mcp'` (CI-10). Release sync never
+writes `.github/workflows/`, so copies made before that guard keep their old
+workflow files until the owner updates them by hand.
 
 Possible improvement, not done: a `redirect-url` parameter on the button would
 bring the user straight back to their instance's `/welcome` after the deploy.

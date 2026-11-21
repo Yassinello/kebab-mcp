@@ -41,7 +41,16 @@ type UpdateStatus =
       releaseUrl?: string;
       deployedRepo?: string;
     }
-  | { state: "no-token"; configureUrl: string }
+  | {
+      state: "no-token";
+      configureUrl: string;
+      // UPD-12: the latest upstream release, read without a token.
+      available?: boolean;
+      installedVersion?: string;
+      latestVersion?: string;
+      releaseUrl?: string;
+      checkedAt?: string;
+    }
   | { state: "disabled"; reason: string }
   | { state: "error"; error: string };
 
@@ -65,7 +74,16 @@ function parseUpdateStatus(d: Record<string, unknown>): UpdateStatus {
   if (d.disabled) return { state: "disabled", reason: d.disabled as string };
   const remote = d.mode === "github-api" || d.mode === "release-sync";
   if (remote && d.reason === "no-token") {
-    return { state: "no-token", configureUrl: (d.configureUrl as string) || CONFIGURE_TOKEN_URL };
+    const str = (k: string) => (typeof d[k] === "string" ? { [k]: d[k] as string } : {});
+    return {
+      state: "no-token",
+      configureUrl: (d.configureUrl as string) || CONFIGURE_TOKEN_URL,
+      available: d.available === true,
+      ...str("installedVersion"),
+      ...str("latestVersion"),
+      ...str("releaseUrl"),
+      ...str("checkedAt"),
+    };
   }
   if (remote) {
     const str = (k: string) => (typeof d[k] === "string" ? { [k]: d[k] as string } : {});
@@ -369,6 +387,49 @@ export function OverviewTab({
           >
             Reconfigure token →
           </a>
+        </div>
+      )}
+
+      {/* Update banner — a new release is out, but no update token (UPD-12) */}
+      {update.state === "no-token" && update.available && update.latestVersion && (
+        <div className="border border-orange/30 bg-orange/5 rounded-lg p-4 space-y-2">
+          <p className="text-sm font-semibold text-orange-dark">
+            Kebab House v{update.latestVersion} available
+          </p>
+          <p className="text-xs text-text-dim">
+            You run v{update.installedVersion}. To install updates from here in one click, add a
+            GitHub token once (about 2 minutes): <em>Contents: read &amp; write</em> on the repo
+            this instance deploys from.
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <a
+              href={update.configureUrl}
+              className="text-xs font-semibold text-accent hover:underline"
+            >
+              Add an update token →
+            </a>
+            {update.releaseUrl && (
+              <a
+                href={update.releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:underline"
+              >
+                What&apos;s new →
+              </a>
+            )}
+            {update.checkedAt && (
+              <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                checked {formatRelativeTime(update.checkedAt)}
+                {justRefreshed && " ✓"}
+                <RefreshIcon
+                  onClick={refreshUpdate}
+                  refreshing={refreshing}
+                  disabled={refreshing || Date.now() < refreshDisabledUntil}
+                />
+              </span>
+            )}
+          </div>
         </div>
       )}
 

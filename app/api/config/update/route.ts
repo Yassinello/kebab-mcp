@@ -29,6 +29,15 @@ import {
   type ReleaseSyncFailure,
   type ReleaseSyncStatusPayload,
 } from "@/core/release-sync";
+import {
+  fetchLatestUpstreamRelease,
+  parseCachedRelease,
+  tokenlessUpdateFields,
+  UPSTREAM_RELEASE_KV_KEY,
+  UPSTREAM_RELEASE_TTL_SECONDS,
+  type UpstreamRelease,
+} from "@/core/upstream-release";
+import { VERSION } from "@/core/version";
 import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 const updateCheckLogger = getLogger("config.update.cache");
@@ -133,6 +142,36 @@ function isValidCachedPayload(p: unknown): p is UpdateStatusPayload | ReleaseSyn
   );
 }
 
+/**
+ * Latest upstream release for the no-token answer (UPD-10..12): KV cache
+ * first (6 h), then an anonymous GitHub read. `force` (the dashboard's
+ * "Check for updates" button, debounced 30 s client-side) skips the cache.
+ * KV failures are non-fatal; a failed read is not cached.
+ */
+async function cachedUpstreamRelease(force: boolean): Promise<UpstreamRelease | null> {
+  if (!force) {
+    try {
+      const cached = parseCachedRelease(await getKVStore().get(UPSTREAM_RELEASE_KV_KEY));
+      if (cached) return cached;
+    } catch (err) {
+      updateCheckLogger.warn("upstream release cache read failed", { error: toMsg(err) });
+    }
+  }
+  const latest = await fetchLatestUpstreamRelease();
+  if (latest) {
+    try {
+      await getKVStore().set(
+        UPSTREAM_RELEASE_KV_KEY,
+        JSON.stringify(latest),
+        UPSTREAM_RELEASE_TTL_SECONDS
+      );
+    } catch (err) {
+      updateCheckLogger.warn("upstream release cache write failed", { error: toMsg(err) });
+    }
+  }
+  return latest;
+}
+
 async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
   const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
   const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
@@ -140,12 +179,15 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
   const token = resolveUpdateToken();
 
   if (!token) {
+    // UPD-10: no token → still say whether a newer release exists. Upstream
+    // is public, so its latest release is read anonymously (cached in KV).
+    const latest = await cachedUpstreamRelease(forceRefresh);
     return NextResponse.json({
       mode: "github-api",
-      available: false,
       reason: "no-token",
       configureUrl: "/config?tab=settings&sub=advanced",
       tokenConfigured: false,
+      ...tokenlessUpdateFields(VERSION, latest),
     });
   }
 

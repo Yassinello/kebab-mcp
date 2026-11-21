@@ -111,3 +111,46 @@ describe("OverviewTab — release-sync mode", () => {
     expect(screen.getByRole("link", { name: /add an update token/i })).toBeInTheDocument();
   });
 });
+
+// UPD-12 (docs/specs/cdc-instances-testeurs.md): without a token, the
+// dashboard still says when a newer upstream release is out.
+describe("OverviewTab — new release without an update token", () => {
+  const NO_TOKEN = {
+    mode: "github-api",
+    reason: "no-token",
+    tokenConfigured: false,
+    configureUrl: "/config?tab=settings&sub=advanced",
+    installedVersion: "0.1.16",
+  };
+
+  it("announces the release and links the token setup and the release notes", async () => {
+    stubFetch({
+      ...NO_TOKEN,
+      available: true,
+      latestVersion: "0.1.19",
+      releaseUrl: "https://github.com/Yassinello/kebab-mcp/releases/tag/v0.1.19",
+      checkedAt: new Date().toISOString(),
+    });
+    render(<OverviewTab {...props} />);
+    expect(await screen.findByText("Kebab House v0.1.19 available")).toBeInTheDocument();
+    expect(screen.getByText(/You run v0\.1\.16/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /what's new/i })).toHaveAttribute(
+      "href",
+      "https://github.com/Yassinello/kebab-mcp/releases/tag/v0.1.19"
+    );
+    const tokenLinks = screen.getAllByRole("link", { name: /add an update token/i });
+    expect(tokenLinks.length).toBeGreaterThan(0);
+    for (const link of tokenLinks) {
+      expect(link).toHaveAttribute("href", "/config?tab=settings&sub=advanced");
+    }
+    // No install button: installing still needs the token.
+    expect(screen.queryByRole("button", { name: "Update now" })).not.toBeInTheDocument();
+  });
+
+  it("shows no release banner when already on the latest release", async () => {
+    stubFetch({ ...NO_TOKEN, available: false, latestVersion: "0.1.16" });
+    render(<OverviewTab {...props} />);
+    expect(await screen.findByText(/Not set up — needs an update token/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Kebab House v.* available$/)).not.toBeInTheDocument();
+  });
+});

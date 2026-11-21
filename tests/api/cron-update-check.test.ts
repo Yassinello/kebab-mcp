@@ -125,6 +125,23 @@ describe("CRON-01: /api/cron/update-check handler body", () => {
     expect(kvSet).not.toHaveBeenCalled();
   });
 
+  it("UPD-11: without a token, refreshes the anonymous latest-release cache", async () => {
+    setEnv({ KEBAB_UPDATE_PAT: undefined, GITHUB_TOKEN: undefined });
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ tag_name: "v9.9.9" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const mod = await import("../../app/api/cron/update-check/route");
+    const res = await (mod.GET as (r: Request) => Promise<Response>)(req());
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: false, reason: "no-token", latestVersion: "9.9.9" });
+    expect(kvSet).toHaveBeenCalledTimes(1);
+    expect(kvSet.mock.calls[0]![0]).toBe("global:upstream-release");
+    expect(kvSet.mock.calls[0]![2]).toBe(6 * 60 * 60);
+  });
+
   it("returns not-a-fork when VERCEL_GIT_REPO_OWNER/SLUG are absent", async () => {
     setEnv({ VERCEL_GIT_REPO_OWNER: undefined, VERCEL_GIT_REPO_SLUG: undefined });
     const mod = await import("../../app/api/cron/update-check/route");

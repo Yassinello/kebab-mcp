@@ -48,8 +48,9 @@ function PageIntro() {
         Choose how to run your AI backend.
       </h1>
       <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-        The Vercel button is the recommended path — one click, free tier, updates from the
-        dashboard. A GitHub fork, Docker and the CLI are there if you want more control.
+        The Vercel button is the recommended path — one click, free tier, a repo you can keep
+        private, updates from the dashboard. Docker and the CLI are there if you want more control;
+        a GitHub fork is for contributors.
       </p>
     </header>
   );
@@ -124,7 +125,8 @@ function RecommendedCard() {
                   <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1 py-0.5">
                     kebab-house
                   </code>
-                  ). It&apos;s yours; Vercel redeploys on every push.
+                  ). It&apos;s yours and it is not a fork, so it can stay private; Vercel redeploys
+                  on every push.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -164,7 +166,13 @@ function RecommendedCard() {
   );
 }
 
-// ── Alternative: Fork + Vercel Import ──────────────────────────────────
+// ── For contributors: Fork + Vercel Import ─────────────────────────────
+//
+// DEP-10..12 (docs/specs/cdc-instances-testeurs.md): GitHub forces every
+// fork of a public repo to be public, and its visibility cannot be changed.
+// An instance deployed from a fork therefore lives in a public repo. That's
+// fine for someone who sends pull requests, not for a personal instance —
+// so this card is labelled for contributors and says it plainly.
 
 function ForkAlternativeCard() {
   return (
@@ -176,21 +184,30 @@ function ForkAlternativeCard() {
         <div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-              Alternative
+              For contributors
             </span>
             <span className="text-xs font-mono text-slate-500">~ 5 min</span>
           </div>
           <h2 id="fork-heading" className="text-xl sm:text-2xl font-bold text-white mb-3">
             Fork on GitHub, deploy on Vercel
           </h2>
-          <p className="text-sm text-slate-400 leading-relaxed mb-6">
-            Prefer a real GitHub fork of{" "}
+          <p className="text-sm text-slate-400 leading-relaxed mb-4">
+            Want to send pull requests to{" "}
             <code className="font-mono text-xs bg-slate-800/80 text-slate-300 rounded px-1.5 py-0.5">
               Yassinello/kebab-mcp
             </code>
-            ? You keep the shared git history, GitHub&apos;s <em>Sync fork</em> button works, and
-            the dashboard updates through GitHub&apos;s merge-upstream. You attach the Upstash
-            database yourself.
+            ? A real GitHub fork keeps the shared git history, GitHub&apos;s <em>Sync fork</em>{" "}
+            button works, and the dashboard updates through GitHub&apos;s merge-upstream. You attach
+            the Upstash database yourself.
+          </p>
+          <p
+            role="note"
+            className="text-sm text-amber-200/90 leading-relaxed mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3"
+          >
+            <strong>A fork is always public.</strong> GitHub doesn&apos;t let you make a fork of a
+            public repo private. Your secrets stay in Vercel and Upstash, but anything you commit to
+            the fork is visible to everyone. For a personal instance, use the one-click button
+            above: its repo can stay private.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <a

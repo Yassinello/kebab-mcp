@@ -20,7 +20,9 @@ The recommended path is the **Deploy with Vercel** button on [/deploy](https://k
 4. Connect your clients. Claude, ChatGPT, Cursor and Claude Code: add the instance URL and sign in, then pick the access level (*read + my profile and notes* is the recommended one). Other clients: **Devices → Add device** gives each one its own device token.
 5. In your AI client, say **“Set up my Kebab House”**: a short interview writes your profile and installs the rituals you pick.
 
-> **Prefer a real fork?** Fork [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) on GitHub, import the fork at [vercel.com/new](https://vercel.com/new), then attach *Upstash for Redis* from the project's *Storage* tab. Both paths get one-click updates (below).
+> **Keep your repository private.** The copy the button creates is not a fork, so it can be private (GitHub → your repo → *Settings* → *Change visibility*). Your secrets live in Vercel and Upstash either way, never in the repo.
+>
+> **Contributing to Kebab House?** Fork [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) on GitHub, import the fork at [vercel.com/new](https://vercel.com/new), then attach *Upstash for Redis* from the project's *Storage* tab. Note that **a fork of a public repo is always public**: GitHub doesn't let you change its visibility. Use a fork for contributions, the button for a personal instance. Both paths get one-click updates (below).
 
 ## Adding connectors
 
@@ -31,6 +33,8 @@ If you set up storage credentials directly in Vercel env vars instead, they take
 ## Configuring updates (Vercel)
 
 If you deployed on Vercel, you can pull upstream Kebab House (`Yassinello/kebab-mcp`) releases directly from the dashboard — no terminal required.
+
+Without any setup, the **Overview** tab tells you when a new release is out (it reads the public upstream repository, no token needed). Installing it in one click needs a token:
 
 **One-time setup:**
 
