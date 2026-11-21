@@ -463,9 +463,10 @@ export function AdvancedSection() {
           Updates
         </h3>
         <p className="text-xs text-text-dim mb-3">
-          Configure a GitHub PAT to enable one-click upstream sync from the Overview tab.
-          Fine-grained PATs: <em>Contents: read &amp; write</em> on the repo this instance deploys
-          from (your fork or your Deploy Button copy). Classic PATs:{" "}
+          Configure a GitHub PAT to enable one-click upstream sync from the Overview tab. Without
+          one, the Overview still tells you when a new release is out. Fine-grained PATs:{" "}
+          <em>Contents: read &amp; write</em> on the repo this instance deploys from (your fork or
+          your Deploy Button copy). Classic PATs:{" "}
           <code className="font-mono bg-bg-muted px-1 rounded">public_repo</code> for a public repo,{" "}
           <code className="font-mono bg-bg-muted px-1 rounded">repo</code> for a private one.
         </p>

@@ -40,13 +40,18 @@ describe("DeployPage", () => {
     expect(within(recommended).getByText(/a vercel project/i)).toBeInTheDocument();
     expect(within(recommended).getByText(/free upstash redis database/i)).toBeInTheDocument();
     expect(within(recommended).getByText(/an update token/i)).toBeInTheDocument();
+    // DEP-11: the copy is not a fork, so it can be private.
+    expect(within(recommended).getByText(/can stay private/i)).toBeInTheDocument();
   });
 
-  it("keeps Fork + Import as a documented alternative", () => {
+  it("keeps Fork + Import, labelled for contributors and flagged as public (DEP-10)", () => {
     render(<DeployPage />);
     const alt = screen
       .getByRole("heading", { name: /fork on github, deploy on vercel/i })
       .closest("section")!;
+    expect(within(alt).getByText(/for contributors/i)).toBeInTheDocument();
+    expect(within(alt).getByRole("note")).toHaveTextContent(/a fork is always public/i);
+    expect(within(alt).queryByText(/^alternative$/i)).not.toBeInTheDocument();
     expect(within(alt).getByRole("link", { name: /fork on github/i })).toHaveAttribute(
       "href",
       GITHUB_FORK_URL

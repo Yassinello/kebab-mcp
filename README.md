@@ -194,9 +194,11 @@ Two paths cover ~95% of users — the Vercel Deploy Button for the recommended p
 
 **[Deploy with Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-house&repository-name=kebab-house&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%7D%5D)** — one click creates a copy of the repo in your GitHub account, a Vercel project and a free Upstash Redis database, then deploys. Open the deployed URL → `/welcome` mints your `MCP_AUTH_TOKEN` and connects your AI client. The deploy hub at **[/deploy](https://kebab-mcp.vercel.app/deploy)** shows what gets created.
 
-Updates: add a GitHub token with *Contents: read & write* on your new repo as `KEBAB_UPDATE_PAT` (Settings → Advanced), then click *Update now* in the dashboard. The copy is not a GitHub fork, so the dashboard uses **release sync**: it copies the latest release's files into your repo as one commit, and stops without writing if you edited one of them.
+The copy is not a GitHub fork, so it **can stay private** (your secrets live in Vercel and Upstash either way, never in the repo).
 
-**Alternative — Fork + Import** (a real GitHub fork, *Sync fork* works): **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** → **[Import to Vercel](https://vercel.com/new)** → in the project, *Storage* → *Connect Database* → *Upstash for Redis* (Free) → open `/welcome`. Without Upstash, your auth token and credentials don't survive serverless cold starts.
+Updates: the dashboard tells you when a new release is out, with no setup. To install it in one click, add a GitHub token with *Contents: read & write* on your new repo as `KEBAB_UPDATE_PAT` (Settings → Advanced), then click *Update now*. The dashboard uses **release sync**: it copies the latest release's files into your repo as one commit, and stops without writing if you edited one of them.
+
+**For contributors — Fork + Import** (a real GitHub fork, *Sync fork* works; **a fork of a public repo is always public**, so use it to send pull requests, not for a personal instance): **[Fork on GitHub](https://github.com/Yassinello/kebab-mcp/fork)** → **[Import to Vercel](https://vercel.com/new)** → in the project, *Storage* → *Connect Database* → *Upstash for Redis* (Free) → open `/welcome`. Without Upstash, your auth token and credentials don't survive serverless cold starts.
 
 <details>
 <summary><strong>Vercel deploy — troubleshooting FAQ</strong></summary>

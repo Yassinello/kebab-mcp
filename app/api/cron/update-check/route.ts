@@ -19,12 +19,18 @@ import {
   UPDATE_CHECK_LOCK_TTL_SECONDS,
   UPDATE_CHECK_TTL_SECONDS,
 } from "@/core/update-check";
+import {
+  fetchLatestUpstreamRelease,
+  UPSTREAM_RELEASE_KV_KEY,
+  UPSTREAM_RELEASE_TTL_SECONDS,
+} from "@/core/upstream-release";
 
 /**
  * Daily cron at 8h UTC (vercel.json).
  *
  * Calls computeDeploymentUpdateStatus() (fork or release-sync) against upstream and writes the
- * result to KV `global:update-check` with a 48h TTL. The Overview banner
+ * result to KV `global:update-check` with a 48h TTL. Without a token it only
+ * refreshes `global:upstream-release` (anonymous read of the latest release). The Overview banner
  * reads this cache first (Plan 063-01) so warm pageviews don't pay the
  * 200-500ms GitHub round-trip.
  *
@@ -48,8 +54,28 @@ async function cronUpdateCheckHandler(_ctx: PipelineContext): Promise<Response> 
   const token = resolveUpdateToken();
 
   if (!token) {
-    logger.info("no token configured — skipping update check");
-    return NextResponse.json({ ok: false, reason: "no-token" });
+    // UPD-11: without a token, still refresh the anonymous "latest upstream
+    // release" cache, so the dashboard can say a new version is out.
+    const latest = await fetchLatestUpstreamRelease();
+    if (latest) {
+      try {
+        await getKVStore().set(
+          UPSTREAM_RELEASE_KV_KEY,
+          JSON.stringify(latest),
+          UPSTREAM_RELEASE_TTL_SECONDS
+        );
+      } catch (err) {
+        logger.warn("upstream release cache write failed", { error: toMsg(err) });
+      }
+    }
+    logger.info("no token configured — refreshed the latest upstream release only", {
+      latest: latest?.version ?? null,
+    });
+    return NextResponse.json({
+      ok: false,
+      reason: "no-token",
+      latestVersion: latest?.version ?? null,
+    });
   }
 
   // ── Determine fork owner/slug (Vercel-deployed forks) ──────────────────

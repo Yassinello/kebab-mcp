@@ -17,6 +17,12 @@ concurrency:
 
 jobs:
   release-please:
+    # CI-10 (docs/specs/cdc-instances-testeurs.md): run only in upstream.
+    # Every Kebab House instance is a copy of this repo (Deploy Button copy
+    # or fork); without this guard each one would run upstream's jobs on its
+    # own Actions minutes and mail its owner on every failure. Pull requests
+    # from forks still run here: their `github.repository` is the base repo.
+    if: github.repository == 'Yassinello/kebab-mcp'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Write scopes only where needed: release-please pushes the release
