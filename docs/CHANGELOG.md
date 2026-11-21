@@ -2,6 +2,14 @@
 
 All notable changes to Kebab House (formerly Kebab MCP).
 
+## [0.1.19](https://github.com/Yassinello/kebab-mcp/compare/v0.1.18...v0.1.19) (2026-11-21)
+
+
+### Features
+
+* **dashboard:** new shell, tabbed pages and row lists ([#84](https://github.com/Yassinello/kebab-mcp/issues/84)) ([869e2fc](https://github.com/Yassinello/kebab-mcp/commit/869e2fcd1251ee05c473ed80060754fc46c92ea4))
+* private-by-default instances, release notice without a token, upstream-only CI ([#87](https://github.com/Yassinello/kebab-mcp/issues/87)) ([dde2bf3](https://github.com/Yassinello/kebab-mcp/commit/dde2bf36d8a281ea050d298a19cef9855046b47f))
+
 ## [0.1.18](https://github.com/Yassinello/kebab-mcp/compare/v0.1.17...v0.1.18) (2026-11-18)
 
 
